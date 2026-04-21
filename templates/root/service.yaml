@@ -1,0 +1,50 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: ${SERVICE_NAME}
+  annotations:
+    run.googleapis.com/ingress: all
+spec:
+  template:
+    spec:
+      serviceAccountName: ${RUNTIME_SERVICE_ACCOUNT}
+      containerConcurrency: 80
+      containers:
+        - image: ${IMAGE_URL}
+          ports:
+            - name: h2c
+              containerPort: 8080
+          env:
+            - name: VAULT_ADDR
+              value: ${VAULT_ADDR}
+            - name: VAULT_SECRET_PATH
+              value: ${VAULT_SECRET_PATH}
+            - name: VAULT_SECRET_KEY
+              value: ${VAULT_SECRET_KEY}
+            - name: CLOUDFLARE_ZONE_ID
+              value: ${CLOUDFLARE_ZONE_ID}
+            - name: VAULT_ROLE_ID_FILE
+              value: /var/run/secrets/vault-role-id/value
+            - name: VAULT_SECRET_ID_FILE
+              value: /var/run/secrets/vault-secret-id/value
+          volumeMounts:
+            - name: vault-role-id
+              mountPath: /var/run/secrets/vault-role-id
+            - name: vault-secret-id
+              mountPath: /var/run/secrets/vault-secret-id
+      volumes:
+        - name: vault-role-id
+          secret:
+            secretName: ${VAULT_ROLE_ID_SECRET}
+            items:
+              - key: latest
+                path: value
+        - name: vault-secret-id
+          secret:
+            secretName: ${VAULT_SECRET_ID_SECRET}
+            items:
+              - key: latest
+                path: value
+  traffic:
+    - latestRevision: true
+      percent: 100

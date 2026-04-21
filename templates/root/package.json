@@ -1,0 +1,12 @@
+{
+  "name": "{{SERVICE_NAME}}",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "go run ./cmd/server",
+    "gen": "buf generate",
+    "lint": "go vet ./... && buf lint",
+    "bootstrap": "bun run ./scripts/cloudrun/bootstrap.ts",
+    "deploy": "bun run ./scripts/cloudrun/deploy.ts"
+  }
+}

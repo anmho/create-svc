@@ -1,0 +1,48 @@
+{
+  "name": "create-svc",
+  "version": "0.1.0",
+  "description": "Bun-authored CLI to scaffold Go Cloud Run services with Chi, ConnectRPC, Vault, and Cloudflare examples.",
+  "module": "index.ts",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "create-svc": "./index.ts",
+    "create-service": "./index.ts"
+  },
+  "files": [
+    "index.ts",
+    "src",
+    "templates",
+    "README.md"
+  ],
+  "scripts": {
+    "dev": "bun run index.ts",
+    "test": "bun test src"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/anmho/create-svc.git"
+  },
+  "homepage": "https://github.com/anmho/create-svc#readme",
+  "bugs": {
+    "url": "https://github.com/anmho/create-svc/issues"
+  },
+  "keywords": [
+    "bun",
+    "cloud-run",
+    "connectrpc",
+    "go",
+    "grpc",
+    "scaffold"
+  ],
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.2.0",
+    "picocolors": "^1.1.1"
+  }
+}

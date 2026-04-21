@@ -1,0 +1,19 @@
+name: buf-publish
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "protos/**"
+
+jobs:
+  publish:
+    if: ${{ vars.BUF_MODULE != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bufbuild/buf-setup-action@v1
+      - run: buf push
+        env:
+          BUF_TOKEN: ${{ secrets.BUF_TOKEN }}
