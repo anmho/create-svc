@@ -1,6 +1,6 @@
 import { cancel, confirm, intro, isCancel, log, note, outro, spinner, text } from "@clack/prompts";
 import pc from "picocolors";
-import { dirname, resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { scaffoldProject, type ScaffoldConfig } from "./scaffold";
 
@@ -194,7 +194,7 @@ function parseArgs(argv: string[]): ParsedArgs {
 }
 
 async function resolveConfig(args: ParsedArgs): Promise<ScaffoldConfig> {
-  const inferredName = slugify(args.directory ?? "dns-api");
+  const inferredName = slugify(basename(args.directory ?? "dns-api"));
   const serviceName = args.yes
     ? inferredName
     : await promptText("Service name", inferredName, (value) => slugify(value).length > 0 || "Service name is required");

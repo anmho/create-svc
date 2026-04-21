@@ -69,12 +69,13 @@ async function collectTemplateFiles(root: string, relative = ""): Promise<string
 
 function buildReplacements(config: ScaffoldConfig) {
   const [repoOwner = "anmho"] = config.githubRepo.split("/");
-  const runtimeServiceAccount = `${config.serviceName}-runtime@${config.projectId}.iam.gserviceaccount.com`;
-  const deployerServiceAccount = `${config.serviceName}-deployer@${config.projectId}.iam.gserviceaccount.com`;
+  const serviceAccountBase = compactIdentifier(config.serviceName, 21);
+  const runtimeServiceAccount = `${serviceAccountBase}-runtime@${config.projectId}.iam.gserviceaccount.com`;
+  const deployerServiceAccount = `${serviceAccountBase}-deployer@${config.projectId}.iam.gserviceaccount.com`;
   const vaultRoleIdSecret = `${config.serviceName}-vault-role-id`;
   const vaultSecretIdSecret = `${config.serviceName}-vault-secret-id`;
   const wifPoolId = "github";
-  const wifProviderId = config.serviceName;
+  const wifProviderId = compactIdentifier(config.serviceName, 32);
 
   return {
     SERVICE_NAME: config.serviceName,
@@ -105,4 +106,28 @@ function renderTemplate(input: string, replacements: Record<string, string>) {
     }
     return replacement;
   });
+}
+
+function compactIdentifier(value: string, maxLength: number) {
+  const normalized = value
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  if (normalized.length <= maxLength) {
+    return normalized || "service";
+  }
+
+  const hash = shortHash(normalized);
+  const head = normalized.slice(0, Math.max(1, maxLength - hash.length - 1)).replace(/-+$/g, "");
+  return `${head}-${hash}`;
+}
+
+function shortHash(value: string) {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).slice(0, 8);
 }
