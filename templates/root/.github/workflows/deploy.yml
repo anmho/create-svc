@@ -19,4 +19,4 @@ jobs:
           workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
           service_account: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
       - uses: google-github-actions/setup-gcloud@v2
-      - run: bun deploy -- --ci
+      - run: bun run deploy -- --ci

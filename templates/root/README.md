@@ -36,7 +36,7 @@ bun dev
 bun gen
 bun lint
 bun test
-bun deploy
+bun run deploy
 ```
 
 `bun test` uses Bun's test runner to invoke `go test ./...` so the command surface stays Bun-first.
@@ -48,10 +48,10 @@ The runtime reads Vault AppRole credentials from Secret Manager. On the first de
 ```bash
 export BOOTSTRAP_VAULT_ROLE_ID=...
 export BOOTSTRAP_VAULT_SECRET_ID=...
-bun deploy
+bun run deploy
 ```
 
-`bun deploy` will:
+`bun run deploy` will:
 
 1. enable required GCP services
 2. create runtime and deployer service accounts

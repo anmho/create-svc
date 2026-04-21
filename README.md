@@ -22,7 +22,7 @@ bun dev
 bun gen
 bun lint
 bun test
-bun deploy
+bun run deploy
 ```
 
 ## Development

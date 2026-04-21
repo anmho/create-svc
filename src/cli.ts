@@ -56,7 +56,7 @@ export async function run(argv: string[]) {
       `Next: ${pc.cyan(`cd ${config.directory}`)}`,
       `Local dev: ${pc.cyan("bun dev")}`,
       `Generate stubs: ${pc.cyan("bun gen")}`,
-      `First deploy: set ${pc.cyan("BOOTSTRAP_VAULT_ROLE_ID")} and ${pc.cyan("BOOTSTRAP_VAULT_SECRET_ID")}, then run ${pc.cyan("bun deploy")}`,
+      `First deploy: set ${pc.cyan("BOOTSTRAP_VAULT_ROLE_ID")} and ${pc.cyan("BOOTSTRAP_VAULT_SECRET_ID")}, then run ${pc.cyan("bun run deploy")}`,
     ].join("\n")
   );
 }
