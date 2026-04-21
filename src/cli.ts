@@ -259,7 +259,7 @@ async function promptText(
   const value = await text({
     message,
     initialValue,
-    validate: (input) => validate(input.trim()),
+    validate: (input) => normalizeValidationResult(validate(input.trim())),
   });
 
   if (isCancel(value)) {
@@ -268,6 +268,10 @@ async function promptText(
   }
 
   return value.trim();
+}
+
+export function normalizeValidationResult(result: true | string): string | undefined {
+  return result === true ? undefined : result;
 }
 
 function slugify(value: string): string {

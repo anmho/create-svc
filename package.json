@@ -1,6 +1,6 @@
 {
   "name": "create-svc",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Bun-authored CLI to scaffold Go Cloud Run services with Chi, ConnectRPC, Vault, and Cloudflare examples.",
   "module": "index.ts",
   "type": "module",
