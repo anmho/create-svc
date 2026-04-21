@@ -1,15 +1,16 @@
 {
   "name": "create-svc",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Bun-authored CLI to scaffold Go Cloud Run services with Chi, ConnectRPC, Vault, and Cloudflare examples.",
   "module": "index.ts",
   "type": "module",
   "license": "MIT",
   "bin": {
-    "create-svc": "./index.ts",
-    "create-service": "./index.ts"
+    "create-svc": "./bin/create-svc.mjs",
+    "create-service": "./bin/create-svc.mjs"
   },
   "files": [
+    "bin",
     "index.ts",
     "src",
     "templates",
