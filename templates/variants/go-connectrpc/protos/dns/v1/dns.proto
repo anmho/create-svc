@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+package dns.v1;
+
+option go_package = "{{MODULE_PATH}}/gen/dns/v1;dnsv1";
+
+service DNSService {
+  rpc ListRecords(ListRecordsRequest) returns (ListRecordsResponse) {}
+  rpc CreateRecord(CreateRecordRequest) returns (CreateRecordResponse) {}
+  rpc UpdateRecord(UpdateRecordRequest) returns (UpdateRecordResponse) {}
+  rpc DeleteRecord(DeleteRecordRequest) returns (DeleteRecordResponse) {}
+}
+
+message Record {
+  string id = 1;
+  string type = 2;
+  string name = 3;
+  string content = 4;
+  int32 ttl = 5;
+  bool proxied = 6;
+}
+
+message ListRecordsRequest {}
+
+message ListRecordsResponse {
+  repeated Record records = 1;
+}
+
+message CreateRecordRequest {
+  string type = 1;
+  string name = 2;
+  string content = 3;
+  int32 ttl = 4;
+  bool proxied = 5;
+}
+
+message CreateRecordResponse {
+  Record record = 1;
+}
+
+message UpdateRecordRequest {
+  string id = 1;
+  string type = 2;
+  string name = 3;
+  string content = 4;
+  int32 ttl = 5;
+  bool proxied = 6;
+}
+
+message UpdateRecordResponse {
+  Record record = 1;
+}
+
+message DeleteRecordRequest {
+  string id = 1;
+}
+
+message DeleteRecordResponse {}

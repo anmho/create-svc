@@ -1,12 +1,14 @@
 # create-svc
 
-`create-svc` is a Bun-authored scaffold CLI for generating a Go Cloud Run service with:
+`create-svc` is a Bun-authored scaffold CLI for generating Cloud Run services with:
 
-- Chi HTTP routes
-- ConnectRPC handlers
-- a real Cloud Run service manifest
-- Bun-based deployment helpers
-- Vault-backed Cloudflare DNS CRUD as the default example
+- `go + chi`
+- `go + connectrpc`
+- `bun + hono`
+- `bun + connectrpc`
+- a real `service.yaml` manifest
+- shared Cloud Run bootstrap, deploy, and cleanup automation
+- Neon-backed main, preview, and personal environments
 
 ## Usage
 
@@ -15,14 +17,22 @@ bun install
 bun run index.ts my-service
 ```
 
-The generated service supports:
+The generator discovers:
+
+- accessible GCP projects
+- open billing accounts
+- Neon defaults from `NEON_API_KEY`, or Vault via `VAULT_ADDR` plus `VAULT_TOKEN`, `VAULT_TOKEN_FILE`, or `~/.vault-token`
+
+Generated repos are `Makefile`-first. The shared Cloud Run control plane is exposed as a local CLI bin and invoked by `make`.
 
 ```bash
-bun dev
-bun gen
-bun lint
-bun test
-bun run deploy
+make dev
+make gen
+make lint
+make test
+make bootstrap
+make deploy
+make cleanup
 ```
 
 ## Development

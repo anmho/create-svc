@@ -1,0 +1,28 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: ${SERVICE_NAME}
+  annotations:
+    run.googleapis.com/ingress: all
+spec:
+  template:
+    spec:
+      serviceAccountName: ${RUNTIME_SERVICE_ACCOUNT}
+      containers:
+        - image: ${IMAGE_URL}
+          ports:
+            - containerPort: 8080
+          env:
+            - name: APP_RUNTIME
+              value: ${SERVICE_RUNTIME}
+            - name: APP_FRAMEWORK
+              value: ${SERVICE_FRAMEWORK}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ${DATABASE_URL_SECRET}
+                  key: latest
+  traffic:
+    - latestRevision: true
+      percent: 100
+

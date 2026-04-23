@@ -1,0 +1,12 @@
+{
+  "name": "{{SERVICE_NAME}}",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "svc-cloudrun": "./scripts/cloudrun/cli.ts"
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.2.0",
+    "@neondatabase/api-client": "^2.7.1"
+  }
+}
