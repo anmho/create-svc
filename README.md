@@ -13,8 +13,13 @@
 ## Usage
 
 ```bash
-bun install
-bun run index.ts my-service
+bun create svc my-service
+```
+
+or:
+
+```bash
+bunx create-svc my-service
 ```
 
 The generator discovers:
@@ -23,7 +28,7 @@ The generator discovers:
 - open billing accounts
 - Neon defaults from `NEON_API_KEY`, or Vault via `VAULT_ADDR` plus `VAULT_TOKEN`, `VAULT_TOKEN_FILE`, or `~/.vault-token`
 
-Generated repos are `Makefile`-first. The shared Cloud Run control plane is exposed as a local CLI bin and invoked by `make`.
+## Generated Repo
 
 ```bash
 make dev
@@ -38,5 +43,7 @@ make cleanup
 ## Development
 
 ```bash
+bun install
 bun test src
+bun run index.ts my-service
 ```
