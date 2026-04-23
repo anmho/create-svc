@@ -1,6 +1,6 @@
 # create-svc
 
-`create-svc` is a Bun-authored scaffold CLI for generating Cloud Run services with:
+`create-svc` is a scaffold CLI for generating Cloud Run services with:
 
 - `go + chi`
 - `go + connectrpc`
@@ -9,6 +9,8 @@
 - a real `service.yaml` manifest
 - shared Cloud Run bootstrap, deploy, and cleanup automation
 - Neon-backed main, preview, and personal environments
+
+npm: <https://www.npmjs.com/package/create-svc>
 
 ## Usage
 
@@ -20,6 +22,24 @@ or:
 
 ```bash
 bunx create-svc my-service
+```
+
+## Local Testing
+
+Without publishing to npm:
+
+```bash
+bun install
+npm pack
+bunx ./create-svc-*.tgz my-service
+```
+
+For faster iteration against your working tree:
+
+```bash
+bun link
+bun link create-svc
+create-svc my-service
 ```
 
 The generator discovers:
