@@ -1,18 +1,17 @@
 import { log } from "@clack/prompts";
-import { config, githubVariables } from "./config";
+import { config } from "./config";
 import { deleteBranch, deleteDatabase, listBranches } from "./neon";
 import {
-  deleteGithubRepository,
-  deleteGithubVariable,
   deleteProject,
+  deleteProductionDomainMapping,
   deleteSecret,
   deleteService,
   deleteServiceAccount,
-  deleteWorkloadIdentityProvider,
   listCloudRunServices,
   listSecrets,
   parseCleanupArgs,
   requireCommand,
+  requireGcloudAuth,
   runMain,
   runStep,
 } from "./lib";
@@ -27,8 +26,11 @@ function matchesSecretResource(name: string) {
 
 export async function cleanup(args = Bun.argv.slice(2)) {
   requireCommand("gcloud");
+  requireGcloudAuth();
 
   const options = parseCleanupArgs(args);
+
+  await runStep(`Deleting production domain mapping ${config.domain.hostname}`, () => deleteProductionDomainMapping());
 
   const services = await runStep("Finding Cloud Run services", () => listCloudRunServices());
   const serviceNames = services.filter(matchesServiceResource);
@@ -49,7 +51,8 @@ export async function cleanup(args = Bun.argv.slice(2)) {
   if (config.neon.projectId && config.neon.baseBranchId) {
     const branches = await runStep("Finding Neon branches", () => listBranches(config.neon.projectId));
     const disposableBranches = branches.filter(
-      (branch) => branch.name.startsWith(`${config.neon.previewBranchPrefix}-`) || branch.name.startsWith(`${config.neon.personalBranchPrefix}-`)
+      (branch: { name: string }) =>
+        branch.name.startsWith(`${config.neon.previewBranchPrefix}-`) || branch.name.startsWith(`${config.neon.personalBranchPrefix}-`)
     );
 
     await runStep("Deleting Neon preview and personal branches", async () => {
@@ -66,32 +69,15 @@ export async function cleanup(args = Bun.argv.slice(2)) {
   }
 
   await runStep("Deleting service-specific identity resources", () => {
-    deleteWorkloadIdentityProvider();
     deleteServiceAccount(config.runtimeServiceAccount);
-    deleteServiceAccount(config.deployerServiceAccount);
   });
-
-  if (Bun.which("gh")) {
-    await runStep("Deleting GitHub repository variables", () => {
-      for (const name of [...Object.keys(githubVariables), "GCP_WIF_PROVIDER", "GCP_DEPLOYER_SERVICE_ACCOUNT"]) {
-        deleteGithubVariable(name);
-      }
-    });
-
-    if (options.destroyRepo) {
-      await runStep(`Deleting GitHub repository ${config.github.repo}`, () => deleteGithubRepository());
-    }
-  } else if (options.destroyRepo) {
-    throw new Error("gh is required to delete the GitHub repository");
-  } else {
-    log.step("Skipping GitHub cleanup because gh is not installed");
-  }
 
   if (options.destroyProject) {
     await runStep(`Deleting GCP project ${config.project.id}`, () => deleteProject());
     return `Deleted project ${config.project.id}`;
   }
 
+  log.step(`Production API hostname released: ${config.domain.hostname}`);
   return `Cleanup finished for ${config.serviceName}`;
 }
 

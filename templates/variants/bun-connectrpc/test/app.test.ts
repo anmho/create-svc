@@ -1,17 +1,9 @@
 import { expect, test } from "bun:test";
-import { handleRequest } from "../src/index";
+import { createDnsService } from "../src/index";
 
-test("connect-style ping route responds", async () => {
-  const response = await handleRequest(
-    new Request("http://localhost/rpc.example.v1.Service/Ping", {
-      method: "POST",
-      body: JSON.stringify({ name: "preview" }),
-      headers: {
-        "Content-Type": "application/json",
-      },
-    })
-  );
+test("listRecords starts empty", async () => {
+  const service = createDnsService();
+  const response = await service.listRecords?.({} as never, {} as never);
 
-  expect(response.status).toBe(200);
-  expect(await response.json()).toEqual({ message: "hello preview" });
+  expect(response).toEqual({ records: [] });
 });

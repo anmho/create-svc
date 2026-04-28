@@ -61,9 +61,9 @@ export function deriveDefaults(serviceName: string) {
     serviceName: normalizedServiceName,
     projectName: normalizedServiceName,
     projectId: compactIdentifier(`anmho-${normalizedServiceName}`, 30),
-    githubRepo: `anmho/${normalizedServiceName}`,
     cloudRunService: normalizedServiceName,
     neonDatabaseName: compactDatabaseName(normalizedServiceName),
+    apiHostname: `api.${normalizedServiceName}.anmho.com`,
   };
 }
 

@@ -5,6 +5,7 @@ import {
   addSecretVersion,
   deleteService,
   ensureArtifactRepository,
+  ensureProductionDomainMapping,
   ensureSecretAccessor,
   gcloud,
   imageUrl,
@@ -13,7 +14,7 @@ import {
   resolveDeploymentTarget,
   runMain,
   runStep,
-  serviceUrl,
+  serviceOrigin,
   writeRenderedManifest,
 } from "./lib";
 
@@ -36,7 +37,7 @@ export async function deploy(args = Bun.argv.slice(2)) {
     await runStep(`Deleting Cloud Run service ${target.serviceName}`, () => deleteService(target.serviceName));
     await runStep(`Deleting Neon branch ${target.branchName}`, async () => {
       const branches = await listBranches(config.neon.projectId);
-      const branch = branches.find((candidate) => candidate.name === target.branchName);
+      const branch = branches.find((candidate: { name: string }) => candidate.name === target.branchName);
       if (branch) {
         await deleteBranch(config.neon.projectId, branch.id);
       }
@@ -46,7 +47,7 @@ export async function deploy(args = Bun.argv.slice(2)) {
 
   await runStep("Ensuring Artifact Registry repository", () => ensureArtifactRepository());
 
-  let branchId = config.neon.baseBranchId;
+  let branchId: string = config.neon.baseBranchId;
   if (options.environment !== "main") {
     const branch = await runStep(`Ensuring Neon branch ${target.branchName}`, () =>
       ensureBranch(config.neon.projectId, target.branchName, config.neon.baseBranchId)
@@ -89,7 +90,11 @@ export async function deploy(args = Bun.argv.slice(2)) {
     ])
   );
 
-  return serviceUrl(target.serviceName);
+  if (target.environment === "main") {
+    await runStep(`Ensuring production domain mapping for ${config.domain.hostname}`, () => ensureProductionDomainMapping(target.serviceName));
+  }
+
+  return serviceOrigin(target);
 }
 
 if (import.meta.main) {

@@ -13,39 +13,17 @@ type CommandResult = {
 };
 
 const decoder = new TextDecoder();
+const encoder = new TextEncoder();
 
 export async function runPostScaffoldFlow(config: ScaffoldConfig, cwd: string) {
-  if (config.createGithubRepo) {
-    initializeRepository(cwd);
-    createGitHubRepo(config, cwd);
-  }
-
   if (config.autoDeploy) {
     installProjectDependencies(cwd);
     run("bun", ["run", "bootstrap"], { cwd });
     run("bun", ["run", "deploy"], { cwd });
-    return { message: "Repository initialized, pushed, and first deploy started" };
+    return { message: "Dependencies installed and first deploy started" };
   }
 
-  return { message: "Repository initialized" };
-}
-
-function initializeRepository(cwd: string) {
-  requireCommand("git");
-  run("git", ["init", "-b", "main"], { cwd, allowFailure: true });
-  run("git", ["add", "."], { cwd });
-  run("git", ["commit", "--allow-empty", "-m", "Initial commit"], { cwd, allowFailure: true });
-}
-
-function createGitHubRepo(config: ScaffoldConfig, cwd: string) {
-  requireCommand("gh");
-
-  const existing = run("gh", ["repo", "view", config.githubRepo], { cwd, allowFailure: true });
-  if (!existing.success) {
-    run("gh", ["repo", "create", config.githubRepo, `--${config.githubVisibility}`, "--source=.", "--remote=origin"], { cwd });
-  }
-
-  run("git", ["push", "-u", "origin", "main"], { cwd, allowFailure: true });
+  return { message: "Backend package generated" };
 }
 
 function installProjectDependencies(cwd: string) {
@@ -63,7 +41,7 @@ function run(command: string, args: string[], options: CommandOptions): CommandR
   const result = Bun.spawnSync([command, ...args], {
     cwd: options.cwd,
     env: process.env,
-    stdin: options.input,
+    stdin: options.input === undefined ? undefined : encoder.encode(options.input),
     stdout: options.allowFailure ? "pipe" : "inherit",
     stderr: options.allowFailure ? "pipe" : "inherit",
   });

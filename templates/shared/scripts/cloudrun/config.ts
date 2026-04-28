@@ -5,9 +5,6 @@ export const config = {
   region: "{{REGION}}",
   artifactRepository: "cloud-run",
   runtimeServiceAccount: "{{RUNTIME_SERVICE_ACCOUNT}}",
-  deployerServiceAccount: "{{DEPLOYER_SERVICE_ACCOUNT}}",
-  workloadIdentityPoolId: "{{WIF_POOL_ID}}",
-  workloadIdentityProviderId: "{{WIF_PROVIDER_ID}}",
   project: {
     mode: "{{GCP_PROJECT_MODE}}",
     id: "{{PROJECT_ID}}",
@@ -16,10 +13,9 @@ export const config = {
     billingAccount: "{{BILLING_ACCOUNT}}",
     quotaProjectId: "{{QUOTA_PROJECT_ID}}",
   },
-  github: {
-    repo: "{{GITHUB_REPO}}",
-    visibility: "{{GITHUB_VISIBILITY}}",
-    createIfMissing: {{GITHUB_CREATE_IF_MISSING}},
+  domain: {
+    hostname: "{{API_HOSTNAME}}",
+    baseDomain: "{{API_BASE_DOMAIN}}",
   },
   neon: {
     projectId: "{{NEON_PROJECT_ID}}",
@@ -42,16 +38,4 @@ export const config = {
   ],
 } as const;
 
-export const githubVariables = {
-  GCP_PROJECT_ID: "{{PROJECT_ID}}",
-  GCP_REGION: "{{REGION}}",
-  CLOUD_RUN_SERVICE: "{{SERVICE_NAME}}",
-  CREATE_SVC_RUNTIME: "{{RUNTIME}}",
-  CREATE_SVC_FRAMEWORK: "{{FRAMEWORK}}",
-  NEON_PROJECT_ID: "{{NEON_PROJECT_ID}}",
-  NEON_BASE_BRANCH_ID: "{{NEON_BASE_BRANCH_ID}}",
-  NEON_DATABASE_NAME: "{{NEON_DATABASE_NAME}}",
-} as const;
-
 export type DeployEnvironment = "main" | "preview" | "personal";
-

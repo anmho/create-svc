@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package dns.v1;
 
-option go_package = "{{MODULE_PATH}}/gen/dns/v1;dnsv1";
-
 service DNSService {
   rpc ListRecords(ListRecordsRequest) returns (ListRecordsResponse) {}
   rpc CreateRecord(CreateRecordRequest) returns (CreateRecordResponse) {}

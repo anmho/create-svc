@@ -6,9 +6,9 @@ test("deriveDefaults uses the service name for project, repo, and database namin
     serviceName: "edge-api",
     projectName: "edge-api",
     projectId: "anmho-edge-api",
-    githubRepo: "anmho/edge-api",
     cloudRunService: "edge-api",
     neonDatabaseName: "edge_api",
+    apiHostname: "api.edge-api.anmho.com",
   });
 });
 

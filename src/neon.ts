@@ -21,25 +21,27 @@ export function createNeonApi(apiKey = process.env.NEON_API_KEY): NeonApi {
     async listProjects() {
       const client = createApiClient({ apiKey: (apiKey?.trim() || (await resolveNeonApiKey())) });
       const payload = await client.listProjects({ limit: 100 });
-      return (payload.projects ?? [])
-        .map((project) => ({
+      const projects = ((payload.data as { projects?: Array<{ id?: string; name?: string }> } | undefined)?.projects ?? []);
+      return projects
+        .map((project: { id?: string; name?: string }) => ({
           id: project.id ?? "",
           name: project.name ?? project.id ?? "",
         }))
-        .filter((project) => project.id)
-        .sort((left, right) => left.name.localeCompare(right.name));
+        .filter((project: NeonProject) => Boolean(project.id))
+        .sort((left: NeonProject, right: NeonProject) => left.name.localeCompare(right.name));
     },
 
     async listBranches(projectId: string) {
       const client = createApiClient({ apiKey: (apiKey?.trim() || (await resolveNeonApiKey())) });
       const payload = await client.listProjectBranches({ projectId });
-      return (payload.branches ?? [])
-        .map((branch) => ({
+      const branches = ((payload.data as { branches?: Array<{ id?: string; name?: string }> } | undefined)?.branches ?? []);
+      return branches
+        .map((branch: { id?: string; name?: string }) => ({
           id: branch.id ?? "",
           name: branch.name ?? branch.id ?? "",
         }))
-        .filter((branch) => branch.id)
-        .sort((left, right) => left.name.localeCompare(right.name));
+        .filter((branch: NeonBranch) => Boolean(branch.id))
+        .sort((left: NeonBranch, right: NeonBranch) => left.name.localeCompare(right.name));
     },
   };
 }

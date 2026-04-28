@@ -5,6 +5,7 @@ WORKDIR /app
 COPY package.json ./
 RUN bun install --production
 
+COPY gen ./gen
 COPY src ./src
 
 ENV PORT=8080

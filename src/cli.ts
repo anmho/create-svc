@@ -5,6 +5,7 @@ import {
   intro,
   isCancel,
   log,
+  note,
   outro,
   select,
   spinner,
@@ -40,7 +41,6 @@ type ParsedArgs = {
   framework?: Framework;
   gcpProjectMode?: GcpProjectMode;
   gcpProject?: string;
-  githubRepo?: string;
   region?: string;
   billingAccount?: string;
   quotaProjectId?: string;
@@ -69,7 +69,7 @@ export async function run(argv: string[]) {
       return;
     }
 
-    intro(`${pc.bold("create-svc")} ${pc.dim("Cloud Run scaffold")}`);
+    intro(`${pc.bold("create-svc")} ${pc.dim("backend bootstrap")}`);
 
     const config = await resolveConfig(args);
     const targetDir = resolve(process.cwd(), config.directory);
@@ -79,7 +79,7 @@ export async function run(argv: string[]) {
         `${pc.bold("Output")}: ${targetDir}`,
         `${pc.bold("Runtime")}: ${config.runtime} + ${config.framework}`,
         `${pc.bold("Project")}: ${config.gcpProjectMode === "create_new" ? "create" : "use"} ${config.gcpProjectName} (${config.gcpProject})`,
-        `${pc.bold("GitHub")}: ${config.githubRepo}`,
+        `${pc.bold("API")}: https://${config.apiHostname}`,
         `${pc.bold("Neon")}: ${config.neonProjectId || "(set later)"} / ${config.neonBaseBranchName || "(set later)"}`,
       ].join("\n"),
       "Scaffold"
@@ -90,7 +90,7 @@ export async function run(argv: string[]) {
     await scaffoldProject(config);
     buildSpinner.stop("Project files generated");
 
-    const shouldRunPostScaffoldFlow = Boolean(process.stdout.isTTY && process.stdin.isTTY && (config.createGithubRepo || config.autoDeploy));
+    const shouldRunPostScaffoldFlow = Boolean(process.stdout.isTTY && process.stdin.isTTY && config.autoDeploy);
     if (shouldRunPostScaffoldFlow) {
       const automationSpinner = spinner();
       automationSpinner.start("Running post-scaffold automation");
@@ -110,6 +110,7 @@ export async function run(argv: string[]) {
         `Bootstrap: ${pc.cyan("bun run bootstrap")}`,
         `Deploy: ${pc.cyan("bun run deploy")}`,
         `Personal env: ${pc.cyan(`bun run deploy -- --environment personal --name ${config.serviceName}`)}`,
+        `Production API: ${pc.cyan(`https://${config.apiHostname}`)}`,
       ].join("\n")
     );
   } catch (error) {
@@ -198,16 +199,6 @@ function parseArgs(argv: string[]): ParsedArgs {
       continue;
     }
 
-    if (token === "--github-repo") {
-      parsed.githubRepo = readValue();
-      continue;
-    }
-
-    if (token.startsWith("--github-repo=")) {
-      parsed.githubRepo = token.slice("--github-repo=".length);
-      continue;
-    }
-
     if (token === "--region") {
       parsed.region = readValue();
       continue;
@@ -270,7 +261,6 @@ export async function resolveConfig(args: ParsedArgs): Promise<ScaffoldConfig> {
   const discovery = await discoveryPromise;
   assertDiscoveryReady(discovery);
   const gcpSelection = await resolveGcpSelection(args, defaults, discovery);
-  const githubRepo = args.githubRepo ?? defaults.githubRepo;
   const region = args.region ?? DEFAULT_REGION;
   const billingAccount = chooseBillingAccount(args.billingAccount, discovery.billingAccounts);
   const autoDeploy = resolveAutoDeploy(args.autoDeploy);
@@ -301,14 +291,12 @@ export async function resolveConfig(args: ParsedArgs): Promise<ScaffoldConfig> {
     gcpProjectName: gcpSelection.projectName,
     billingAccount,
     quotaProjectId: args.quotaProjectId ?? QUOTA_PROJECT_DEFAULT,
-    githubRepo,
-    githubVisibility: "public",
-    createGithubRepo: true,
     autoDeploy,
     neonProjectId: discovery.neonProjectId ?? "",
     neonBaseBranchId: discovery.neonBaseBranchId ?? "",
     neonBaseBranchName: discovery.neonBaseBranchName ?? "main",
     neonDatabaseName: defaults.neonDatabaseName,
+    apiHostname: defaults.apiHostname,
     generatorRoot: resolve(dirname(fileURLToPath(import.meta.url)), ".."),
   };
 }
@@ -319,15 +307,15 @@ async function resolveRuntime(args: ParsedArgs): Promise<Runtime> {
   }
 
   if (args.yes) {
-    return "go";
+    return "bun";
   }
 
   const value = await select({
     message: "Runtime",
-    initialValue: "go",
+    initialValue: "bun",
     options: [
-      { value: "go", label: "Go", hint: "Default" },
-      { value: "bun", label: "Bun" },
+      { value: "bun", label: "Bun", hint: "Default" },
+      { value: "go", label: "Go" },
     ],
   });
 
@@ -336,13 +324,13 @@ async function resolveRuntime(args: ParsedArgs): Promise<Runtime> {
     process.exit(1);
   }
 
-  return value;
+  return value as Runtime;
 }
 
 async function resolveFramework(args: ParsedArgs, runtime: Runtime): Promise<Framework> {
   const allowed = FRAMEWORKS_BY_RUNTIME[runtime];
   if (args.framework) {
-    if (allowed.includes(args.framework)) {
+    if (allowed.some((framework) => framework === args.framework)) {
       return args.framework;
     }
     throw new Error(`Framework ${args.framework} is not valid for runtime ${runtime}`);
@@ -367,7 +355,7 @@ async function resolveFramework(args: ParsedArgs, runtime: Runtime): Promise<Fra
     process.exit(1);
   }
 
-  return value;
+  return value as Framework;
 }
 
 async function resolveGcpSelection(
@@ -520,7 +508,7 @@ function resolveAutoDeploy(value: boolean | undefined) {
   if (value !== undefined) {
     return value;
   }
-  return Boolean(process.stdout.isTTY && process.stdin.isTTY);
+  return false;
 }
 
 async function promptText(
@@ -531,7 +519,7 @@ async function promptText(
   const value = await text({
     message,
     initialValue,
-    validate: (input) => normalizeValidationResult(validate(input.trim())),
+    validate: (input) => normalizeValidationResult(validate((input ?? "").trim())),
   });
 
   if (isCancel(value)) {
@@ -645,7 +633,6 @@ Options:
   --framework <name>              Framework for the selected runtime
   --project-mode <mode>           create_new or use_existing
   --project-id <id>               GCP project id
-  --github-repo <owner/repo>      GitHub repository
   --billing-account <name>        Billing account resource name
   --quota-project <id>            Billing quota project for gcloud calls
   --region <region>               Cloud Run region
@@ -654,4 +641,8 @@ Options:
   --yes, -y                       Accept defaults without prompts
   --help, -h                      Show this message
 `);
+}
+
+function matchesProject(project: GcpProject, query: string) {
+  return project.projectId === query || project.name === query;
 }

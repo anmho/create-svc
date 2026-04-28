@@ -2,15 +2,15 @@
 //
 // Source: dns/v1/dns.proto
 
-package dnsv1connect
+package v1connect
 
 import (
 	connect "connectrpc.com/connect"
 	context "context"
 	errors "errors"
-	v1 "{{MODULE_PATH}}/gen/dns/v1"
 	http "net/http"
 	strings "strings"
+	v1 "{{MODULE_PATH}}/gen/dns/v1"
 )
 
 // This is a compile-time assertion to ensure that this generated file and the connect package are

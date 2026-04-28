@@ -7,7 +7,7 @@ import (
 	"connectrpc.com/connect"
 
 	dnsv1 "{{MODULE_PATH}}/gen/dns/v1"
-	dnsv1connect "{{MODULE_PATH}}/gen/dns/v1/dnsv1connect"
+	v1connect "{{MODULE_PATH}}/gen/dns/v1/v1connect"
 	"{{MODULE_PATH}}/internal/app"
 )
 
@@ -16,7 +16,7 @@ type Handler struct {
 }
 
 func NewHandler(service *app.DNSService) (string, http.Handler) {
-	return dnsv1connect.NewDNSServiceHandler(&Handler{service: service})
+	return v1connect.NewDNSServiceHandler(&Handler{service: service})
 }
 
 func (h *Handler) ListRecords(ctx context.Context, _ *connect.Request[dnsv1.ListRecordsRequest]) (*connect.Response[dnsv1.ListRecordsResponse], error) {

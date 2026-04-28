@@ -4,7 +4,7 @@
 // 	protoc        (unknown)
 // source: dns/v1/dns.proto
 
-package dnsv1
+package v1
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -553,7 +553,7 @@ const file_dns_v1_dns_proto_rawDesc = "" +
 	"\vListRecords\x12\x1a.dns.v1.ListRecordsRequest\x1a\x1b.dns.v1.ListRecordsResponse\"\x00\x12K\n" +
 	"\fCreateRecord\x12\x1b.dns.v1.CreateRecordRequest\x1a\x1c.dns.v1.CreateRecordResponse\"\x00\x12K\n" +
 	"\fUpdateRecord\x12\x1b.dns.v1.UpdateRecordRequest\x1a\x1c.dns.v1.UpdateRecordResponse\"\x00\x12K\n" +
-	"\fDeleteRecord\x12\x1b.dns.v1.DeleteRecordRequest\x1a\x1c.dns.v1.DeleteRecordResponse\"\x00B)Z'{{MODULE_PATH}}/gen/dns/v1;dnsv1b\x06proto3"
+	"\fDeleteRecord\x12\x1b.dns.v1.DeleteRecordRequest\x1a\x1c.dns.v1.DeleteRecordResponse\"\x00b\x06proto3"
 
 var (
 	file_dns_v1_dns_proto_rawDescOnce sync.Once

@@ -18,14 +18,12 @@ export type ScaffoldConfig = {
   gcpProjectName: string;
   billingAccount: string;
   quotaProjectId: string;
-  githubRepo: string;
-  githubVisibility: "public" | "private";
-  createGithubRepo: boolean;
   autoDeploy: boolean;
   neonProjectId: string;
   neonBaseBranchId: string;
   neonBaseBranchName: string;
   neonDatabaseName: string;
+  apiHostname: string;
   generatorRoot: string;
 };
 
@@ -91,7 +89,13 @@ async function collectTemplateFiles(root: string, relative = ""): Promise<string
   for (const entry of entries) {
     const nextRelative = relative ? join(relative, entry.name) : entry.name;
     if (entry.isDirectory()) {
+      if (nextRelative === ".github" || nextRelative.startsWith(".github/")) {
+        continue;
+      }
       files.push(...(await collectTemplateFiles(root, nextRelative)));
+      continue;
+    }
+    if (nextRelative === ".github" || nextRelative.startsWith(".github/")) {
       continue;
     }
     files.push(nextRelative);
@@ -101,13 +105,9 @@ async function collectTemplateFiles(root: string, relative = ""): Promise<string
 }
 
 function buildReplacements(config: ScaffoldConfig) {
-  const [githubOwner = "anmho"] = config.githubRepo.split("/");
-  const modulePath = `github.com/${config.githubRepo}`;
+  const modulePath = `github.com/anmho/${config.serviceName}`;
   const serviceAccountBase = compactIdentifier(config.serviceName, 21);
   const runtimeServiceAccount = `${serviceAccountBase}-runtime@${config.gcpProject}.iam.gserviceaccount.com`;
-  const deployerServiceAccount = `${serviceAccountBase}-deployer@${config.gcpProject}.iam.gserviceaccount.com`;
-  const wifPoolId = "github";
-  const wifProviderId = compactIdentifier(config.serviceName, 32);
   const previewBranchPrefix = `${config.serviceName}-pr`;
   const personalBranchPrefix = `${config.serviceName}-dev`;
 
@@ -121,10 +121,6 @@ function buildReplacements(config: ScaffoldConfig) {
     PROJECT_CREATE_IF_MISSING: String(config.gcpProjectMode === "create_new"),
     BILLING_ACCOUNT: config.billingAccount,
     QUOTA_PROJECT_ID: config.quotaProjectId,
-    GITHUB_REPO: config.githubRepo,
-    GITHUB_OWNER: githubOwner,
-    GITHUB_VISIBILITY: config.githubVisibility,
-    GITHUB_CREATE_IF_MISSING: String(config.createGithubRepo),
     AUTO_DEPLOY: String(config.autoDeploy),
     RUNTIME: config.runtime,
     FRAMEWORK: config.framework,
@@ -137,9 +133,8 @@ function buildReplacements(config: ScaffoldConfig) {
     NEON_PREVIEW_BRANCH_PREFIX: previewBranchPrefix,
     NEON_PERSONAL_BRANCH_PREFIX: personalBranchPrefix,
     RUNTIME_SERVICE_ACCOUNT: runtimeServiceAccount,
-    DEPLOYER_SERVICE_ACCOUNT: deployerServiceAccount,
-    WIF_POOL_ID: wifPoolId,
-    WIF_PROVIDER_ID: wifProviderId,
+    API_HOSTNAME: config.apiHostname,
+    API_BASE_DOMAIN: "anmho.com",
   };
 }
 

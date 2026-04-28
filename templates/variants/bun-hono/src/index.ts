@@ -1,5 +1,9 @@
 import { Hono } from "hono";
 
+type ConnectRequest = {
+  name?: string;
+};
+
 export function createApp() {
   const app = new Hono();
 
@@ -9,7 +13,20 @@ export function createApp() {
     return context.json({
       service: "{{SERVICE_NAME}}",
       databaseConfigured,
+      apiOrigin: "https://api.{{SERVICE_NAME}}.anmho.com",
     });
+  });
+  app.post("/rpc.example.v1.Service/Ping", async (context) => {
+    const payload = (await context.req.json().catch(() => ({}))) as ConnectRequest;
+    return context.json(
+      {
+        message: `hello ${payload.name?.trim() || "{{SERVICE_NAME}}"}`,
+      },
+      200,
+      {
+        "Content-Type": "application/json",
+      }
+    );
   });
 
   return app;

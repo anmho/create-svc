@@ -4,7 +4,9 @@ plugins:
     out: gen
     opt:
       - paths=source_relative
+      - Mdns/v1/dns.proto={{MODULE_PATH}}/gen/dns/v1
   - local: protoc-gen-connect-go
     out: gen
     opt:
       - paths=source_relative
+      - Mdns/v1/dns.proto={{MODULE_PATH}}/gen/dns/v1

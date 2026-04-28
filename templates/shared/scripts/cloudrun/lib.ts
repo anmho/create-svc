@@ -15,7 +15,6 @@ type DeployArgs = {
 
 type CleanupArgs = {
   destroyProject: boolean;
-  destroyRepo: boolean;
 };
 
 type DeploymentTarget = {
@@ -33,6 +32,7 @@ type CommandResult = {
 };
 
 const decoder = new TextDecoder();
+const encoder = new TextEncoder();
 
 export class CommandError extends Error {
   command: string;
@@ -58,11 +58,27 @@ export function requireCommand(name: string) {
   }
 }
 
+export function requireGcloudAuth() {
+  const activeAccount = gcloud(["auth", "list", "--filter=status:ACTIVE", "--format=value(account)"], {
+    allowFailure: true,
+  }).stdout.trim();
+
+  if (!activeAccount) {
+    throw new Error(
+      [
+        "gcloud is installed but no active Google Cloud account is available.",
+        "Run `gcloud auth login` on this machine before using bootstrap, deploy, or cleanup.",
+        "If you also rely on Application Default Credentials for other tooling, run `gcloud auth application-default login` as well.",
+      ].join(" ")
+    );
+  }
+}
+
 export function run(command: string, args: string[], options: CommandOptions = {}): CommandResult {
   const result = Bun.spawnSync([command, ...args], {
     cwd: process.cwd(),
     env: process.env,
-    stdin: options.input,
+    stdin: options.input === undefined ? undefined : encoder.encode(options.input),
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -87,10 +103,6 @@ export function gcloud(args: string[], options: CommandOptions = {}) {
     normalized.push("--billing-project", config.project.quotaProjectId);
   }
   return run("gcloud", normalized, options);
-}
-
-export function gh(args: string[], options: CommandOptions = {}) {
-  return run("gh", args, options);
 }
 
 export async function runStep<T>(label: string, task: () => Promise<T> | T) {
@@ -232,114 +244,6 @@ export function projectNumber() {
   return gcloud(["projects", "describe", config.project.id, "--format=value(projectNumber)"]).stdout;
 }
 
-export function workloadIdentityPoolResource() {
-  return `projects/${projectNumber()}/locations/global/workloadIdentityPools/${config.workloadIdentityPoolId}`;
-}
-
-export function workloadIdentityProviderResource() {
-  return `${workloadIdentityPoolResource()}/providers/${config.workloadIdentityProviderId}`;
-}
-
-export function ensureWorkloadIdentityPool() {
-  if (
-    gcloud(["iam", "workload-identity-pools", "describe", config.workloadIdentityPoolId, "--project", config.project.id, "--location", "global"], {
-      allowFailure: true,
-    }).success
-  ) {
-    return;
-  }
-
-  gcloud([
-    "iam",
-    "workload-identity-pools",
-    "create",
-    config.workloadIdentityPoolId,
-    "--project",
-    config.project.id,
-    "--location",
-    "global",
-    "--display-name",
-    "GitHub Actions",
-  ]);
-}
-
-export function ensureWorkloadIdentityProvider() {
-  if (
-    gcloud(
-      [
-        "iam",
-        "workload-identity-pools",
-        "providers",
-        "describe",
-        config.workloadIdentityProviderId,
-        "--project",
-        config.project.id,
-        "--location",
-        "global",
-        "--workload-identity-pool",
-        config.workloadIdentityPoolId,
-      ],
-      { allowFailure: true }
-    ).success
-  ) {
-    return;
-  }
-
-  gcloud([
-    "iam",
-    "workload-identity-pools",
-    "providers",
-    "create-oidc",
-    config.workloadIdentityProviderId,
-    "--project",
-    config.project.id,
-    "--location",
-    "global",
-    "--workload-identity-pool",
-    config.workloadIdentityPoolId,
-    "--display-name",
-    `${config.serviceName} GitHub`,
-    "--issuer-uri",
-    "https://token.actions.githubusercontent.com",
-    "--attribute-mapping",
-    "google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository,attribute.repository_owner=assertion.repository_owner",
-    "--attribute-condition",
-    `assertion.repository=='${config.github.repo}'`,
-  ]);
-}
-
-export function deleteWorkloadIdentityProvider() {
-  gcloud(
-    [
-      "iam",
-      "workload-identity-pools",
-      "providers",
-      "delete",
-      config.workloadIdentityProviderId,
-      "--project",
-      config.project.id,
-      "--location",
-      "global",
-      "--workload-identity-pool",
-      config.workloadIdentityPoolId,
-      "--quiet",
-    ],
-    { allowFailure: true }
-  );
-}
-
-export function setGithubVariable(name: string, value: string) {
-  gh(["variable", "set", name, "--repo", config.github.repo, "--body", value]);
-}
-
-export function deleteGithubVariable(name: string) {
-  gh(["variable", "delete", name, "--repo", config.github.repo], { allowFailure: true });
-}
-
-export function deleteGithubRepository() {
-  gh(["repo", "delete", config.github.repo, "--yes"]);
-}
-
 export function imageTag() {
   const gitSha = run("git", ["rev-parse", "--short", "HEAD"], { allowFailure: true }).stdout;
   return gitSha || `${Date.now()}`;
@@ -408,17 +312,11 @@ export function parseDeployArgs(argv: string[]): DeployArgs {
 export function parseCleanupArgs(argv: string[]): CleanupArgs {
   const parsed: CleanupArgs = {
     destroyProject: false,
-    destroyRepo: false,
   };
 
   for (const token of argv) {
     if (token === "--project") {
       parsed.destroyProject = true;
-      continue;
-    }
-
-    if (token === "--repo") {
-      parsed.destroyRepo = true;
       continue;
     }
   }
@@ -489,6 +387,50 @@ export function serviceUrl(serviceName: string) {
   return gcloud(
     ["run", "services", "describe", serviceName, "--project", config.project.id, "--region", config.region, "--format=value(status.url)"]
   ).stdout;
+}
+
+export function serviceDomain(target: DeploymentTarget) {
+  if (target.environment === "main") {
+    return config.domain.hostname;
+  }
+
+  return `${target.serviceName}-${config.project.id}-${config.region}.a.run.app`;
+}
+
+export function serviceOrigin(target: DeploymentTarget) {
+  if (target.environment === "main") {
+    return `https://${config.domain.hostname}`;
+  }
+
+  const url = serviceUrl(target.serviceName);
+  return url || `https://${serviceDomain(target)}`;
+}
+
+export function ensureProductionDomainMapping(serviceName: string) {
+  if (gcloud(["beta", "run", "domain-mappings", "describe", "--domain", config.domain.hostname, "--project", config.project.id], { allowFailure: true }).success) {
+    return;
+  }
+
+  gcloud([
+    "beta",
+    "run",
+    "domain-mappings",
+    "create",
+    "--service",
+    serviceName,
+    "--domain",
+    config.domain.hostname,
+    "--project",
+    config.project.id,
+    "--region",
+    config.region,
+  ]);
+}
+
+export function deleteProductionDomainMapping() {
+  gcloud(["beta", "run", "domain-mappings", "delete", "--domain", config.domain.hostname, "--project", config.project.id, "--quiet"], {
+    allowFailure: true,
+  });
 }
 
 export function listCloudRunServices() {

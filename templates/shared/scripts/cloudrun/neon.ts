@@ -73,13 +73,14 @@ async function neonClient() {
 
 export async function listBranches(projectId: string) {
   const payload = await (await neonClient()).listProjectBranches({ projectId });
-  return (payload.branches ?? [])
-    .map((branch) => ({
+  const branches = ((payload.data as { branches?: Array<{ id?: string; name?: string }> } | undefined)?.branches ?? []);
+  return branches
+    .map((branch: { id?: string; name?: string }) => ({
       id: branch.id ?? "",
       name: branch.name ?? branch.id ?? "",
     }))
-    .filter((branch): branch is NeonBranch => Boolean(branch.id))
-    .sort((left, right) => left.name.localeCompare(right.name));
+    .filter((branch: NeonBranch): branch is NeonBranch => Boolean(branch.id))
+    .sort((left: NeonBranch, right: NeonBranch) => left.name.localeCompare(right.name));
 }
 
 export async function ensureDatabase(projectId: string, branchId: string, databaseName: string) {
@@ -98,6 +99,7 @@ export async function ensureDatabase(projectId: string, branchId: string, databa
   await client.createProjectBranchDatabase(projectId, branchId, {
     database: {
       name: databaseName,
+      owner_name: config.neon.roleName,
     },
   });
 }
@@ -127,12 +129,12 @@ export async function ensureBranch(projectId: string, branchName: string, parent
     },
     endpoints: [
       {
-        type: "read_write",
+        type: "read_write" as never,
       },
     ],
   });
 
-  const branch = payload.branch;
+  const branch = (payload.data as { branch?: { id?: string; name?: string } } | undefined)?.branch;
   if (!branch?.id) {
     throw new Error(`Neon did not return a branch for ${branchName}`);
   }
@@ -158,12 +160,12 @@ export async function deleteBranch(projectId: string, branchId: string) {
 export async function getConnectionUri(projectId: string, branchId: string, databaseName: string, roleName: string) {
   const payload = await (await neonClient()).getConnectionUri({
     projectId,
-    branchId,
-    databaseName,
-    roleName,
+    branch_id: branchId,
+    database_name: databaseName,
+    role_name: roleName,
   });
 
-  const uri = payload.uri;
+  const uri = (payload.data as { uri?: string } | undefined)?.uri;
   if (!uri) {
     throw new Error(`Neon did not return a connection URI for ${databaseName} in ${config.serviceName}`);
   }

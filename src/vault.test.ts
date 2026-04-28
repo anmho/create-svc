@@ -32,7 +32,7 @@ test("readVaultSecret reads KV v2 secret data using existing vault login env", a
     );
   });
 
-  globalThis.fetch = fetchMock as typeof fetch;
+  globalThis.fetch = fetchMock as unknown as typeof fetch;
 
   await expect(
     readVaultSecret({
@@ -64,7 +64,7 @@ test("readVaultSecret falls back to ~/.vault-token", async () => {
     );
   });
 
-  globalThis.fetch = fetchMock as typeof fetch;
+  globalThis.fetch = fetchMock as unknown as typeof fetch;
 
   await expect(
     readVaultSecret({

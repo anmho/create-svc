@@ -1,7 +1,10 @@
 import { expect, test } from "bun:test";
 
 test("go test ./...", { timeout: 60_000 }, () => {
-  const result = Bun.spawnSync(["go", "test", "./..."], {
+  const go = Bun.which("go");
+  expect(go, "go must be installed and available on PATH").toBeString();
+
+  const result = Bun.spawnSync([go, "test", "./..."], {
     cwd: process.cwd(),
     stdout: "pipe",
     stderr: "pipe",
