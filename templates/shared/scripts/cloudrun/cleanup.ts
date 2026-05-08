@@ -1,6 +1,6 @@
 import { log } from "@clack/prompts";
 import { config } from "./config";
-import { deleteBranch, deleteDatabase, listBranches } from "./neon";
+import { deleteBranch, deleteDatabase, listBranches, resolveNeonConfig } from "./neon";
 import {
   deleteProject,
   deleteProductionDomainMapping,
@@ -48,24 +48,24 @@ export async function cleanup(args = Bun.argv.slice(2)) {
     }
   });
 
-  if (config.neon.projectId && config.neon.baseBranchId) {
-    const branches = await runStep("Finding Neon branches", () => listBranches(config.neon.projectId));
+  try {
+    const neon = await runStep("Resolving Neon defaults", () => resolveNeonConfig());
+    const branches = await runStep("Finding Neon branches", () => listBranches(neon.projectId));
     const disposableBranches = branches.filter(
       (branch: { name: string }) =>
-        branch.name.startsWith(`${config.neon.previewBranchPrefix}-`) || branch.name.startsWith(`${config.neon.personalBranchPrefix}-`)
+        branch.name.startsWith(`${neon.previewBranchPrefix}-`) || branch.name.startsWith(`${neon.personalBranchPrefix}-`)
     );
 
     await runStep("Deleting Neon preview and personal branches", async () => {
       for (const branch of disposableBranches) {
-        await deleteBranch(config.neon.projectId, branch.id);
+        await deleteBranch(neon.projectId, branch.id);
       }
     });
 
-    await runStep("Deleting Neon service database", () =>
-      deleteDatabase(config.neon.projectId, config.neon.baseBranchId, config.neon.databaseName)
-    );
-  } else {
+    await runStep("Deleting Neon service database", () => deleteDatabase(neon.projectId, neon.baseBranchId, neon.databaseName));
+  } catch (error) {
     log.step("Skipping Neon cleanup because Neon is not configured");
+    log.step(error instanceof Error ? error.message : String(error));
   }
 
   await runStep("Deleting service-specific identity resources", () => {

@@ -240,6 +240,24 @@ export function ensureArtifactRepository() {
   ]);
 }
 
+export function ensureStorageBucket() {
+  if (gcloud(["storage", "buckets", "describe", `gs://${config.storage.attachmentBucket}`, "--project", config.project.id], { allowFailure: true }).success) {
+    return;
+  }
+
+  gcloud([
+    "storage",
+    "buckets",
+    "create",
+    `gs://${config.storage.attachmentBucket}`,
+    "--project",
+    config.project.id,
+    "--location",
+    config.region,
+    "--uniform-bucket-level-access",
+  ]);
+}
+
 export function projectNumber() {
   return gcloud(["projects", "describe", config.project.id, "--format=value(projectNumber)"]).stdout;
 }
@@ -365,6 +383,8 @@ export async function renderManifest(image: string, target: DeploymentTarget) {
     DATABASE_URL_SECRET: target.databaseSecretName,
     SERVICE_RUNTIME: config.runtime,
     SERVICE_FRAMEWORK: config.framework,
+    ATTACHMENT_BUCKET: config.storage.attachmentBucket,
+    ATTACHMENT_PUBLIC_BASE_URL: config.storage.attachmentPublicBaseUrl,
   };
 
   return template.replace(/\$\{([A-Z0-9_]+)\}/g, (_, key: string) => {

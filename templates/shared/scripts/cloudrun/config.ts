@@ -17,6 +17,10 @@ export const config = {
     hostname: "{{API_HOSTNAME}}",
     baseDomain: "{{API_BASE_DOMAIN}}",
   },
+  storage: {
+    attachmentBucket: "{{ATTACHMENT_BUCKET}}",
+    attachmentPublicBaseUrl: "{{ATTACHMENT_PUBLIC_BASE_URL}}",
+  },
   neon: {
     projectId: "{{NEON_PROJECT_ID}}",
     baseBranchId: "{{NEON_BASE_BRANCH_ID}}",
@@ -34,6 +38,7 @@ export const config = {
     "iamcredentials.googleapis.com",
     "secretmanager.googleapis.com",
     "serviceusage.googleapis.com",
+    "storage.googleapis.com",
     "sts.googleapis.com",
   ],
 } as const;

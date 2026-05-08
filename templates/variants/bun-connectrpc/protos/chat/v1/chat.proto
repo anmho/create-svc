@@ -1,0 +1,228 @@
+syntax = "proto3";
+
+package chat.v1;
+
+option go_package = "{{MODULE_PATH}}/gen/chat/v1;chatv1";
+
+service ChatService {
+  rpc CreateUser(CreateUserRequest) returns (CreateUserResponse) {}
+  rpc GetUser(GetUserRequest) returns (GetUserResponse) {}
+  rpc GetUserByUsername(GetUserByUsernameRequest) returns (GetUserResponse) {}
+  rpc CreateConversation(CreateConversationRequest) returns (CreateConversationResponse) {}
+  rpc GetConversation(GetConversationRequest) returns (GetConversationResponse) {}
+  rpc UpdateConversation(UpdateConversationRequest) returns (UpdateConversationResponse) {}
+  rpc DeleteConversation(DeleteConversationRequest) returns (DeleteConversationResponse) {}
+  rpc AddConversationParticipant(AddConversationParticipantRequest) returns (AddConversationParticipantResponse) {}
+  rpc RemoveConversationParticipant(RemoveConversationParticipantRequest) returns (RemoveConversationParticipantResponse) {}
+  rpc ListMessages(ListMessagesRequest) returns (ListMessagesResponse) {}
+  rpc CreateMessage(CreateMessageRequest) returns (CreateMessageResponse) {}
+  rpc UpdateMessage(UpdateMessageRequest) returns (UpdateMessageResponse) {}
+  rpc DeleteMessage(DeleteMessageRequest) returns (DeleteMessageResponse) {}
+  rpc CreateAttachmentUpload(CreateAttachmentUploadRequest) returns (CreateAttachmentUploadResponse) {}
+  rpc FinalizeAttachment(FinalizeAttachmentRequest) returns (FinalizeAttachmentResponse) {}
+  rpc GetAttachment(GetAttachmentRequest) returns (GetAttachmentResponse) {}
+  rpc DeleteAttachment(DeleteAttachmentRequest) returns (DeleteAttachmentResponse) {}
+}
+
+message User {
+  string id = 1;
+  string username = 2;
+  string display_name = 3;
+  string created_at = 4;
+  string updated_at = 5;
+}
+
+message Conversation {
+  string id = 1;
+  string title = 2;
+  string created_by_user_id = 3;
+  repeated User participants = 4;
+  string created_at = 5;
+  string updated_at = 6;
+}
+
+message Message {
+  string id = 1;
+  string conversation_id = 2;
+  string user_id = 3;
+  string body = 4;
+  string edited_at = 5;
+  string created_at = 6;
+  string updated_at = 7;
+  repeated MessageAttachment attachments = 8;
+}
+
+message MessageAttachment {
+  string id = 1;
+  string filename = 2;
+  string content_type = 3;
+  int64 byte_size = 4;
+  string status = 5;
+  string public_url = 6;
+}
+
+message Attachment {
+  string id = 1;
+  string conversation_id = 2;
+  string message_id = 3;
+  string uploaded_by_user_id = 4;
+  string storage_bucket = 5;
+  string storage_key = 6;
+  string content_type = 7;
+  int64 byte_size = 8;
+  string filename = 9;
+  string status = 10;
+  string public_url = 11;
+  string created_at = 12;
+  string updated_at = 13;
+}
+
+message UploadTarget {
+  string method = 1;
+  string url = 2;
+  map<string, string> headers = 3;
+}
+
+message CreateUserRequest {
+  string username = 1;
+  string display_name = 2;
+}
+
+message CreateUserResponse {
+  User user = 1;
+}
+
+message GetUserRequest {
+  string user_id = 1;
+}
+
+message GetUserByUsernameRequest {
+  string username = 1;
+}
+
+message GetUserResponse {
+  User user = 1;
+}
+
+message CreateConversationRequest {
+  string created_by_user_id = 1;
+  string title = 2;
+  repeated string participant_user_ids = 3;
+}
+
+message CreateConversationResponse {
+  Conversation conversation = 1;
+}
+
+message GetConversationRequest {
+  string conversation_id = 1;
+}
+
+message GetConversationResponse {
+  Conversation conversation = 1;
+}
+
+message UpdateConversationRequest {
+  string conversation_id = 1;
+  string title = 2;
+}
+
+message UpdateConversationResponse {
+  Conversation conversation = 1;
+}
+
+message DeleteConversationRequest {
+  string conversation_id = 1;
+}
+
+message DeleteConversationResponse {}
+
+message AddConversationParticipantRequest {
+  string conversation_id = 1;
+  string user_id = 2;
+}
+
+message AddConversationParticipantResponse {
+  Conversation conversation = 1;
+}
+
+message RemoveConversationParticipantRequest {
+  string conversation_id = 1;
+  string user_id = 2;
+}
+
+message RemoveConversationParticipantResponse {}
+
+message ListMessagesRequest {
+  string conversation_id = 1;
+  string cursor = 2;
+  int32 limit = 3;
+}
+
+message ListMessagesResponse {
+  repeated Message messages = 1;
+  string next_cursor = 2;
+}
+
+message CreateMessageRequest {
+  string conversation_id = 1;
+  string user_id = 2;
+  string body = 3;
+}
+
+message CreateMessageResponse {
+  Message message = 1;
+}
+
+message UpdateMessageRequest {
+  string conversation_id = 1;
+  string message_id = 2;
+  string body = 3;
+}
+
+message UpdateMessageResponse {
+  Message message = 1;
+}
+
+message DeleteMessageRequest {
+  string conversation_id = 1;
+  string message_id = 2;
+}
+
+message DeleteMessageResponse {}
+
+message CreateAttachmentUploadRequest {
+  string conversation_id = 1;
+  string user_id = 2;
+  string filename = 3;
+  string content_type = 4;
+  int64 byte_size = 5;
+}
+
+message CreateAttachmentUploadResponse {
+  Attachment attachment = 1;
+  UploadTarget upload = 2;
+}
+
+message FinalizeAttachmentRequest {
+  string attachment_id = 1;
+  string message_id = 2;
+}
+
+message FinalizeAttachmentResponse {
+  Attachment attachment = 1;
+}
+
+message GetAttachmentRequest {
+  string attachment_id = 1;
+}
+
+message GetAttachmentResponse {
+  Attachment attachment = 1;
+}
+
+message DeleteAttachmentRequest {
+  string attachment_id = 1;
+}
+
+message DeleteAttachmentResponse {}

@@ -1,9 +1,18 @@
 import { expect, test } from "bun:test";
-import { createDnsService } from "../src/index";
+import { createIntrospectionDocument, isLocalRpcIntrospectionEnabled } from "../src/index";
 
-test("listRecords starts empty", async () => {
-  const service = createDnsService();
-  const response = await service.listRecords?.({} as never, {} as never);
+test("local introspection document exposes chat service and methods", () => {
+  const document = createIntrospectionDocument();
 
-  expect(response).toEqual({ records: [] });
+  expect(document.service).toBe("chat.v1.ChatService");
+  expect(document.methods.map((method) => method.name)).toContain("CreateUser");
+  expect(document.methods.map((method) => method.name)).toContain("CreateAttachmentUpload");
+});
+
+test("local introspection defaults to enabled outside Cloud Run", () => {
+  delete Bun.env.K_SERVICE;
+  delete Bun.env.ENABLE_RPC_INTROSPECTION;
+  Bun.env.NODE_ENV = "development";
+
+  expect(isLocalRpcIntrospectionEnabled()).toBeTrue();
 });

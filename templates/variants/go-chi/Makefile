@@ -1,9 +1,13 @@
-.PHONY: dev gen lint test bootstrap deploy cleanup
+.PHONY: dev migrate gen lint test bootstrap deploy cleanup
 
 CLOUDRUN := npx --no-install svc-cloudrun
+WITH_ENV := set -a; [ ! -f .env.local ] || . ./.env.local; set +a;
 
 dev:
-	go run ./cmd/server
+	@$(WITH_ENV) go run ./cmd/server
+
+migrate:
+	@$(WITH_ENV) go run ./cmd/migrate
 
 gen:
 	buf generate

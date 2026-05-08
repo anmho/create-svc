@@ -10,17 +10,18 @@ test("normalizeValidationResult preserves validation errors", () => {
   expect(normalizeValidationResult("Service name is required")).toBe("Service name is required");
 });
 
-test("assertDiscoveryReady requires Neon discovery to succeed", () => {
-  expect(() =>
+test("assertDiscoveryReady no longer blocks scaffold when remote discovery is unavailable", () => {
+  expect(
     assertDiscoveryReady({
       projects: [],
       billingAccounts: [],
-      warnings: [],
-      neonError: "Vault secret resolution requires VAULT_ADDR, VAULT_TOKEN, and a secret path",
+      warnings: ["Skipping GCP project discovery: gcloud not installed"],
     })
-  ).toThrow(
-    "Neon discovery is required before scaffolding. Set NEON_API_KEY, or use Vault by providing VAULT_ADDR and either VAULT_TOKEN, VAULT_TOKEN_FILE, or ~/.vault-token. Optional overrides: VAULT_SECRET_MOUNT, VAULT_NEON_API_KEY_PATH, VAULT_NEON_API_KEY_FIELD."
-  );
+  ).toEqual({
+    projects: [],
+    billingAccounts: [],
+    warnings: ["Skipping GCP project discovery: gcloud not installed"],
+  });
 });
 
 test("validateServiceNameInput rejects a taken target directory", async () => {

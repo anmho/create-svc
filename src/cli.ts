@@ -17,7 +17,6 @@ import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runPostScaffoldFlow } from "./post-scaffold";
 import { listOpenBillingAccounts, listAccessibleProjects, type BillingAccount, type GcpProject } from "./gcp";
-import { discoverNeonDefaults } from "./neon";
 import {
   BILLING_ACCOUNT_DEFAULT,
   FRAMEWORKS_BY_RUNTIME,
@@ -39,6 +38,7 @@ type ParsedArgs = {
   directory?: string;
   runtime?: Runtime;
   framework?: Framework;
+  modulePath?: string;
   gcpProjectMode?: GcpProjectMode;
   gcpProject?: string;
   region?: string;
@@ -52,10 +52,6 @@ type ParsedArgs = {
 type DiscoveryState = {
   projects: GcpProject[];
   billingAccounts: BillingAccount[];
-  neonProjectId?: string;
-  neonBaseBranchId?: string;
-  neonBaseBranchName?: string;
-  neonError?: string;
   warnings: string[];
 };
 
@@ -80,7 +76,7 @@ export async function run(argv: string[]) {
         `${pc.bold("Runtime")}: ${config.runtime} + ${config.framework}`,
         `${pc.bold("Project")}: ${config.gcpProjectMode === "create_new" ? "create" : "use"} ${config.gcpProjectName} (${config.gcpProject})`,
         `${pc.bold("API")}: https://${config.apiHostname}`,
-        `${pc.bold("Neon")}: ${config.neonProjectId || "(set later)"} / ${config.neonBaseBranchName || "(set later)"}`,
+        `${pc.bold("Local DB")}: docker compose postgres`,
       ].join("\n"),
       "Scaffold"
     );
@@ -103,13 +99,20 @@ export async function run(argv: string[]) {
       }
     }
 
+    const isBun = config.runtime === "bun";
     outro(
       [
         `Next: ${pc.cyan(`cd ${config.directory}`)}`,
-        `Local dev: ${pc.cyan("bun dev")}`,
-        `Bootstrap: ${pc.cyan("bun run bootstrap")}`,
-        `Deploy: ${pc.cyan("bun run deploy")}`,
-        `Personal env: ${pc.cyan(`bun run deploy -- --environment personal --name ${config.serviceName}`)}`,
+        `Local DB: ${pc.cyan("docker compose up -d")}`,
+        `Migrate: ${pc.cyan(isBun ? "bun run migrate" : "make migrate")}`,
+        `Local dev: ${pc.cyan(isBun ? "bun run dev" : "make dev")}`,
+        `Bootstrap: ${pc.cyan(isBun ? "bun run bootstrap" : "make bootstrap")}`,
+        `Deploy: ${pc.cyan(isBun ? "bun run deploy" : "make deploy")}`,
+        `Personal env: ${pc.cyan(
+          isBun
+            ? `bun run deploy -- --environment personal --name ${config.serviceName}`
+            : `make deploy ARGS="--environment personal --name ${config.serviceName}"`
+        )}`,
         `Production API: ${pc.cyan(`https://${config.apiHostname}`)}`,
       ].join("\n")
     );
@@ -171,6 +174,16 @@ function parseArgs(argv: string[]): ParsedArgs {
 
     if (token.startsWith("--framework=")) {
       parsed.framework = token.slice("--framework=".length) as Framework;
+      continue;
+    }
+
+    if (token === "--module-path") {
+      parsed.modulePath = readValue();
+      continue;
+    }
+
+    if (token.startsWith("--module-path=")) {
+      parsed.modulePath = token.slice("--module-path=".length);
       continue;
     }
 
@@ -258,8 +271,8 @@ export async function resolveConfig(args: ParsedArgs): Promise<ScaffoldConfig> {
   const defaults = deriveDefaults(serviceName);
   const runtime = await resolveRuntime(args);
   const framework = await resolveFramework(args, runtime);
-  const discovery = await discoveryPromise;
-  assertDiscoveryReady(discovery);
+  const modulePath = await resolveModulePath(args, runtime, defaults.modulePath);
+  const discovery = await waitForDiscovery(discoveryPromise);
   const gcpSelection = await resolveGcpSelection(args, defaults, discovery);
   const region = args.region ?? DEFAULT_REGION;
   const billingAccount = chooseBillingAccount(args.billingAccount, discovery.billingAccounts);
@@ -283,6 +296,7 @@ export async function resolveConfig(args: ParsedArgs): Promise<ScaffoldConfig> {
   return {
     directory,
     serviceName,
+    modulePath,
     runtime,
     framework,
     region,
@@ -292,13 +306,23 @@ export async function resolveConfig(args: ParsedArgs): Promise<ScaffoldConfig> {
     billingAccount,
     quotaProjectId: args.quotaProjectId ?? QUOTA_PROJECT_DEFAULT,
     autoDeploy,
-    neonProjectId: discovery.neonProjectId ?? "",
-    neonBaseBranchId: discovery.neonBaseBranchId ?? "",
-    neonBaseBranchName: discovery.neonBaseBranchName ?? "main",
     neonDatabaseName: defaults.neonDatabaseName,
     apiHostname: defaults.apiHostname,
     generatorRoot: resolve(dirname(fileURLToPath(import.meta.url)), ".."),
   };
+}
+
+async function waitForDiscovery(discoveryPromise: Promise<DiscoveryState>) {
+  const indicator = spinner();
+  indicator.start("Discovering GCP defaults");
+  try {
+    const discovery = await discoveryPromise;
+    indicator.stop("GCP defaults discovered");
+    return discovery;
+  } catch (error) {
+    indicator.stop("GCP defaults discovery failed");
+    throw error;
+  }
 }
 
 async function resolveRuntime(args: ParsedArgs): Promise<Runtime> {
@@ -356,6 +380,27 @@ async function resolveFramework(args: ParsedArgs, runtime: Runtime): Promise<Fra
   }
 
   return value as Framework;
+}
+
+async function resolveModulePath(args: ParsedArgs, runtime: Runtime, initialValue: string) {
+  if (runtime !== "go") {
+    return args.modulePath ?? initialValue;
+  }
+
+  if (args.modulePath) {
+    return args.modulePath.trim();
+  }
+
+  if (args.yes) {
+    return initialValue;
+  }
+
+  return promptText("Go module path", initialValue, (value) => {
+    if (!value.trim()) {
+      return "Go module path is required";
+    }
+    return true;
+  });
 }
 
 async function resolveGcpSelection(
@@ -471,24 +516,11 @@ async function discoverCloudInputs(): Promise<DiscoveryState> {
     result.warnings.push(`Skipping billing account discovery: ${formatError(error)}`);
   }
 
-  try {
-    const neonDefaults = await discoverNeonDefaults();
-    result.neonProjectId = neonDefaults.projectId;
-    result.neonBaseBranchId = neonDefaults.baseBranchId;
-    result.neonBaseBranchName = neonDefaults.baseBranchName;
-  } catch (error) {
-    result.neonError = formatError(error);
-  }
-
   return result;
 }
 
 export function assertDiscoveryReady(discovery: DiscoveryState) {
-  if (!discovery.neonError) {
-    return;
-  }
-
-  throw new Error(formatNeonDiscoveryRequirement(discovery.neonError));
+  return discovery;
 }
 
 function chooseBillingAccount(input: string | undefined, accounts: BillingAccount[]) {
@@ -532,18 +564,6 @@ async function promptText(
 
 function formatError(error: unknown) {
   return error instanceof Error ? error.message : String(error);
-}
-
-function formatNeonDiscoveryRequirement(reason: string) {
-  if (reason.includes("Vault secret resolution requires")) {
-    return [
-      "Neon discovery is required before scaffolding.",
-      "Set NEON_API_KEY, or use Vault by providing VAULT_ADDR and either VAULT_TOKEN, VAULT_TOKEN_FILE, or ~/.vault-token.",
-      "Optional overrides: VAULT_SECRET_MOUNT, VAULT_NEON_API_KEY_PATH, VAULT_NEON_API_KEY_FIELD.",
-    ].join(" ");
-  }
-
-  return `Neon discovery is required before scaffolding: ${reason}`;
 }
 
 function handleCliError(error: unknown) {
@@ -631,6 +651,7 @@ Usage:
 Options:
   --runtime <go|bun>              Runtime scaffold to generate
   --framework <name>              Framework for the selected runtime
+  --module-path <path>            Go module path for generated Go scaffolds
   --project-mode <mode>           create_new or use_existing
   --project-id <id>               GCP project id
   --billing-account <name>        Billing account resource name

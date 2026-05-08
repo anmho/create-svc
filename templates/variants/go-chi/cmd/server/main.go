@@ -6,13 +6,14 @@ import (
 	"net/http"
 	"time"
 
+	"cloud.google.com/go/storage"
 	"github.com/go-chi/chi/v5"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 
 	"{{MODULE_PATH}}/internal/app"
 	"{{MODULE_PATH}}/internal/config"
-	"{{MODULE_PATH}}/internal/connectapi"
 	"{{MODULE_PATH}}/internal/httpapi"
 )
 
@@ -22,24 +23,24 @@ func main() {
 		log.Fatal(err)
 	}
 
-	service := app.NewDNSService()
-	if cfg.DatabaseURL != "" {
-		if _, err := service.CreateRecord(context.Background(), app.CreateRecordInput{
-			Type:    "TXT",
-			Name:    "bootstrap",
-			Content: "database-configured",
-			TTL:     60,
-			Proxied: false,
-		}); err != nil {
-			log.Fatal(err)
-		}
+	db, err := app.OpenDatabase(context.Background(), cfg.DatabaseURL)
+	if err != nil {
+		log.Fatal(err)
 	}
+
+	storageClient, err := storage.NewClient(context.Background())
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	service := app.NewChatService(
+		db,
+		app.NewGCSStorage(cfg.AttachmentBucket, cfg.AttachmentPublicBaseURL, storageClient),
+		app.GenericWebhookAdapter{},
+	)
 
 	router := chi.NewRouter()
 	httpapi.RegisterRoutes(router, service)
-
-	connectPath, connectHandler := connectapi.NewHandler(service)
-	router.Mount(connectPath, connectHandler)
 
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,

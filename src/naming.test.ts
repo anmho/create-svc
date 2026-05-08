@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { buildGcpProjectOptions, compactDatabaseName, compactIdentifier, deriveDefaults } from "./naming";
+import { buildGcpProjectOptions, compactDatabaseName, compactIdentifier, deriveDefaults, deriveLocalPostgresPort } from "./naming";
 
 test("deriveDefaults uses the service name for project, repo, and database naming", () => {
   expect(deriveDefaults("edge-api")).toEqual({
@@ -8,7 +8,9 @@ test("deriveDefaults uses the service name for project, repo, and database namin
     projectId: "anmho-edge-api",
     cloudRunService: "edge-api",
     neonDatabaseName: "edge_api",
+    localDatabasePort: deriveLocalPostgresPort("edge-api"),
     apiHostname: "api.edge-api.anmho.com",
+    modulePath: "example.com/edge-api",
   });
 });
 

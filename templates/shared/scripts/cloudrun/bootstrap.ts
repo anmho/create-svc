@@ -1,5 +1,5 @@
 import { config } from "./config";
-import { ensureDatabase, getConnectionUri } from "./neon";
+import { ensureDatabase, getConnectionUri, resolveNeonConfig } from "./neon";
 import {
   addSecretVersion,
   attachBilling,
@@ -8,6 +8,7 @@ import {
   ensureProjectRole,
   ensureSecretAccessor,
   ensureServiceAccount,
+  ensureStorageBucket,
   gcloud,
   requireCommand,
   requireGcloudAuth,
@@ -29,24 +30,23 @@ export async function bootstrap() {
   });
 
   await runStep("Ensuring Artifact Registry repository", () => ensureArtifactRepository());
+  await runStep("Ensuring attachment storage bucket", () => ensureStorageBucket());
 
   await runStep("Granting project roles", () => {
     ensureProjectRole(`serviceAccount:${config.runtimeServiceAccount}`, "roles/secretmanager.secretAccessor");
   });
 
-  if (!config.neon.projectId || !config.neon.baseBranchId) {
-    throw new Error("Neon project and base branch must be configured before bootstrap");
-  }
+  const neon = await runStep("Resolving Neon defaults", () => resolveNeonConfig());
 
   const target = resolveDeploymentTarget("main");
-  await runStep("Ensuring Neon database", () => ensureDatabase(config.neon.projectId, config.neon.baseBranchId, config.neon.databaseName));
+  await runStep("Ensuring Neon database", () => ensureDatabase(neon.projectId, neon.baseBranchId, neon.databaseName));
 
   await runStep("Publishing database secret", async () => {
     const connectionUri = await getConnectionUri(
-      config.neon.projectId,
-      config.neon.baseBranchId,
-      config.neon.databaseName,
-      config.neon.roleName
+      neon.projectId,
+      neon.baseBranchId,
+      neon.databaseName,
+      neon.roleName
     );
     addSecretVersion(target.databaseSecretName, connectionUri);
     ensureSecretAccessor(target.databaseSecretName, `serviceAccount:${config.runtimeServiceAccount}`);

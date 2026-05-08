@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -12,70 +13,45 @@ import (
 	"{{MODULE_PATH}}/internal/app"
 )
 
-func RegisterRoutes(router chi.Router, service *app.DNSService) {
+func RegisterRoutes(router chi.Router, service *app.ChatService) {
 	router.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
-
-	router.Route("/v1/dns/records", func(r chi.Router) {
-		r.Get("/", func(w http.ResponseWriter, request *http.Request) {
-			records, err := service.ListRecords(request.Context())
-			if err != nil {
-				writeError(w, err)
-				return
-			}
-			writeJSON(w, http.StatusOK, map[string]any{"records": records})
-		})
-
-		r.Post("/", func(w http.ResponseWriter, request *http.Request) {
-			var input app.CreateRecordInput
-			if err := decodeJSON(request, &input); err != nil {
-				writeError(w, err)
-				return
-			}
-
-			record, err := service.CreateRecord(request.Context(), input)
-			if err != nil {
-				writeError(w, err)
-				return
-			}
-			writeJSON(w, http.StatusCreated, map[string]any{"record": record})
-		})
-
-		r.Route("/{recordID}", func(r chi.Router) {
-			r.Put("/", func(w http.ResponseWriter, request *http.Request) {
-				var input app.UpdateRecordInput
-				if err := decodeJSON(request, &input); err != nil {
-					writeError(w, err)
-					return
-				}
-
-				record, err := service.UpdateRecord(request.Context(), chi.URLParam(request, "recordID"), input)
-				if err != nil {
-					writeError(w, err)
-					return
-				}
-				writeJSON(w, http.StatusOK, map[string]any{"record": record})
-			})
-
-			r.Delete("/", func(w http.ResponseWriter, request *http.Request) {
-				if err := service.DeleteRecord(request.Context(), chi.URLParam(request, "recordID")); err != nil {
-					writeError(w, err)
-					return
-				}
-				w.WriteHeader(http.StatusNoContent)
-			})
+	router.Get("/readyz", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	})
+	router.Get("/", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]string{
+			"service":   "{{SERVICE_NAME}}",
+			"domain":    "chat",
+			"apiOrigin": "https://api.{{SERVICE_NAME}}.anmho.com",
 		})
 	})
-}
 
-func decodeJSON(request *http.Request, out any) error {
-	defer request.Body.Close()
+	router.Post("/webhooks/{provider}", func(w http.ResponseWriter, request *http.Request) {
+		rawBody, err := io.ReadAll(request.Body)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		event, duplicate, err := service.ProcessWebhook(request.Context(), chi.URLParam(request, "provider"), request.Header, rawBody)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		status := http.StatusAccepted
+		if duplicate {
+			status = http.StatusOK
+		}
+		writeJSON(w, status, map[string]any{"event": event, "duplicate": duplicate})
+	})
 
-	if err := json.NewDecoder(request.Body).Decode(out); err != nil {
-		return err
-	}
-	return nil
+	router.Get("/webhooks/{provider}/health", func(w http.ResponseWriter, request *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]string{
+			"status":   "ok",
+			"provider": chi.URLParam(request, "provider"),
+		})
+	})
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {
@@ -85,6 +61,15 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 }
 
 func writeError(w http.ResponseWriter, err error) {
+	var appErr *app.AppError
+	if errors.As(err, &appErr) {
+		writeJSON(w, appErr.Status, map[string]string{
+			"error": appErr.Error(),
+			"code":  appErr.Code,
+		})
+		return
+	}
+
 	status := http.StatusInternalServerError
 	if errors.Is(err, strconv.ErrSyntax) || strings.Contains(strings.ToLower(err.Error()), "json") {
 		status = http.StatusBadRequest

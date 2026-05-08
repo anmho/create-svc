@@ -1,9 +1,12 @@
-.PHONY: dev gen lint test bootstrap deploy cleanup
+.PHONY: dev migrate gen lint test bootstrap deploy cleanup
 
 CLOUDRUN := npx --no-install svc-cloudrun
 
 dev:
 	bun run ./src/index.ts
+
+migrate:
+	bun run ./scripts/migrate.ts
 
 gen:
 	bun run ./scripts/codegen.ts

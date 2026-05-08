@@ -2,6 +2,8 @@ import { mkdir, readdir } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import {
   compactIdentifier,
+  compactDatabaseName,
+  deriveLocalPostgresPort,
   type Framework,
   type GcpProjectMode,
   type Runtime,
@@ -10,6 +12,7 @@ import {
 export type ScaffoldConfig = {
   directory: string;
   serviceName: string;
+  modulePath: string;
   runtime: Runtime;
   framework: Framework;
   region: string;
@@ -19,9 +22,6 @@ export type ScaffoldConfig = {
   billingAccount: string;
   quotaProjectId: string;
   autoDeploy: boolean;
-  neonProjectId: string;
-  neonBaseBranchId: string;
-  neonBaseBranchName: string;
   neonDatabaseName: string;
   apiHostname: string;
   generatorRoot: string;
@@ -60,6 +60,8 @@ export async function scaffoldProject(config: ScaffoldConfig) {
       await Bun.write(destinationPath, rendered);
     }
   }
+
+  await writeLocalEnvFile(targetDir, replacements);
 }
 
 async function ensureTargetDirectory(targetDir: string) {
@@ -105,15 +107,20 @@ async function collectTemplateFiles(root: string, relative = ""): Promise<string
 }
 
 function buildReplacements(config: ScaffoldConfig) {
-  const modulePath = `github.com/anmho/${config.serviceName}`;
   const serviceAccountBase = compactIdentifier(config.serviceName, 21);
   const runtimeServiceAccount = `${serviceAccountBase}-runtime@${config.gcpProject}.iam.gserviceaccount.com`;
   const previewBranchPrefix = `${config.serviceName}-pr`;
   const personalBranchPrefix = `${config.serviceName}-dev`;
+  const remoteAttachmentBucket = `${config.gcpProject}-${config.serviceName}-attachments`;
+  const remoteAttachmentPublicBaseUrl = `https://storage.googleapis.com/${remoteAttachmentBucket}`;
+  const localDatabaseName = compactDatabaseName(config.serviceName);
+  const localDatabasePort = deriveLocalPostgresPort(config.serviceName);
+  const localAttachmentBucket = `${config.serviceName}-local-attachments`;
+  const localAttachmentPublicBaseUrl = `https://storage.local.invalid/${localAttachmentBucket}`;
 
   return {
     SERVICE_NAME: config.serviceName,
-    MODULE_PATH: modulePath,
+    MODULE_PATH: config.modulePath,
     PROJECT_ID: config.gcpProject,
     PROJECT_NAME: config.gcpProjectName,
     REGION: config.region,
@@ -125,9 +132,9 @@ function buildReplacements(config: ScaffoldConfig) {
     RUNTIME: config.runtime,
     FRAMEWORK: config.framework,
     CLOUD_RUN_SERVICE: config.serviceName,
-    NEON_PROJECT_ID: config.neonProjectId,
-    NEON_BASE_BRANCH_ID: config.neonBaseBranchId,
-    NEON_BASE_BRANCH_NAME: config.neonBaseBranchName,
+    NEON_PROJECT_ID: "",
+    NEON_BASE_BRANCH_ID: "",
+    NEON_BASE_BRANCH_NAME: "main",
     NEON_DATABASE_NAME: config.neonDatabaseName,
     NEON_ROLE_NAME: "neondb_owner",
     NEON_PREVIEW_BRANCH_PREFIX: previewBranchPrefix,
@@ -135,7 +142,68 @@ function buildReplacements(config: ScaffoldConfig) {
     RUNTIME_SERVICE_ACCOUNT: runtimeServiceAccount,
     API_HOSTNAME: config.apiHostname,
     API_BASE_DOMAIN: "anmho.com",
+    ATTACHMENT_BUCKET: remoteAttachmentBucket,
+    ATTACHMENT_PUBLIC_BASE_URL: remoteAttachmentPublicBaseUrl,
+    LOCAL_DATABASE_NAME: localDatabaseName,
+    LOCAL_DATABASE_PORT: localDatabasePort,
+    LOCAL_DATABASE_USER: "postgres",
+    LOCAL_DATABASE_PASSWORD: "postgres",
+    LOCAL_ATTACHMENT_BUCKET: localAttachmentBucket,
+    LOCAL_ATTACHMENT_PUBLIC_BASE_URL: localAttachmentPublicBaseUrl,
+    COMMAND_DEV: config.runtime === "bun" ? "bun run dev" : "make dev",
+    COMMAND_MIGRATE: config.runtime === "bun" ? "bun run migrate" : "make migrate",
+    COMMAND_GEN: config.runtime === "bun" ? "bun run gen" : "make gen",
+    COMMAND_LINT: config.runtime === "bun" ? "bun run lint" : "make lint",
+    COMMAND_TEST: config.runtime === "bun" ? "bun run test" : "make test",
+    COMMAND_BOOTSTRAP: config.runtime === "bun" ? "bun run bootstrap" : "make bootstrap",
+    COMMAND_DEPLOY: config.runtime === "bun" ? "bun run deploy" : "make deploy",
+    COMMAND_DEPLOY_PERSONAL:
+      config.runtime === "bun"
+        ? 'bun run deploy -- --environment personal --name <slug>'
+        : 'make deploy ARGS="--environment personal --name <slug>"',
+    COMMAND_DEPLOY_DESTROY:
+      config.runtime === "bun"
+        ? 'bun run deploy -- --destroy --environment personal --name <slug>'
+        : 'make deploy ARGS="--destroy --environment personal --name <slug>"',
+    COMMAND_CLEANUP: config.runtime === "bun" ? "bun run cleanup" : "make cleanup",
+    COMMAND_CLEANUP_PROJECT: config.runtime === "bun" ? "bun run cleanup -- --project" : 'make cleanup ARGS="--project"',
+    GITIGNORE_EXTRA: config.framework === "connectrpc" ? "gen/" : "",
+    LOCAL_INTROSPECTION_NOTE:
+      config.framework === "connectrpc"
+        ? [
+            "",
+            "## Local introspection",
+            "",
+            "When running locally, ConnectRPC variants expose introspection by default.",
+            "",
+            "- `go + connectrpc`: standard gRPC reflection for tools like `grpcurl list localhost:<port>`",
+            "- `bun + connectrpc`: JSON introspection at `/debug/connectrpc`",
+            "- override with `ENABLE_RPC_INTROSPECTION=true|false`",
+          ].join("\n")
+        : "",
   };
+}
+
+async function writeLocalEnvFile(targetDir: string, replacements: Record<string, string>) {
+  const envPath = join(targetDir, ".env.local");
+  if (await Bun.file(envPath).exists()) {
+    return;
+  }
+
+  const rendered = renderTemplate(
+    [
+      "# Generated local development defaults for create-svc.",
+      "# This file is user-owned after scaffold and is gitignored.",
+      "",
+      "DATABASE_URL=postgres://{{LOCAL_DATABASE_USER}}:{{LOCAL_DATABASE_PASSWORD}}@127.0.0.1:{{LOCAL_DATABASE_PORT}}/{{LOCAL_DATABASE_NAME}}",
+      "ATTACHMENT_BUCKET={{LOCAL_ATTACHMENT_BUCKET}}",
+      "ATTACHMENT_PUBLIC_BASE_URL={{LOCAL_ATTACHMENT_PUBLIC_BASE_URL}}",
+      "",
+    ].join("\n"),
+    replacements
+  );
+
+  await Bun.write(envPath, rendered);
 }
 
 function renderTemplate(input: string, replacements: Record<string, string>) {

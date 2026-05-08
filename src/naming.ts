@@ -54,6 +54,12 @@ export function compactDatabaseName(serviceName: string) {
   });
 }
 
+export function deriveLocalPostgresPort(serviceName: string) {
+  const normalized = slugify(serviceName) || "my-service";
+  const hash = Number.parseInt(shortHash(normalized).slice(0, 4), 16);
+  return String(55000 + (hash % 1000));
+}
+
 export function deriveDefaults(serviceName: string) {
   const normalizedServiceName = slugify(serviceName) || "my-service";
 
@@ -63,7 +69,9 @@ export function deriveDefaults(serviceName: string) {
     projectId: compactIdentifier(`anmho-${normalizedServiceName}`, 30),
     cloudRunService: normalizedServiceName,
     neonDatabaseName: compactDatabaseName(normalizedServiceName),
+    localDatabasePort: deriveLocalPostgresPort(normalizedServiceName),
     apiHostname: `api.${normalizedServiceName}.anmho.com`,
+    modulePath: `example.com/${normalizedServiceName}`,
   };
 }
 

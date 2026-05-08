@@ -1,0 +1,14 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "55432:5432"
+    environment:
+      POSTGRES_DB: create_svc_test
+      POSTGRES_USER: create_svc
+      POSTGRES_PASSWORD: create_svc
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 2s
+      timeout: 2s
+      retries: 20

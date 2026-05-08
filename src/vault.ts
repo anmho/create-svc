@@ -71,7 +71,8 @@ async function resolveVaultToken() {
     return direct;
   }
 
-  const tokenFile = process.env.VAULT_TOKEN_FILE?.trim() || join(homedir(), ".vault-token");
+  const home = process.env.HOME?.trim() || homedir();
+  const tokenFile = process.env.VAULT_TOKEN_FILE?.trim() || join(home, ".vault-token");
 
   try {
     const value = (await Bun.file(tokenFile).text()).trim();

@@ -22,7 +22,10 @@ spec:
                 secretKeyRef:
                   name: ${DATABASE_URL_SECRET}
                   key: latest
+            - name: ATTACHMENT_BUCKET
+              value: ${ATTACHMENT_BUCKET}
+            - name: ATTACHMENT_PUBLIC_BASE_URL
+              value: ${ATTACHMENT_PUBLIC_BASE_URL}
   traffic:
     - latestRevision: true
       percent: 100
-

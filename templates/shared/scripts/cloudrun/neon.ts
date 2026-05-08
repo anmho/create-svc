@@ -3,9 +3,24 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { config } from "./config";
 
+type NeonProject = {
+  id: string;
+  name: string;
+};
+
 type NeonBranch = {
   id: string;
   name: string;
+};
+
+type ResolvedNeonConfig = {
+  projectId: string;
+  baseBranchId: string;
+  baseBranchName: string;
+  databaseName: string;
+  roleName: string;
+  previewBranchPrefix: string;
+  personalBranchPrefix: string;
 };
 
 async function resolveNeonApiKey() {
@@ -57,7 +72,7 @@ async function resolveVaultToken() {
     return direct;
   }
 
-  const tokenFile = process.env.VAULT_TOKEN_FILE?.trim() || join(homedir(), ".vault-token");
+  const tokenFile = process.env.VAULT_TOKEN_FILE?.trim() || join(process.env.HOME?.trim() || homedir(), ".vault-token");
 
   try {
     return (await Bun.file(tokenFile).text()).trim();
@@ -71,6 +86,18 @@ async function neonClient() {
   return createApiClient({ apiKey });
 }
 
+export async function listProjects() {
+  const payload = await (await neonClient()).listProjects({ limit: 100 });
+  const projects = ((payload.data as { projects?: Array<{ id?: string; name?: string }> } | undefined)?.projects ?? []);
+  return projects
+    .map((project: { id?: string; name?: string }) => ({
+      id: project.id ?? "",
+      name: project.name ?? project.id ?? "",
+    }))
+    .filter((project: NeonProject): project is NeonProject => Boolean(project.id))
+    .sort((left: NeonProject, right: NeonProject) => left.name.localeCompare(right.name));
+}
+
 export async function listBranches(projectId: string) {
   const payload = await (await neonClient()).listProjectBranches({ projectId });
   const branches = ((payload.data as { branches?: Array<{ id?: string; name?: string }> } | undefined)?.branches ?? []);
@@ -81,6 +108,46 @@ export async function listBranches(projectId: string) {
     }))
     .filter((branch: NeonBranch): branch is NeonBranch => Boolean(branch.id))
     .sort((left: NeonBranch, right: NeonBranch) => left.name.localeCompare(right.name));
+}
+
+export async function resolveNeonConfig(): Promise<ResolvedNeonConfig> {
+  const configuredProjectId = config.neon.projectId.trim();
+  const configuredBaseBranchId = config.neon.baseBranchId.trim();
+  const configuredBaseBranchName = config.neon.baseBranchName.trim() || "main";
+
+  if (configuredProjectId && configuredBaseBranchId) {
+    return {
+      projectId: configuredProjectId,
+      baseBranchId: configuredBaseBranchId,
+      baseBranchName: configuredBaseBranchName,
+      databaseName: config.neon.databaseName,
+      roleName: config.neon.roleName,
+      previewBranchPrefix: config.neon.previewBranchPrefix,
+      personalBranchPrefix: config.neon.personalBranchPrefix,
+    };
+  }
+
+  const projects = await listProjects();
+  const project = projects[0];
+  if (!project) {
+    throw new Error(`No Neon projects are available for ${config.serviceName}`);
+  }
+
+  const branches = await listBranches(project.id);
+  const branch = branches.find((candidate) => candidate.name === configuredBaseBranchName) ?? branches[0];
+  if (!branch) {
+    throw new Error(`No Neon branches are available in project ${project.id}`);
+  }
+
+  return {
+    projectId: project.id,
+    baseBranchId: branch.id,
+    baseBranchName: branch.name,
+    databaseName: config.neon.databaseName,
+    roleName: config.neon.roleName,
+    previewBranchPrefix: config.neon.previewBranchPrefix,
+    personalBranchPrefix: config.neon.personalBranchPrefix,
+  };
 }
 
 export async function ensureDatabase(projectId: string, branchId: string, databaseName: string) {

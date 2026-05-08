@@ -16,7 +16,7 @@ const result = Bun.spawnSync(
     `--plugin=protoc-gen-es=${plugin}`,
     "--es_out=gen",
     "--es_opt=target=ts",
-    "protos/dns/v1/dns.proto",
+    "protos/chat/v1/chat.proto",
   ],
   {
     cwd: process.cwd(),

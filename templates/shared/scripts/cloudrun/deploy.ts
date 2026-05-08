@@ -1,6 +1,6 @@
 import { config } from "./config";
 import { bootstrap } from "./bootstrap";
-import { deleteBranch, ensureBranch, ensureDatabase, getConnectionUri, listBranches } from "./neon";
+import { deleteBranch, ensureBranch, ensureDatabase, getConnectionUri, listBranches, resolveNeonConfig } from "./neon";
 import {
   addSecretVersion,
   deleteService,
@@ -28,6 +28,7 @@ export async function deploy(args = Bun.argv.slice(2)) {
   }
 
   const target = resolveDeploymentTarget(options.environment, options.name);
+  const neon = await runStep("Resolving Neon defaults", () => resolveNeonConfig());
 
   if (options.destroy) {
     if (options.environment === "main") {
@@ -36,10 +37,10 @@ export async function deploy(args = Bun.argv.slice(2)) {
 
     await runStep(`Deleting Cloud Run service ${target.serviceName}`, () => deleteService(target.serviceName));
     await runStep(`Deleting Neon branch ${target.branchName}`, async () => {
-      const branches = await listBranches(config.neon.projectId);
+      const branches = await listBranches(neon.projectId);
       const branch = branches.find((candidate: { name: string }) => candidate.name === target.branchName);
       if (branch) {
-        await deleteBranch(config.neon.projectId, branch.id);
+        await deleteBranch(neon.projectId, branch.id);
       }
     });
     return `Destroyed ${target.serviceName}`;
@@ -47,17 +48,17 @@ export async function deploy(args = Bun.argv.slice(2)) {
 
   await runStep("Ensuring Artifact Registry repository", () => ensureArtifactRepository());
 
-  let branchId: string = config.neon.baseBranchId;
+  let branchId: string = neon.baseBranchId;
   if (options.environment !== "main") {
     const branch = await runStep(`Ensuring Neon branch ${target.branchName}`, () =>
-      ensureBranch(config.neon.projectId, target.branchName, config.neon.baseBranchId)
+      ensureBranch(neon.projectId, target.branchName, neon.baseBranchId)
     );
     branchId = branch.id;
   }
 
   await runStep("Publishing environment database secret", async () => {
-    await ensureDatabase(config.neon.projectId, branchId, config.neon.databaseName);
-    const connectionUri = await getConnectionUri(config.neon.projectId, branchId, config.neon.databaseName, config.neon.roleName);
+    await ensureDatabase(neon.projectId, branchId, neon.databaseName);
+    const connectionUri = await getConnectionUri(neon.projectId, branchId, neon.databaseName, neon.roleName);
     addSecretVersion(target.databaseSecretName, connectionUri);
     ensureSecretAccessor(target.databaseSecretName, `serviceAccount:${config.runtimeServiceAccount}`);
   });
