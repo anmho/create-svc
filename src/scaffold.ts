@@ -8,6 +8,7 @@ import {
   type GcpProjectMode,
   type Runtime,
 } from "./naming";
+import { exampleForProfile, type Profile } from "./profiles";
 
 export type ScaffoldConfig = {
   directory: string;
@@ -15,6 +16,7 @@ export type ScaffoldConfig = {
   modulePath: string;
   runtime: Runtime;
   framework: Framework;
+  profile: Profile;
   region: string;
   gcpProjectMode: GcpProjectMode;
   gcpProject: string;
@@ -46,8 +48,10 @@ export async function scaffoldProject(config: ScaffoldConfig) {
   const replacements = buildReplacements(config);
   const sharedTemplateRoot = resolve(config.generatorRoot, "templates", "shared");
   const variantTemplateRoot = resolve(config.generatorRoot, "templates", "variants", `${config.runtime}-${config.framework}`);
+  const profileTemplateRoot = resolve(config.generatorRoot, "templates", "profiles", config.profile);
+  const templateRoots = config.profile === "app" ? [sharedTemplateRoot, variantTemplateRoot, profileTemplateRoot] : [sharedTemplateRoot, variantTemplateRoot];
 
-  for (const templateRoot of [sharedTemplateRoot, variantTemplateRoot]) {
+  for (const templateRoot of templateRoots) {
     const files = await collectTemplateFiles(templateRoot);
 
     for (const relativePath of files) {
@@ -107,6 +111,7 @@ async function collectTemplateFiles(root: string, relative = ""): Promise<string
 }
 
 function buildReplacements(config: ScaffoldConfig) {
+  const example = exampleForProfile(config.profile);
   const serviceAccountBase = compactIdentifier(config.serviceName, 21);
   const runtimeServiceAccount = `${serviceAccountBase}-runtime@${config.gcpProject}.iam.gserviceaccount.com`;
   const previewBranchPrefix = `${config.serviceName}-pr`;
@@ -117,6 +122,7 @@ function buildReplacements(config: ScaffoldConfig) {
   const localDatabasePort = deriveLocalPostgresPort(config.serviceName);
   const localAttachmentBucket = `${config.serviceName}-local-attachments`;
   const localAttachmentPublicBaseUrl = `https://storage.local.invalid/${localAttachmentBucket}`;
+  const appDeepLinkScheme = deriveAppDeepLinkScheme(config.serviceName);
 
   return {
     SERVICE_NAME: config.serviceName,
@@ -131,6 +137,10 @@ function buildReplacements(config: ScaffoldConfig) {
     AUTO_DEPLOY: String(config.autoDeploy),
     RUNTIME: config.runtime,
     FRAMEWORK: config.framework,
+    PROFILE: config.profile,
+    EXAMPLE_KIND: example.kind,
+    EXAMPLE_DOMAIN: example.domain,
+    EXAMPLE_LABEL: example.label,
     CLOUD_RUN_SERVICE: config.serviceName,
     NEON_PROJECT_ID: "",
     NEON_BASE_BRANCH_ID: "",
@@ -144,6 +154,9 @@ function buildReplacements(config: ScaffoldConfig) {
     API_BASE_DOMAIN: "anmho.com",
     ATTACHMENT_BUCKET: remoteAttachmentBucket,
     ATTACHMENT_PUBLIC_BASE_URL: remoteAttachmentPublicBaseUrl,
+    APP_DEEP_LINK: `${appDeepLinkScheme}://open`,
+    IOS_STORE_URL: "",
+    ANDROID_STORE_URL: "",
     LOCAL_DATABASE_NAME: localDatabaseName,
     LOCAL_DATABASE_PORT: localDatabasePort,
     LOCAL_DATABASE_USER: "postgres",
@@ -182,6 +195,10 @@ function buildReplacements(config: ScaffoldConfig) {
           ].join("\n")
         : "",
   };
+}
+
+function deriveAppDeepLinkScheme(serviceName: string) {
+  return serviceName.replace(/[^a-z0-9]+/g, "") || "app";
 }
 
 async function writeLocalEnvFile(targetDir: string, replacements: Record<string, string>) {

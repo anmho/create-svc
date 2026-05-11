@@ -1,4 +1,5 @@
 import { config } from "./config";
+import { publishProviderRuntimeSecrets } from "./integrations";
 import { ensureDatabase, getConnectionUri, resolveNeonConfig } from "./neon";
 import {
   addSecretVersion,
@@ -51,6 +52,8 @@ export async function bootstrap() {
     addSecretVersion(target.databaseSecretName, connectionUri);
     ensureSecretAccessor(target.databaseSecretName, `serviceAccount:${config.runtimeServiceAccount}`);
   });
+
+  await runStep("Publishing provider runtime secrets", () => publishProviderRuntimeSecrets(target));
 }
 
 if (import.meta.main) {

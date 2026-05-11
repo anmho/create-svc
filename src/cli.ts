@@ -27,6 +27,7 @@ import {
   type GcpProjectMode,
   type Runtime,
 } from "./naming";
+import { parseProfile, type Profile } from "./profiles";
 import {
   DirectoryConflictError,
   assertTargetDirectoryIsEmpty,
@@ -45,6 +46,7 @@ type ParsedArgs = {
   billingAccount?: string;
   quotaProjectId?: string;
   autoDeploy?: boolean;
+  profile: Profile;
   yes: boolean;
   help: boolean;
 };
@@ -86,7 +88,7 @@ export async function run(argv: string[]) {
     await scaffoldProject(config);
     buildSpinner.stop("Project files generated");
 
-    const shouldRunPostScaffoldFlow = Boolean(process.stdout.isTTY && process.stdin.isTTY && config.autoDeploy);
+    const shouldRunPostScaffoldFlow = config.autoDeploy;
     if (shouldRunPostScaffoldFlow) {
       const automationSpinner = spinner();
       automationSpinner.start("Running post-scaffold automation");
@@ -121,8 +123,9 @@ export async function run(argv: string[]) {
   }
 }
 
-function parseArgs(argv: string[]): ParsedArgs {
+export function parseArgs(argv: string[]): ParsedArgs {
   const parsed: ParsedArgs = {
+    profile: "microservice",
     yes: false,
     help: false,
   };
@@ -174,6 +177,16 @@ function parseArgs(argv: string[]): ParsedArgs {
 
     if (token.startsWith("--framework=")) {
       parsed.framework = token.slice("--framework=".length) as Framework;
+      continue;
+    }
+
+    if (token === "--profile") {
+      parsed.profile = parseProfile(readValue());
+      continue;
+    }
+
+    if (token.startsWith("--profile=")) {
+      parsed.profile = parseProfile(token.slice("--profile=".length));
       continue;
     }
 
@@ -247,6 +260,11 @@ function parseArgs(argv: string[]): ParsedArgs {
       continue;
     }
 
+    if (token === "--bootstrap") {
+      parsed.autoDeploy = true;
+      continue;
+    }
+
     if (token === "--no-auto-deploy") {
       parsed.autoDeploy = false;
       continue;
@@ -299,6 +317,7 @@ export async function resolveConfig(args: ParsedArgs): Promise<ScaffoldConfig> {
     modulePath,
     runtime,
     framework,
+    profile: args.profile,
     region,
     gcpProjectMode: gcpSelection.mode,
     gcpProject: gcpSelection.projectId,
@@ -649,6 +668,7 @@ Usage:
   bun run index.ts [directory] [options]
 
 Options:
+  --profile <microservice|app>    Generation profile (default: microservice)
   --runtime <go|bun>              Runtime scaffold to generate
   --framework <name>              Framework for the selected runtime
   --module-path <path>            Go module path for generated Go scaffolds
@@ -658,6 +678,7 @@ Options:
   --quota-project <id>            Billing quota project for gcloud calls
   --region <region>               Cloud Run region
   --auto-deploy                   Run bootstrap and first deploy after scaffold
+  --bootstrap                     Alias for --auto-deploy
   --no-auto-deploy                Scaffold only
   --yes, -y                       Accept defaults without prompts
   --help, -h                      Show this message

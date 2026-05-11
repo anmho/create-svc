@@ -22,6 +22,46 @@ spec:
                 secretKeyRef:
                   name: ${DATABASE_URL_SECRET}
                   key: latest
+            - name: CLERK_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ${CLERK_SECRET_KEY}
+                  key: latest
+            - name: CLERK_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ${CLERK_WEBHOOK_SECRET}
+                  key: latest
+            - name: STRIPE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ${STRIPE_SECRET_KEY}
+                  key: latest
+            - name: STRIPE_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ${STRIPE_WEBHOOK_SECRET}
+                  key: latest
+            - name: REVENUECAT_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ${REVENUECAT_API_KEY}
+                  key: latest
+            - name: REVENUECAT_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ${REVENUECAT_WEBHOOK_SECRET}
+                  key: latest
+            - name: RESEND_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ${RESEND_API_KEY}
+                  key: latest
+            - name: POSTHOG_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ${POSTHOG_API_KEY}
+                  key: latest
             - name: ATTACHMENT_BUCKET
               value: ${ATTACHMENT_BUCKET}
             - name: ATTACHMENT_PUBLIC_BASE_URL

@@ -1,5 +1,11 @@
 export const config = {
   serviceName: "{{SERVICE_NAME}}",
+  profile: "{{PROFILE}}",
+  example: {
+    kind: "{{EXAMPLE_KIND}}",
+    domain: "{{EXAMPLE_DOMAIN}}",
+    label: "{{EXAMPLE_LABEL}}",
+  },
   runtime: "{{RUNTIME}}",
   framework: "{{FRAMEWORK}}",
   region: "{{REGION}}",

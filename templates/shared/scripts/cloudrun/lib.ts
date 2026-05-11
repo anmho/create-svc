@@ -17,7 +17,7 @@ type CleanupArgs = {
   destroyProject: boolean;
 };
 
-type DeploymentTarget = {
+export type DeploymentTarget = {
   environment: "main" | "preview" | "personal";
   serviceName: string;
   branchName: string;
@@ -374,6 +374,19 @@ export function resolveDeploymentTarget(environment: DeployArgs["environment"], 
   };
 }
 
+export function runtimeSecretNames(target: DeploymentTarget) {
+  return {
+    CLERK_SECRET_KEY: `${target.serviceName}-clerk-secret-key`,
+    CLERK_WEBHOOK_SECRET: `${target.serviceName}-clerk-webhook-secret`,
+    STRIPE_SECRET_KEY: `${target.serviceName}-stripe-secret-key`,
+    STRIPE_WEBHOOK_SECRET: `${target.serviceName}-stripe-webhook-secret`,
+    REVENUECAT_API_KEY: `${target.serviceName}-revenuecat-api-key`,
+    REVENUECAT_WEBHOOK_SECRET: `${target.serviceName}-revenuecat-webhook-secret`,
+    RESEND_API_KEY: `${target.serviceName}-resend-api-key`,
+    POSTHOG_API_KEY: `${target.serviceName}-posthog-api-key`,
+  } as const;
+}
+
 export async function renderManifest(image: string, target: DeploymentTarget) {
   const template = await Bun.file(new URL("../../service.yaml", import.meta.url)).text();
   const values = {
@@ -381,6 +394,7 @@ export async function renderManifest(image: string, target: DeploymentTarget) {
     RUNTIME_SERVICE_ACCOUNT: config.runtimeServiceAccount,
     IMAGE_URL: image,
     DATABASE_URL_SECRET: target.databaseSecretName,
+    ...runtimeSecretNames(target),
     SERVICE_RUNTIME: config.runtime,
     SERVICE_FRAMEWORK: config.framework,
     ATTACHMENT_BUCKET: config.storage.attachmentBucket,

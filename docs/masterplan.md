@@ -6,29 +6,35 @@ This document is the living master plan for `create-svc`. It tracks the product 
 
 Create the perfect backend fundamentals so agents and humans can build product features quickly after infrastructure, styling conventions, runtime plumbing, and common integrations are already handled.
 
-The primary product is an app backend boilerplate. A stripped-down service profile comes later by removing app-specific capabilities from the app backend baseline.
+The product has two profiles:
+
+- `microservice`: the default and first implementation target. It generates a production-deployable API/service with a small waitlist/launch SaaS example and strict integration bootstrap.
+- `app`: a future consumer SaaS workspace profile that generates service/API, workflows, website, and mobile app around a personal tracker example. Its website is a lightweight public landing/download page that links users into the app after bootstrap.
 
 ## Current Priority
 
-Perfect the app backend baseline first.
+Perfect the lightweight microservice bootstrap first.
 
-The generated app should include core backend plumbing and the common product integration stack by default: database, secrets, migrations, uploads, webhooks, auth, payments, entitlements, email, analytics, and operations.
+The generated microservice should be standalone by default: scaffold, bootstrap, and deploy production without Terraform PRs, control-plane registration, or platform-console setup. Terraform remains an optional way to precreate shared foundations.
 
 ## Locked Product Direction
 
-- Primary generated target: app backend.
-- Later generated target: service, derived from the app backend by stripping app-specific pieces.
-- Profile selection: prompt for `app backend` vs `service`, defaulting to `app backend`.
-- Non-interactive profile default: app backend unless a future `--profile service` flag is provided.
-- Local scaffold flow: local-first for runtime dependencies, with app-profile secret validation when integration requirements are enabled.
+- Primary generated target today: `microservice`.
+- Later generated target: `app`, a consumer SaaS boilerplate with API, workflows, website, and mobile app.
+- The `app` profile website is not an admin console by default. It is the public product page for the generated consumer app, with app-store/deep-link/bootstrap links and enough account/billing surface to make the mobile app install path work.
+- Profile selection: `--profile microservice|app`, defaulting to `microservice`.
+- Non-interactive profile default: `microservice`.
+- Local scaffold flow: local-first for runtime dependencies, with strict provider/bootstrap validation only when production bootstrap is requested.
 - Local database: Docker Compose Postgres.
 - Remote database: shared Neon instance with one database per generated app.
 - Runtime modes: `local`, `preview`, and `prod`.
 - Local mode reads `.env.local`, uses Docker Postgres, and uses local defaults.
-- Preview and prod read sensitive runtime values from Vault, including `DATABASE_URL`.
-- Cloud Run runtime Vault auth uses Vault GCP auth with the Cloud Run runtime service account.
+- Secret Manager is the Cloud Run runtime delivery layer.
+- Vault and environment variables are bootstrap input sources.
+- Generated `DATABASE_URL` values are deploy outputs written directly to app-project Secret Manager.
 - GitHub Actions deploys preview on all non-main branch pushes and prod on `main`.
-- Generated backend domain today: chat, attachments, and webhooks as durable plumbing examples.
+- Generated microservice example target: waitlist/launch service.
+- Future app example target: personal tracker consumer SaaS.
 - Webhook ingress: plain HTTP for all variants, with typed internal normalization and dispatch.
 - Attachment storage: direct-to-GCS signed upload plus finalize.
 - ConnectRPC: typed first-party app/service API where selected; webhooks remain HTTP.
@@ -79,9 +85,9 @@ All four variants are still first-class while the baseline is being hardened.
 - Generated Cloud Run scripts provision remote resources and deployment config.
 - Generated remote scripts resolve Neon defaults during `bootstrap` and `deploy`, not during scaffold.
 
-## Vault-Centered Integration Model
+## Lightweight Integration Model
 
-The app backend profile requires the core integration stack by default:
+The strict production bootstrap path requires the core integration stack by default:
 
 - Clerk for auth and identity.
 - Stripe as the web billing/payment rail.
@@ -90,7 +96,7 @@ The app backend profile requires the core integration stack by default:
 - PostHog for product analytics.
 - Neon for remote Postgres provisioning.
 
-Users configure Vault paths once with a future command:
+Users can configure Vault paths once with a future command:
 
 ```bash
 create-svc config vault
@@ -106,11 +112,11 @@ The config uses a named secret map. Generated secret names map to Vault `{ path,
 
 The app-profile scaffold validates required Vault paths and fields before generation. Missing values fail with a concrete checklist of secret names, paths, and fields to add.
 
-`create-svc` is read-only for Vault. If provisioning creates a new secret value, such as a production `DATABASE_URL`, the tool prints the exact operator Vault write step and validates after the operator stores it.
+`create-svc` reads Vault when available and falls back to environment variables for standalone users. Generated runtime values are mirrored into app-project Secret Manager for Cloud Run. Terraform is optional and never required for a generated app's happy path.
 
-## Required App-Profile Secrets
+## Required Bootstrap Inputs
 
-Minimum app-profile Vault validation set:
+Minimum strict-bootstrap input set:
 
 - `NEON_API_KEY`
 - `CLERK_SECRET_KEY`
@@ -121,7 +127,7 @@ Minimum app-profile Vault validation set:
 - `REVENUECAT_WEBHOOK_SECRET`
 - `RESEND_API_KEY`
 - `POSTHOG_API_KEY`
-- `DATABASE_URL` for preview/prod after operator Vault write
+- `DATABASE_URL` is generated during deploy and written directly to app-project Secret Manager.
 
 ## Identity, Auth, and RBAC
 
@@ -133,7 +139,7 @@ Clerk user ID is the canonical user identifier across:
 - Stripe customer/subscription mappings
 - Resend workflows
 
-The app backend should include local users plus organizations from the start. RBAC should build on that user/organization model rather than retrofitting tenancy later.
+The microservice profile uses mixed auth: public submit and provider webhook endpoints, plus Clerk-protected admin APIs. The future app profile is users-first for consumer SaaS; organizations/workspaces belong to a later B2B lane.
 
 Generated apps should include project-owned Clerk helper scripts. These helpers use the Clerk Backend API or SDK; they do not rely on a Clerk CLI login command.
 
@@ -163,12 +169,12 @@ PostHog events should flow through a typed domain event layer. Domain services e
 
 ## Near-Term Hardening
 
-These items finish the current baseline before integration expansion:
+These items finish the current baseline before deeper integration expansion:
 
 - Keep the repo-owned generated-app validation harness green across all four variants.
 - Prove remote `bootstrap` and deploy path end to end for all four variants.
 - Prove remote Neon database creation in the shared Neon instance.
-- Rework remote runtime secrets so preview/prod read from Vault instead of relying on Secret Manager as the runtime source.
+- Keep Secret Manager as the Cloud Run runtime source and improve Vault/env bootstrap input handling.
 - Prove GCS attachment upload and finalize against real cloud storage.
 - Add local fake or emulator-backed attachment tests where practical.
 - Add webhook idempotency acceptance tests across all variants.
@@ -178,15 +184,14 @@ These items finish the current baseline before integration expansion:
 ## Build Order
 
 1. Finish current validation harness and remote deploy proof.
-2. Add `create-svc config vault` and app-profile Vault validation.
-3. Add Clerk auth/RBAC with users plus organizations.
-4. Add `dev:login`, `dev:prod`, and local-only `dev:no-auth`.
-5. Add RevenueCat/Stripe entitlement and webhook plumbing.
-6. Add Resend email plumbing.
-7. Add PostHog domain event adapter.
-8. Add GitHub Actions preview/prod deployment.
-9. Extract stripped-down service profile.
-10. Defer Temporal until the app backend has enough async flows to justify it.
+2. Harden strict microservice bootstrap across all four variants.
+3. Replace the remaining chat-shaped sample with the waitlist/launch service model.
+4. Add provider resource automation for Clerk, Stripe, RevenueCat, Resend, and PostHog where APIs support it.
+5. Add resumable hard-failure instructions for provider gaps.
+6. Add auth boundaries, entitlement checks, email adapter, analytics adapter, and webhook idempotency tests.
+7. Add generated GitHub Actions preview/prod deployment.
+8. Add the future `app` profile around the personal tracker consumer SaaS example.
+9. Defer B2B tenancy and Temporal until the app profile needs them.
 
 ## Future Template System
 

@@ -266,6 +266,7 @@ function createScaffoldConfig(
     modulePath: `example.com/${item.serviceName}`,
     runtime: item.runtime,
     framework: item.framework,
+    profile: "microservice",
     region: "us-west1",
     gcpProjectMode,
     gcpProject: defaults.projectId,

@@ -1,7 +1,8 @@
 # create-svc
 
-`create-svc` is a local backend bootstrap CLI for generating Cloud Run API services with:
+`create-svc` is a local backend bootstrap CLI for generating standalone Cloud Run API services with:
 
+- a default `microservice` profile and future `app` profile
 - a Bun-first backend path built around `hono` and ConnectRPC
 - standalone package output that does not assume repo bootstrap
 - compatibility with future monorepo use in layouts like `apps/<service>`
@@ -14,6 +15,7 @@
 - a production API origin at `https://api.<appname>.anmho.com`
 
 Local provisioning intentionally prefers known-good CLIs, especially `gcloud`, over SDK-heavy orchestration for Google Cloud operations.
+Terraform, control planes, and platform consoles are optional advanced paths, not default prerequisites.
 
 npm: <https://www.npmjs.com/package/create-svc>
 
@@ -28,6 +30,14 @@ or:
 ```bash
 bunx create-svc my-service
 ```
+
+For the strict one-command production path:
+
+```bash
+bun create svc my-service --profile microservice --bootstrap --yes
+```
+
+`--profile microservice` is the default. `--profile app` is reserved for the future consumer SaaS workspace profile.
 
 ## Local Testing
 
@@ -53,6 +63,7 @@ During scaffold, the generator can discover:
 - open billing accounts
 
 Remote `bootstrap` and `deploy` use Neon credentials from `NEON_API_KEY`, or Vault via `VAULT_ADDR` plus `VAULT_TOKEN`, `VAULT_TOKEN_FILE`, or `~/.vault-token`.
+Provider runtime credentials can be supplied through environment variables or Vault paths under `secret/prod/providers/*`; generated Cloud Run services receive runtime values through app-project Secret Manager.
 
 Before running generated provisioning commands locally, authenticate `gcloud` on the machine:
 
@@ -96,7 +107,7 @@ make cleanup
 
 The generated package is intended to be consumed by a Next.js web app or a mobile client over HTTPS. In v1, production is expected to live at `https://api.<appname>.anmho.com`, while preview and personal environments keep using deterministic Cloud Run URLs.
 
-The current boilerplate domain is a simple chat backend with:
+The microservice profile is moving toward a small waitlist/launch service example. The current generated plumbing still includes:
 
 - Postgres-backed `users`, `conversations`, `conversation_participants`, and `messages`
 - image attachment upload/finalize plumbing via GCS

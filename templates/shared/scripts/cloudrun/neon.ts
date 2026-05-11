@@ -32,8 +32,8 @@ async function resolveNeonApiKey() {
   const addr = process.env.VAULT_ADDR?.trim() ?? "";
   const token = await resolveVaultToken();
   const mount = process.env.VAULT_SECRET_MOUNT?.trim() ?? "secret";
-  const path = process.env.VAULT_NEON_API_KEY_PATH?.trim() ?? "provider/neon-api-key";
-  const field = process.env.VAULT_NEON_API_KEY_FIELD?.trim() ?? "value";
+  const path = process.env.VAULT_NEON_API_KEY_PATH?.trim() ?? "prod/providers/neon";
+  const field = process.env.VAULT_NEON_API_KEY_FIELD?.trim() ?? "api_key";
 
   if (!addr || !token) {
     throw new Error("NEON_API_KEY is required for Neon provisioning, or set VAULT_ADDR with VAULT_TOKEN, VAULT_TOKEN_FILE, or ~/.vault-token");

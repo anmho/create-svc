@@ -1,5 +1,6 @@
 import { config } from "./config";
 import { bootstrap } from "./bootstrap";
+import { publishProviderRuntimeSecrets } from "./integrations";
 import { deleteBranch, ensureBranch, ensureDatabase, getConnectionUri, listBranches, resolveNeonConfig } from "./neon";
 import {
   addSecretVersion,
@@ -62,6 +63,8 @@ export async function deploy(args = Bun.argv.slice(2)) {
     addSecretVersion(target.databaseSecretName, connectionUri);
     ensureSecretAccessor(target.databaseSecretName, `serviceAccount:${config.runtimeServiceAccount}`);
   });
+
+  await runStep("Publishing environment provider secrets", () => publishProviderRuntimeSecrets(target));
 
   const image = imageUrl();
   await runStep("Building container image", () =>

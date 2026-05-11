@@ -18,6 +18,7 @@ function baseConfig(overrides: Partial<ScaffoldConfig> = {}): ScaffoldConfig {
     gcpProjectName: "dns-api",
     billingAccount: "billingAccounts/01BD2E-3A6949-8F4C84",
     quotaProjectId: "anmho-infra-prod",
+    profile: "microservice",
     neonDatabaseName: "dns_api",
     apiHostname: "api.dns-api.anmho.com",
     generatorRoot: join(import.meta.dir, ".."),
@@ -48,6 +49,9 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
     );
 
     const configScript = await Bun.file(join(generatedRoot, "scripts", "cloudrun", "config.ts")).text();
+    expect(configScript).toContain('profile: "microservice"');
+    expect(configScript).toContain('domain: "waitlist"');
+    expect(configScript).toContain('kind: "microservice"');
     expect(configScript).toContain(`runtime: "${variant.runtime}"`);
     expect(configScript).toContain(`framework: "${variant.framework}"`);
     expect(configScript).toContain('mode: "create_new"');
@@ -67,6 +71,16 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
       expect(deployScript).toContain("ensureProductionDomainMapping");
       expect(deployScript).toContain("ensureStorageBucket");
 
+      const bootstrapScript = await Bun.file(join(generatedRoot, "scripts", "cloudrun", "bootstrap.ts")).text();
+      expect(bootstrapScript).toContain("publishProviderRuntimeSecrets");
+
+      const manifest = await Bun.file(join(generatedRoot, "service.yaml")).text();
+      expect(manifest).toContain("CLERK_SECRET_KEY");
+      expect(manifest).toContain("STRIPE_SECRET_KEY");
+      expect(manifest).toContain("REVENUECAT_API_KEY");
+      expect(manifest).toContain("RESEND_API_KEY");
+      expect(manifest).toContain("POSTHOG_API_KEY");
+
       const gitignore = await Bun.file(join(generatedRoot, ".gitignore")).text();
       expect(gitignore).toContain("node_modules");
 
@@ -77,6 +91,11 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
     const envExample = await Bun.file(join(generatedRoot, ".env.example")).text();
     expect(envExample).toContain(`DATABASE_URL=postgres://postgres:postgres@127.0.0.1:${localPort}/dns_api`);
     expect(envExample).toContain("ATTACHMENT_BUCKET=dns-api-local-attachments");
+    expect(envExample).toContain("CLERK_SECRET_KEY=");
+    expect(envExample).toContain("STRIPE_SECRET_KEY=");
+    expect(envExample).toContain("REVENUECAT_API_KEY=");
+    expect(envExample).toContain("RESEND_API_KEY=");
+    expect(envExample).toContain("POSTHOG_API_KEY=");
 
     const localEnv = await Bun.file(join(generatedRoot, ".env.local")).text();
     expect(localEnv).toContain(`DATABASE_URL=postgres://postgres:postgres@127.0.0.1:${localPort}/dns_api`);
@@ -119,6 +138,9 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
       expect(entrypoint).toContain(variant.framework === "hono" ? "Hono" : "connectNodeAdapter");
       expect(readme).toContain("ATTACHMENT_BUCKET");
       expect(readme).toContain("/webhooks/:provider");
+      expect(readme).toContain("microservice profile");
+      expect(readme).toContain("waitlist/launch service");
+      expect(readme).toContain("Terraform is optional");
     }
   }
 }, 30000);
@@ -136,7 +158,7 @@ test("scaffolds a backend package cleanly into a nested monorepo-style directory
   );
 
   const readme = await Bun.file(join(generatedRoot, "README.md")).text();
-  expect(readme).toContain("backend bootstrap");
+  expect(readme).toContain("`microservice` profile");
   expect(readme).toContain("api.dns-api.anmho.com");
   expect(readme).toContain("docker compose up -d");
   expect(readme).toContain("local Postgres service in `docker-compose.yml`");
@@ -145,6 +167,9 @@ test("scaffolds a backend package cleanly into a nested monorepo-style directory
   expect(readme).toContain("bun run bootstrap");
   expect(readme).toContain("bun run deploy");
   expect(readme).toContain("ATTACHMENT_BUCKET");
+  expect(readme).toContain("one-command production bootstrap");
+  expect(readme).toContain("waitlist/launch service");
+  expect(readme).toContain("Terraform is optional");
   expect(readme).toContain("webhook_events");
   expect(readme).not.toContain("Neon main, preview, and personal branch provisioning");
   expect(readme).not.toContain("GitHub Actions");
@@ -158,6 +183,50 @@ test("scaffolds a backend package cleanly into a nested monorepo-style directory
 
   expect(await Bun.file(join(generatedRoot, ".github", "workflows", "ci.yml")).exists()).toBeFalse();
 }, 15000);
+
+test("app profile adds a Next.js download website with app deep link fallback", async () => {
+  const root = await mkdtemp(join(tmpdir(), "create-svc-app-profile-"));
+  const generatedRoot = join(root, "tracker");
+
+  await scaffoldProject(
+    baseConfig({
+      directory: generatedRoot,
+      serviceName: "daily-tracker",
+      profile: "app",
+      runtime: "bun",
+      framework: "hono",
+    })
+  );
+
+  const websitePackage = await Bun.file(join(generatedRoot, "website", "package.json")).text();
+  expect(websitePackage).toContain('"next"');
+  expect(websitePackage).toContain('"dev": "next dev"');
+
+  const page = await Bun.file(join(generatedRoot, "website", "app", "page.tsx")).text();
+  expect(page).toContain("dailytracker://open");
+  expect(page).toContain("IOS_STORE_URL");
+  expect(page).toContain("ANDROID_STORE_URL");
+
+  const button = await Bun.file(join(generatedRoot, "website", "app", "download-link-button.tsx")).text();
+  expect(button).toContain("Open app");
+
+  const downloadLinks = await Bun.file(join(generatedRoot, "website", "app", "download-links.ts")).text();
+  expect(downloadLinks).toContain("detectDownloadPlatform");
+  expect(downloadLinks).toContain("selectStoreUrl");
+
+  const readme = await Bun.file(join(generatedRoot, "website", "README.md")).text();
+  expect(readme).toContain("download website");
+  expect(readme).toContain("app deep link");
+});
+
+test("microservice profile does not generate a website package", async () => {
+  const root = await mkdtemp(join(tmpdir(), "create-svc-microservice-profile-"));
+  const generatedRoot = join(root, "service");
+
+  await scaffoldProject(baseConfig({ directory: generatedRoot, profile: "microservice" }));
+
+  expect(await Bun.file(join(generatedRoot, "website", "package.json")).exists()).toBeFalse();
+});
 
 test("detects conflicting files before scaffold generation", async () => {
   const root = await mkdtemp(join(tmpdir(), "create-svc-conflict-"));
