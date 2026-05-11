@@ -48,8 +48,7 @@ export async function scaffoldProject(config: ScaffoldConfig) {
   const replacements = buildReplacements(config);
   const sharedTemplateRoot = resolve(config.generatorRoot, "templates", "shared");
   const variantTemplateRoot = resolve(config.generatorRoot, "templates", "variants", `${config.runtime}-${config.framework}`);
-  const profileTemplateRoot = resolve(config.generatorRoot, "templates", "profiles", config.profile);
-  const templateRoots = config.profile === "app" ? [sharedTemplateRoot, variantTemplateRoot, profileTemplateRoot] : [sharedTemplateRoot, variantTemplateRoot];
+  const templateRoots = [sharedTemplateRoot, variantTemplateRoot];
 
   for (const templateRoot of templateRoots) {
     const files = await collectTemplateFiles(templateRoot);
@@ -122,7 +121,6 @@ function buildReplacements(config: ScaffoldConfig) {
   const localDatabasePort = deriveLocalPostgresPort(config.serviceName);
   const localAttachmentBucket = `${config.serviceName}-local-attachments`;
   const localAttachmentPublicBaseUrl = `https://storage.local.invalid/${localAttachmentBucket}`;
-  const appDeepLinkScheme = deriveAppDeepLinkScheme(config.serviceName);
 
   return {
     SERVICE_NAME: config.serviceName,
@@ -154,9 +152,6 @@ function buildReplacements(config: ScaffoldConfig) {
     API_BASE_DOMAIN: "anmho.com",
     ATTACHMENT_BUCKET: remoteAttachmentBucket,
     ATTACHMENT_PUBLIC_BASE_URL: remoteAttachmentPublicBaseUrl,
-    APP_DEEP_LINK: `${appDeepLinkScheme}://open`,
-    IOS_STORE_URL: "",
-    ANDROID_STORE_URL: "",
     LOCAL_DATABASE_NAME: localDatabaseName,
     LOCAL_DATABASE_PORT: localDatabasePort,
     LOCAL_DATABASE_USER: "postgres",
@@ -195,10 +190,6 @@ function buildReplacements(config: ScaffoldConfig) {
           ].join("\n")
         : "",
   };
-}
-
-function deriveAppDeepLinkScheme(serviceName: string) {
-  return serviceName.replace(/[^a-z0-9]+/g, "") || "app";
 }
 
 async function writeLocalEnvFile(targetDir: string, replacements: Record<string, string>) {

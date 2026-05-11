@@ -59,30 +59,31 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
     expect(configScript).toContain('projectId: ""');
     expect(configScript).toContain('baseBranchId: ""');
     expect(configScript).toContain('baseBranchName: "main"');
-      expect(configScript).toContain('previewBranchPrefix: "dns-api-pr"');
-      expect(configScript).toContain('hostname: "api.dns-api.anmho.com"');
-      expect(configScript).toContain('attachmentBucket: "anmho-dns-api-dns-api-attachments"');
-      expect(configScript).toContain('attachmentPublicBaseUrl: "https://storage.googleapis.com/anmho-dns-api-dns-api-attachments"');
-      expect(configScript).not.toContain("github:");
+    expect(configScript).toContain('previewBranchPrefix: "dns-api-pr"');
+    expect(configScript).toContain('hostname: "api.dns-api.anmho.com"');
+    expect(configScript).toContain('attachmentBucket: "anmho-dns-api-dns-api-attachments"');
+    expect(configScript).toContain('attachmentPublicBaseUrl: "https://storage.googleapis.com/anmho-dns-api-dns-api-attachments"');
+    expect(configScript).not.toContain("github:");
 
-      const deployScript = await Bun.file(join(generatedRoot, "scripts", "cloudrun", "lib.ts")).text();
-      expect(deployScript).toContain('--billing-project", config.project.quotaProjectId');
-      expect(deployScript).toContain("serviceDomain");
-      expect(deployScript).toContain("ensureProductionDomainMapping");
-      expect(deployScript).toContain("ensureStorageBucket");
+    const deployScript = await Bun.file(join(generatedRoot, "scripts", "cloudrun", "lib.ts")).text();
+    expect(deployScript).toContain('--billing-project", config.project.quotaProjectId');
+    expect(deployScript).toContain("serviceDomain");
+    expect(deployScript).toContain("ensureProductionDomainMapping");
+    expect(deployScript).toContain("ensureStorageBucket");
 
-      const bootstrapScript = await Bun.file(join(generatedRoot, "scripts", "cloudrun", "bootstrap.ts")).text();
-      expect(bootstrapScript).toContain("publishProviderRuntimeSecrets");
+    const bootstrapScript = await Bun.file(join(generatedRoot, "scripts", "cloudrun", "bootstrap.ts")).text();
+    expect(bootstrapScript).toContain("publishProviderRuntimeSecrets");
 
-      const manifest = await Bun.file(join(generatedRoot, "service.yaml")).text();
-      expect(manifest).toContain("CLERK_SECRET_KEY");
-      expect(manifest).toContain("STRIPE_SECRET_KEY");
-      expect(manifest).toContain("REVENUECAT_API_KEY");
-      expect(manifest).toContain("RESEND_API_KEY");
-      expect(manifest).toContain("POSTHOG_API_KEY");
+    const manifest = await Bun.file(join(generatedRoot, "service.yaml")).text();
+    expect(manifest).toContain("CLERK_SECRET_KEY");
+    expect(manifest).toContain("STRIPE_SECRET_KEY");
+    expect(manifest).toContain("REVENUECAT_API_KEY");
+    expect(manifest).toContain("RESEND_API_KEY");
+    expect(manifest).toContain("POSTHOG_API_KEY");
 
-      const gitignore = await Bun.file(join(generatedRoot, ".gitignore")).text();
-      expect(gitignore).toContain("node_modules");
+    const gitignore = await Bun.file(join(generatedRoot, ".gitignore")).text();
+    expect(gitignore).toContain("node_modules");
+    expect(await Bun.file(join(generatedRoot, "website", "package.json")).exists()).toBeFalse();
 
     const dockerCompose = await Bun.file(join(generatedRoot, "docker-compose.yml")).text();
     expect(dockerCompose).toContain('image: postgres:16-alpine');
@@ -183,41 +184,6 @@ test("scaffolds a backend package cleanly into a nested monorepo-style directory
 
   expect(await Bun.file(join(generatedRoot, ".github", "workflows", "ci.yml")).exists()).toBeFalse();
 }, 15000);
-
-test("app profile adds a Next.js download website with app deep link fallback", async () => {
-  const root = await mkdtemp(join(tmpdir(), "create-svc-app-profile-"));
-  const generatedRoot = join(root, "tracker");
-
-  await scaffoldProject(
-    baseConfig({
-      directory: generatedRoot,
-      serviceName: "daily-tracker",
-      profile: "app",
-      runtime: "bun",
-      framework: "hono",
-    })
-  );
-
-  const websitePackage = await Bun.file(join(generatedRoot, "website", "package.json")).text();
-  expect(websitePackage).toContain('"next"');
-  expect(websitePackage).toContain('"dev": "next dev"');
-
-  const page = await Bun.file(join(generatedRoot, "website", "app", "page.tsx")).text();
-  expect(page).toContain("dailytracker://open");
-  expect(page).toContain("IOS_STORE_URL");
-  expect(page).toContain("ANDROID_STORE_URL");
-
-  const button = await Bun.file(join(generatedRoot, "website", "app", "download-link-button.tsx")).text();
-  expect(button).toContain("Open app");
-
-  const downloadLinks = await Bun.file(join(generatedRoot, "website", "app", "download-links.ts")).text();
-  expect(downloadLinks).toContain("detectDownloadPlatform");
-  expect(downloadLinks).toContain("selectStoreUrl");
-
-  const readme = await Bun.file(join(generatedRoot, "website", "README.md")).text();
-  expect(readme).toContain("download website");
-  expect(readme).toContain("app deep link");
-});
 
 test("microservice profile does not generate a website package", async () => {
   const root = await mkdtemp(join(tmpdir(), "create-svc-microservice-profile-"));

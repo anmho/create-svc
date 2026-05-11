@@ -39,12 +39,9 @@ test("parseArgs defaults to the microservice profile and treats bootstrap as str
   });
 });
 
-test("parseArgs accepts the app profile without making it the default", () => {
-  expect(parseArgs(["tracker", "--profile=app", "--yes"])).toMatchObject({
-    directory: "tracker",
-    profile: "app",
-    yes: true,
-  });
+test("parseArgs rejects the moved app profile with private template guidance", () => {
+  expect(() => parseArgs(["tracker", "--profile=app", "--yes"])).toThrow("anmho/create-app-consumer");
+  expect(() => parseArgs(["tracker", "--profile", "app", "--yes"])).toThrow("anmho/create-app-saas");
 });
 
 test("validateServiceNameInput rejects a taken target directory", async () => {

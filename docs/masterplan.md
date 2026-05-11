@@ -1,28 +1,31 @@
 # create-svc Master Plan
 
-This document is the living master plan for `create-svc`. It tracks the product vision, locked decisions, current progress, and next work needed to turn the generator into the default foundation for serious app backends.
+This document is the living master plan for `create-svc`. It tracks the product vision, locked decisions, current progress, and next work needed to turn the generator into the default foundation for standalone microservices.
 
 ## Vision
 
-Create the perfect backend fundamentals so agents and humans can build product features quickly after infrastructure, styling conventions, runtime plumbing, and common integrations are already handled.
+Create the perfect backend fundamentals so agents and humans can build microservice features quickly after infrastructure, runtime plumbing, and common integrations are already handled.
 
-The product has two profiles:
+The product now has one generated target:
 
-- `microservice`: the default and first implementation target. It generates a production-deployable API/service with a small waitlist/launch SaaS example and strict integration bootstrap.
-- `app`: a future consumer SaaS workspace profile that generates service/API, workflows, website, and mobile app around a personal tracker example. Its website is a lightweight public landing/download page that links users into the app after bootstrap.
+- `microservice`: a production-deployable API/service with a small waitlist/launch SaaS example and strict integration bootstrap.
+
+Full app workspaces have moved out of `create-svc` into private GitHub Template repositories:
+
+- `anmho/create-app-consumer`: consumer app template with per-user subscriptions/paygate.
+- `anmho/create-app-saas`: multitenant SaaS template with org/workspace billing, roles, invites, and a generic workspace-checklist demo.
 
 ## Current Priority
 
-Perfect the lightweight microservice bootstrap first.
+Perfect the lightweight microservice bootstrap.
 
 The generated microservice should be standalone by default: scaffold, bootstrap, and deploy production without Terraform PRs, control-plane registration, or platform-console setup. Terraform remains an optional way to precreate shared foundations.
 
 ## Locked Product Direction
 
-- Primary generated target today: `microservice`.
-- Later generated target: `app`, a consumer SaaS boilerplate with API, workflows, website, and mobile app.
-- The `app` profile website is not an admin console by default. It is the public product page for the generated consumer app, with app-store/deep-link/bootstrap links and enough account/billing surface to make the mobile app install path work.
-- Profile selection: `--profile microservice|app`, defaulting to `microservice`.
+- Only generated target: `microservice`.
+- `--profile microservice` is retained as a compatibility no-op.
+- `--profile app` fails with guidance to the private app template repositories.
 - Non-interactive profile default: `microservice`.
 - Local scaffold flow: local-first for runtime dependencies, with strict provider/bootstrap validation only when production bootstrap is requested.
 - Local database: Docker Compose Postgres.
@@ -34,11 +37,10 @@ The generated microservice should be standalone by default: scaffold, bootstrap,
 - Generated `DATABASE_URL` values are deploy outputs written directly to app-project Secret Manager.
 - GitHub Actions deploys preview on all non-main branch pushes and prod on `main`.
 - Generated microservice example target: waitlist/launch service.
-- Future app example target: personal tracker consumer SaaS.
 - Webhook ingress: plain HTTP for all variants, with typed internal normalization and dispatch.
 - Attachment storage: direct-to-GCS signed upload plus finalize.
 - ConnectRPC: typed first-party app/service API where selected; webhooks remain HTTP.
-- Temporal is explicitly deferred until the app backend has enough async flows to justify it.
+- Temporal is out of scope for `create-svc`; it belongs in the app template repositories.
 
 ## Current Generated Matrix
 
@@ -110,7 +112,7 @@ The command stores user-level config at:
 
 The config uses a named secret map. Generated secret names map to Vault `{ path, field }` entries so generated apps stay deterministic while users can choose their own Vault layout.
 
-The app-profile scaffold validates required Vault paths and fields before generation. Missing values fail with a concrete checklist of secret names, paths, and fields to add.
+The app template repositories validate required Vault paths and fields before provider mutation. Missing values fail with a concrete checklist of secret names, paths, and fields to add.
 
 `create-svc` reads Vault when available and falls back to environment variables for standalone users. Generated runtime values are mirrored into app-project Secret Manager for Cloud Run. Terraform is optional and never required for a generated app's happy path.
 
@@ -139,7 +141,7 @@ Clerk user ID is the canonical user identifier across:
 - Stripe customer/subscription mappings
 - Resend workflows
 
-The microservice profile uses mixed auth: public submit and provider webhook endpoints, plus Clerk-protected admin APIs. The future app profile is users-first for consumer SaaS; organizations/workspaces belong to a later B2B lane.
+The microservice profile uses mixed auth: public submit and provider webhook endpoints, plus Clerk-protected admin APIs. Consumer and SaaS app tenancy belong in the private app template repositories.
 
 Generated apps should include project-owned Clerk helper scripts. These helpers use the Clerk Backend API or SDK; they do not rely on a Clerk CLI login command.
 
@@ -190,27 +192,15 @@ These items finish the current baseline before deeper integration expansion:
 5. Add resumable hard-failure instructions for provider gaps.
 6. Add auth boundaries, entitlement checks, email adapter, analytics adapter, and webhook idempotency tests.
 7. Add generated GitHub Actions preview/prod deployment.
-8. Add the future `app` profile around the personal tracker consumer SaaS example.
-9. Defer B2B tenancy and Temporal until the app profile needs them.
+8. Keep app workspace generation out of `create-svc`; evolve it in `anmho/create-app-consumer` and `anmho/create-app-saas`.
 
-## Future Template System
+## App Template Repositories
 
-The long-term template system should become more general than a single backend package.
+App workspace generation is handled by private GitHub Template repositories, not by this CLI.
 
-Target direction:
+Both app templates use Nx + Bun + Next.js + Expo + an embedded API + Temporal worker. They keep `bun run bootstrap`, `bun run provision`, and `bun run dev` inside the cloned workspace, with provider credentials read from Vault paths defined by the app-platform Terraform provider schema.
 
-- Nx repo as the full application workspace.
-- Multi-language support.
-- Backend service packages.
-- Web app packages.
-- Mobile app packages.
-- Shared contracts and generated clients.
-- App backend profile as the default product backend.
-- Service profile as a smaller backend for general APIs and internal services.
-
-Open design point:
-
-- Whether `create-svc` remains the backend generator and a future generator owns the Nx workspace, or whether `create-svc` evolves into the top-level app workspace generator.
+`create-svc` does not clone, call, or provision those repositories. It only documents their existence and rejects the removed `app` profile with a clear pointer.
 
 ## Current Non-Goals
 
@@ -220,14 +210,15 @@ Open design point:
 - Redis queueing.
 - Provider-specific business logic beyond core integration plumbing.
 - Mobile or web app generation in the current backend-focused phase.
-- Temporal in the first app-backend integration pass.
+- Temporal.
+- Nx workspace generation.
 
 ## Future Test Coverage
 
 Future implementation tests should cover:
 
 - Vault config file loading and missing-config checklist.
-- App-profile scaffold blocking on missing required Vault fields.
+- App-template provision dry-run blocking on missing required Vault fields.
 - Local mode still running from Docker/env defaults.
 - `dev:login` creating or reusing a Clerk user, syncing local `users`, and printing a token.
 - `dev:no-auth` refusing outside `APP_ENV=local`.

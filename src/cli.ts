@@ -668,7 +668,7 @@ Usage:
   bun run index.ts [directory] [options]
 
 Options:
-  --profile <microservice|app>    Generation profile (default: microservice)
+  --profile <microservice>        Compatibility no-op; create-svc only generates microservices
   --runtime <go|bun>              Runtime scaffold to generate
   --framework <name>              Framework for the selected runtime
   --module-path <path>            Go module path for generated Go scaffolds

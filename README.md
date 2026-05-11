@@ -2,7 +2,7 @@
 
 `create-svc` is a local backend bootstrap CLI for generating standalone Cloud Run API services with:
 
-- a default `microservice` profile and future `app` profile
+- a single `microservice` generation path
 - a Bun-first backend path built around `hono` and ConnectRPC
 - standalone package output that does not assume repo bootstrap
 - compatibility with future monorepo use in layouts like `apps/<service>`
@@ -37,7 +37,7 @@ For the strict one-command production path:
 bun create svc my-service --profile microservice --bootstrap --yes
 ```
 
-`--profile microservice` is the default. `--profile app` is reserved for the future consumer SaaS workspace profile.
+`--profile microservice` is accepted as a compatibility no-op. Full app workspaces live in the private GitHub template repos `anmho/create-app-consumer` and `anmho/create-app-saas`.
 
 ## Local Testing
 
