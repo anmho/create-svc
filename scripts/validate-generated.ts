@@ -3,6 +3,7 @@ import { basename, join, resolve } from "node:path";
 import { createServer } from "node:net";
 import { connect as connectHttp2, constants as http2Constants } from "node:http2";
 import { deriveDefaults, type Framework, type GcpProjectMode, type Runtime } from "../src/naming";
+import type { Profile } from "../src/profiles";
 import { scaffoldProject, type ScaffoldConfig } from "../src/scaffold";
 
 export const GENERATED_VARIANTS = [
@@ -13,6 +14,7 @@ export const GENERATED_VARIANTS = [
 ] as const;
 
 export type GeneratedVariant = (typeof GENERATED_VARIANTS)[number];
+export type GeneratedTarget = GeneratedVariant | "app";
 
 type VariantDefinition = {
   name: GeneratedVariant;
@@ -29,14 +31,15 @@ export type ValidationCommandStep = {
 
 export type SmokeCheck = {
   name: string;
-  kind?: "http" | "connect-client";
+  kind?: "http" | "connect-client" | "http-json-client" | "web" | "ios-expo";
   path?: string;
   expectStatus?: number;
   protocol?: "http1" | "http2";
 };
 
 export type ValidationPlanItem = {
-  name: GeneratedVariant;
+  name: GeneratedTarget;
+  profile: Profile;
   runtime: Runtime;
   framework: Framework;
   serviceName: string;
@@ -48,6 +51,7 @@ export type ValidationPlanItem = {
 
 export type ValidationOptions = {
   selectedVariant?: GeneratedVariant;
+  selectedProfile: Profile;
   keep: boolean;
   runId?: string;
 };
@@ -126,6 +130,7 @@ const SMOKE_REQUEST_TIMEOUT_MS = 2_000;
 
 export function parseValidationArgs(args: string[]): ValidationOptions {
   let selectedVariant: GeneratedVariant | undefined;
+  let selectedProfile: Profile = "microservice";
   let keep = false;
 
   for (let index = 0; index < args.length; index += 1) {
@@ -154,14 +159,57 @@ export function parseValidationArgs(args: string[]): ValidationOptions {
       continue;
     }
 
+    if (token === "--profile") {
+      const value = args[index + 1];
+      if (!value) {
+        throw new Error("Missing value for --profile");
+      }
+      selectedProfile = parseGeneratedProfile(value);
+      index += 1;
+      continue;
+    }
+
+    if (token.startsWith("--profile=")) {
+      selectedProfile = parseGeneratedProfile(token.slice("--profile=".length));
+      continue;
+    }
+
     throw new Error(`Unknown argument: ${token}`);
   }
 
-  return { selectedVariant, keep };
+  if (selectedProfile === "app" && selectedVariant) {
+    throw new Error("--variant cannot be combined with --profile app");
+  }
+
+  return { selectedVariant, selectedProfile, keep };
 }
 
 export function planValidation(args: string[] | ValidationOptions): ValidationPlanItem[] {
   const options = Array.isArray(args) ? parseValidationArgs(args) : args;
+  if (options.selectedProfile === "app") {
+    const runSuffix = options.runId ? `-${options.runId}` : "";
+    const composeRunId = options.runId ?? "validation";
+    const serviceName = `validation${runSuffix}-app`;
+    return [
+      {
+        name: "app",
+        profile: "app",
+        runtime: "bun",
+        framework: "connectrpc",
+        serviceName,
+        directoryName: "app",
+        composeProjectName: `create_svc_${composeRunId}_app`.replace(/[^a-zA-Z0-9_-]/g, "_"),
+        commandSteps: [{ name: "run go-button", command: ["bun", "run", "go"] }],
+        smokeChecks: [
+          { name: "health endpoint", path: "/healthz" },
+          { name: "http json chat client", kind: "http-json-client" },
+          { name: "web app", kind: "web" },
+          { name: "ios expo app", kind: "ios-expo" },
+        ],
+      },
+    ];
+  }
+
   const variants = options.selectedVariant ? [options.selectedVariant] : GENERATED_VARIANTS;
   const runSuffix = options.runId ? `-${options.runId}` : "";
   const composeRunId = options.runId ?? "validation";
@@ -171,6 +219,7 @@ export function planValidation(args: string[] | ValidationOptions): ValidationPl
     const serviceName = `validation${runSuffix}-${name}`;
     return {
       name,
+      profile: "microservice",
       runtime: definition.runtime,
       framework: definition.framework,
       serviceName,
@@ -202,6 +251,12 @@ export async function validateGeneratedApps(args: string[] = Bun.argv.slice(2)) 
       try {
         console.log(`→ ${item.name}: scaffold`);
         await scaffoldProject(createScaffoldConfig(item, generatedRoot, generatorRoot));
+
+        if (item.profile === "app") {
+          await runAppProfileValidation(item, generatedRoot);
+          console.log(`✓ ${item.name}`);
+          continue;
+        }
 
         for (const step of item.commandSteps) {
           console.log(`→ ${item.name}: ${step.name}`);
@@ -245,11 +300,93 @@ export async function validateGeneratedApps(args: string[] = Bun.argv.slice(2)) 
   }
 }
 
+async function runAppProfileValidation(item: ValidationPlanItem, cwd: string) {
+  const proc = Bun.spawn(["bun", "run", "go"], {
+    cwd,
+    env: {
+      ...process.env,
+      COMPOSE_PROJECT_NAME: item.composeProjectName,
+      API_BASE_URL: "http://127.0.0.1:8080",
+      EXPO_PUBLIC_API_URL: "http://localhost:8080",
+    },
+    stdin: "ignore",
+    stdout: "pipe",
+    stderr: "pipe",
+    detached: true,
+  });
+
+  try {
+    await waitForHttp("http://127.0.0.1:8080/healthz", 200, proc);
+    await runHttpJsonClientSmoke(cwd);
+    await waitForHttp("http://127.0.0.1:3000", 200, proc);
+    await runWebSmoke();
+    await runIosExpoSmoke(proc);
+  } finally {
+    terminateProcessGroup(proc);
+    await proc.exited.catch(() => {});
+    await stopDockerCompose(cwd, item);
+  }
+}
+
+async function runHttpJsonClientSmoke(cwd: string) {
+  const smokePath = join(cwd, ".create-svc-http-json-smoke.ts");
+  await Bun.write(
+    smokePath,
+    [
+      'import { createHttpJsonChatClient } from "@svc/api-client";',
+      "",
+      'const client = createHttpJsonChatClient({ baseUrl: "http://127.0.0.1:8080" });',
+      'const username = `smoke-${Date.now()}`;',
+      'const userResponse = await client.createUser({ username, displayName: "Smoke" });',
+      'if (userResponse.user?.username !== username) throw new Error("HTTP JSON CreateUser smoke failed");',
+      "const conversationResponse = await client.createConversation({",
+      "  createdByUserId: userResponse.user.id,",
+      '  title: "Smoke",',
+      "  participantUserIds: [userResponse.user.id],",
+      "});",
+      'if (!conversationResponse.conversation?.id) throw new Error("HTTP JSON CreateConversation smoke failed");',
+      "const messageResponse = await client.createMessage({",
+      "  conversationId: conversationResponse.conversation.id,",
+      "  userId: userResponse.user.id,",
+      '  body: "Hello from HTTP JSON.",',
+      "});",
+      'if (messageResponse.message?.body !== "Hello from HTTP JSON.") throw new Error("HTTP JSON CreateMessage smoke failed");',
+      "const listResponse = await client.listMessages({ conversationId: conversationResponse.conversation.id });",
+      'if (!listResponse.messages.some((message) => message.body === "Hello from HTTP JSON.")) throw new Error("HTTP JSON ListMessages smoke failed");',
+      "",
+    ].join("\n")
+  );
+  await runCommand(["bun", "run", smokePath], { cwd });
+}
+
+async function runWebSmoke() {
+  const response = await fetch("http://127.0.0.1:3000", { signal: AbortSignal.timeout(10_000) });
+  const html = await response.text();
+  if (!html.includes("Agent-first mobile and web starter") || !html.includes("Hello from ConnectRPC.")) {
+    throw new Error("web app smoke did not render the expected chat content");
+  }
+}
+
+async function runIosExpoSmoke(proc: ServerProcess) {
+  await waitForHttp("http://127.0.0.1:8081", 200, proc);
+  const booted = await runProcess(["xcrun", "simctl", "list", "devices", "booted"], { cwd: process.cwd() });
+  if (booted.exitCode !== 0 || !booted.output.includes("iPhone")) {
+    throw new Error(`iOS Simulator did not boot for Expo validation\n${booted.output}`);
+  }
+}
+
 function parseGeneratedVariant(value: string): GeneratedVariant {
   if (!GENERATED_VARIANTS.includes(value as GeneratedVariant)) {
     throw new Error(`Unknown generated service variant: ${value}`);
   }
   return value as GeneratedVariant;
+}
+
+function parseGeneratedProfile(value: string): Profile {
+  if (value === "microservice" || value === "app") {
+    return value;
+  }
+  throw new Error(`Unknown generated profile: ${value}`);
 }
 
 function createScaffoldConfig(
@@ -266,7 +403,7 @@ function createScaffoldConfig(
     modulePath: `example.com/${item.serviceName}`,
     runtime: item.runtime,
     framework: item.framework,
-    profile: "microservice",
+    profile: item.profile,
     region: "us-west1",
     gcpProjectMode,
     gcpProject: defaults.projectId,

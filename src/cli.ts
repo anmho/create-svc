@@ -7,6 +7,7 @@ import {
   log,
   note,
   outro,
+  password,
   select,
   spinner,
   text,
@@ -34,6 +35,7 @@ import {
   scaffoldProject,
   type ScaffoldConfig,
 } from "./scaffold";
+import { readVaultSecretFields, upsertVaultSecretFields } from "./vault";
 
 type ParsedArgs = {
   directory?: string;
@@ -46,6 +48,9 @@ type ParsedArgs = {
   billingAccount?: string;
   quotaProjectId?: string;
   autoDeploy?: boolean;
+  clerkPublishableKey?: string;
+  clerkSecretKey?: string;
+  clerkWebhookSecret?: string;
   profile: Profile;
   yes: boolean;
   help: boolean;
@@ -58,6 +63,7 @@ type DiscoveryState = {
 };
 
 const DEFAULT_REGION = "us-west1";
+const CLERK_PROVIDER_VAULT_PATH = "prod/providers/clerk";
 
 export async function run(argv: string[]) {
   try {
@@ -71,6 +77,7 @@ export async function run(argv: string[]) {
 
     const config = await resolveConfig(args);
     const targetDir = resolve(process.cwd(), config.directory);
+    const clerkVaultResolution = await resolveClerkVaultFields(args, config.profile);
 
     note(
       [
@@ -82,6 +89,20 @@ export async function run(argv: string[]) {
       ].join("\n"),
       "Scaffold"
     );
+
+    if (clerkVaultResolution?.action === "present") {
+      log.info("Clerk keys already present at Vault secret/prod/providers/clerk");
+    }
+
+    if (clerkVaultResolution?.action === "write") {
+      const vaultSpinner = spinner();
+      vaultSpinner.start("Writing Clerk keys to Vault");
+      await upsertVaultSecretFields({
+        path: CLERK_PROVIDER_VAULT_PATH,
+        fields: clerkVaultResolution.fields,
+      });
+      vaultSpinner.stop("Clerk keys written to Vault secret/prod/providers/clerk");
+    }
 
     const buildSpinner = spinner();
     buildSpinner.start("Generating project files");
@@ -260,6 +281,36 @@ export function parseArgs(argv: string[]): ParsedArgs {
       continue;
     }
 
+    if (token === "--clerk-publishable-key") {
+      parsed.clerkPublishableKey = readValue();
+      continue;
+    }
+
+    if (token.startsWith("--clerk-publishable-key=")) {
+      parsed.clerkPublishableKey = token.slice("--clerk-publishable-key=".length);
+      continue;
+    }
+
+    if (token === "--clerk-secret-key") {
+      parsed.clerkSecretKey = readValue();
+      continue;
+    }
+
+    if (token.startsWith("--clerk-secret-key=")) {
+      parsed.clerkSecretKey = token.slice("--clerk-secret-key=".length);
+      continue;
+    }
+
+    if (token === "--clerk-webhook-secret") {
+      parsed.clerkWebhookSecret = readValue();
+      continue;
+    }
+
+    if (token.startsWith("--clerk-webhook-secret=")) {
+      parsed.clerkWebhookSecret = token.slice("--clerk-webhook-secret=".length);
+      continue;
+    }
+
     if (token === "--bootstrap") {
       parsed.autoDeploy = true;
       continue;
@@ -276,6 +327,122 @@ export function parseArgs(argv: string[]): ParsedArgs {
   return parsed;
 }
 
+type ClerkVaultInput = {
+  publishableKey: string;
+  secretKey: string;
+  webhookSecret: string;
+};
+
+type ClerkVaultFields = ReturnType<typeof buildClerkVaultFields>;
+
+type ClerkVaultResolution = { action: "present" } | { action: "write"; fields: ClerkVaultFields };
+
+type ClerkVaultResolverDependencies = {
+  readExistingFields: () => Promise<Record<string, string | undefined> | undefined>;
+  confirmWrite: () => Promise<boolean>;
+  promptPublishableKey: () => Promise<string>;
+  promptSecretKey: () => Promise<string>;
+  promptWebhookSecret: () => Promise<string>;
+};
+
+export function buildClerkVaultFields(input: ClerkVaultInput) {
+  const fields = {
+    publishable_key: input.publishableKey.trim(),
+    secret_key: input.secretKey.trim(),
+    webhook_secret: input.webhookSecret.trim(),
+  };
+
+  const missing = Object.entries(fields)
+    .filter(([, value]) => !value)
+    .map(([field]) => field);
+  if (missing.length > 0) {
+    throw new Error(`Missing Clerk Vault field values: ${missing.join(", ")}`);
+  }
+
+  return fields;
+}
+
+export async function resolveClerkVaultFields(
+  args: ParsedArgs,
+  profile: Profile,
+  dependencies: ClerkVaultResolverDependencies = defaultClerkVaultResolverDependencies
+): Promise<ClerkVaultResolution | undefined> {
+  if (profile !== "app") {
+    return undefined;
+  }
+
+  const hasAnyKey = [args.clerkPublishableKey, args.clerkSecretKey, args.clerkWebhookSecret].some(
+    (value) => value !== undefined
+  );
+  if (hasAnyKey) {
+    return {
+      action: "write",
+      fields: buildClerkVaultFields({
+        publishableKey: args.clerkPublishableKey ?? "",
+        secretKey: args.clerkSecretKey ?? "",
+        webhookSecret: args.clerkWebhookSecret ?? "",
+      }),
+    };
+  }
+
+  if (args.yes) {
+    return undefined;
+  }
+
+  const existingFields = await dependencies.readExistingFields();
+  if (existingFields && hasCompleteClerkVaultFields(existingFields)) {
+    return { action: "present" };
+  }
+
+  const shouldWrite = await dependencies.confirmWrite();
+  if (!shouldWrite) {
+    return undefined;
+  }
+
+  const publishableKey = await dependencies.promptPublishableKey();
+  const secretKey = await dependencies.promptSecretKey();
+  const webhookSecret = await dependencies.promptWebhookSecret();
+
+  return {
+    action: "write",
+    fields: buildClerkVaultFields({
+      publishableKey,
+      secretKey,
+      webhookSecret,
+    }),
+  };
+}
+
+const defaultClerkVaultResolverDependencies: ClerkVaultResolverDependencies = {
+  readExistingFields: async () => readExistingClerkVaultFields(),
+  confirmWrite: async () => {
+    const shouldWrite = await confirm({
+      message: "Write Clerk keys to Vault secret/prod/providers/clerk now?",
+      initialValue: false,
+    });
+    if (isCancel(shouldWrite)) {
+      cancel("Aborted");
+      process.exit(1);
+    }
+    return shouldWrite;
+  },
+  promptPublishableKey: async () => promptText("Clerk publishable key", "", requireValue("Clerk publishable key")),
+  promptSecretKey: async () => promptSecret("Clerk secret key", requireValue("Clerk secret key")),
+  promptWebhookSecret: async () => promptSecret("Clerk webhook secret", requireValue("Clerk webhook secret")),
+};
+
+async function readExistingClerkVaultFields() {
+  try {
+    return await readVaultSecretFields({ path: CLERK_PROVIDER_VAULT_PATH });
+  } catch {
+    return undefined;
+  }
+}
+
+function hasCompleteClerkVaultFields(fields: Record<string, string | undefined>) {
+  return Boolean(fields.publishable_key?.trim() && fields.secret_key?.trim() && fields.webhook_secret?.trim());
+}
+
 export async function resolveConfig(args: ParsedArgs): Promise<ScaffoldConfig> {
   const inferredName = slugify(basename(args.directory ?? "my-service"));
   const serviceName = args.yes
@@ -287,8 +454,9 @@ export async function resolveConfig(args: ParsedArgs): Promise<ScaffoldConfig> {
 
   const discoveryPromise = discoverCloudInputs();
   const defaults = deriveDefaults(serviceName);
-  const runtime = await resolveRuntime(args);
-  const framework = await resolveFramework(args, runtime);
+  const runtime = await resolveRuntime(args, args.profile);
+  const framework = await resolveFramework(args, runtime, args.profile);
+  validateProfileRuntimeFramework(args.profile, runtime, framework);
   const modulePath = await resolveModulePath(args, runtime, defaults.modulePath);
   const discovery = await waitForDiscovery(discoveryPromise);
   const gcpSelection = await resolveGcpSelection(args, defaults, discovery);
@@ -344,9 +512,13 @@ async function waitForDiscovery(discoveryPromise: Promise<DiscoveryState>) {
   }
 }
 
-async function resolveRuntime(args: ParsedArgs): Promise<Runtime> {
+async function resolveRuntime(args: ParsedArgs, profile: Profile): Promise<Runtime> {
   if (args.runtime) {
     return args.runtime;
+  }
+
+  if (profile === "app") {
+    return "bun";
   }
 
   if (args.yes) {
@@ -370,13 +542,17 @@ async function resolveRuntime(args: ParsedArgs): Promise<Runtime> {
   return value as Runtime;
 }
 
-async function resolveFramework(args: ParsedArgs, runtime: Runtime): Promise<Framework> {
+async function resolveFramework(args: ParsedArgs, runtime: Runtime, profile: Profile): Promise<Framework> {
   const allowed = FRAMEWORKS_BY_RUNTIME[runtime];
   if (args.framework) {
     if (allowed.some((framework) => framework === args.framework)) {
       return args.framework;
     }
     throw new Error(`Framework ${args.framework} is not valid for runtime ${runtime}`);
+  }
+
+  if (profile === "app") {
+    return "connectrpc";
   }
 
   if (args.yes) {
@@ -581,6 +757,24 @@ async function promptText(
   return value.trim();
 }
 
+async function promptSecret(message: string, validate: (value: string) => true | string): Promise<string> {
+  const value = await password({
+    message,
+    validate: (input) => normalizeValidationResult(validate((input ?? "").trim())),
+  });
+
+  if (isCancel(value)) {
+    cancel("Aborted");
+    process.exit(1);
+  }
+
+  return value.trim();
+}
+
+function requireValue(label: string) {
+  return (value: string) => (value.trim() ? true : `${label} is required`);
+}
+
 function formatError(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
@@ -639,6 +833,12 @@ export function normalizeValidationResult(result: true | string): string | undef
   return result === true ? undefined : result;
 }
 
+export function validateProfileRuntimeFramework(profile: Profile, runtime: Runtime, framework: Framework) {
+  if (profile === "app" && (runtime !== "bun" || framework !== "connectrpc")) {
+    throw new Error("The app profile currently supports only bun + connectrpc");
+  }
+}
+
 export function validateServiceNameInput(rawValue: string, directoryOverride?: string) {
   const serviceName = slugify(rawValue);
   if (!serviceName) {
@@ -668,7 +868,7 @@ Usage:
   bun run index.ts [directory] [options]
 
 Options:
-  --profile <microservice>        Compatibility no-op; create-svc only generates microservices
+  --profile <microservice|app>    Generate a backend microservice or app workspace
   --runtime <go|bun>              Runtime scaffold to generate
   --framework <name>              Framework for the selected runtime
   --module-path <path>            Go module path for generated Go scaffolds
@@ -680,6 +880,9 @@ Options:
   --auto-deploy                   Run bootstrap and first deploy after scaffold
   --bootstrap                     Alias for --auto-deploy
   --no-auto-deploy                Scaffold only
+  --clerk-publishable-key <key>   Write Clerk publishable key to Vault for app profile
+  --clerk-secret-key <key>        Write Clerk secret key to Vault for app profile
+  --clerk-webhook-secret <secret> Write Clerk webhook secret to Vault for app profile
   --yes, -y                       Accept defaults without prompts
   --help, -h                      Show this message
 `);

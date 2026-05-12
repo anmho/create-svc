@@ -18,6 +18,26 @@ test("plans only the selected variant when --variant is provided", () => {
   expect(plan.map((variant) => variant.name)).toEqual(["bun-hono"]);
 });
 
+test("plans the app profile when --profile app is provided", () => {
+  const plan = planValidation(["--profile", "app"]);
+
+  expect(plan.map((variant) => variant.name)).toEqual(["app"]);
+  expect(plan[0]).toMatchObject({
+    runtime: "bun",
+    framework: "connectrpc",
+    profile: "app",
+  });
+  expect(plan[0]?.commandSteps.map((step) => step.command.join(" "))).toContain("bun run go");
+  expect(plan[0]?.smokeChecks).toContainEqual({
+    name: "http json chat client",
+    kind: "http-json-client",
+  });
+  expect(plan[0]?.smokeChecks).toContainEqual({
+    name: "ios expo app",
+    kind: "ios-expo",
+  });
+});
+
 test("plans the public commands for the bun hono tracer bullet", () => {
   const plan = planValidation(["--variant", "bun-hono"]);
 
@@ -59,6 +79,7 @@ test("parses keep mode and rejects unknown variants", () => {
   expect(parseValidationArgs(["--keep", "--variant", "go-chi"])).toEqual({
     keep: true,
     selectedVariant: "go-chi",
+    selectedProfile: "microservice",
   });
   expect(() => parseValidationArgs(["--variant", "bad"])).toThrow("Unknown generated service variant: bad");
 });

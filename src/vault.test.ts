@@ -1,6 +1,6 @@
 import { afterEach, expect, mock, test } from "bun:test";
 import { mkdir } from "node:fs/promises";
-import { readVaultSecret, resolveNeonApiKey } from "./vault";
+import { readVaultSecret, resolveNeonApiKey, upsertVaultSecretFields } from "./vault";
 
 const originalEnv = { ...process.env };
 
@@ -96,4 +96,64 @@ test("readVaultSecret falls back to ~/.vault-token", async () => {
       field: "api_key",
     })
   ).resolves.toBe("vault-token");
+});
+
+test("upsertVaultSecretFields writes merged KV v2 data", async () => {
+  process.env.VAULT_ADDR = "https://vault.example.com";
+  process.env.VAULT_TOKEN = "token-123";
+
+  const requests: Array<{ method: string; url: string; body?: unknown }> = [];
+  const fetchMock = mock(async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input);
+    requests.push({
+      method: init?.method ?? "GET",
+      url,
+      body: init?.body ? JSON.parse(String(init.body)) : undefined,
+    });
+
+    if ((init?.method ?? "GET") === "GET") {
+      return new Response(
+        JSON.stringify({
+          data: {
+            data: {
+              existing_field: "keep-me",
+            },
+          },
+        }),
+        { status: 200 }
+      );
+    }
+
+    return new Response(JSON.stringify({}), { status: 200 });
+  });
+
+  globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+  await upsertVaultSecretFields({
+    path: "prod/providers/clerk",
+    fields: {
+      publishable_key: "pk_live_example",
+      secret_key: "sk_live_example",
+      webhook_secret: "whsec_example",
+    },
+  });
+
+  expect(requests).toEqual([
+    {
+      method: "GET",
+      url: "https://vault.example.com/v1/secret/data/prod/providers/clerk",
+    },
+    {
+      method: "POST",
+      url: "https://vault.example.com/v1/secret/data/prod/providers/clerk",
+      body: {
+        data: {
+          existing_field: "keep-me",
+          publishable_key: "pk_live_example",
+          secret_key: "sk_live_example",
+          webhook_secret: "whsec_example",
+        },
+      },
+    },
+  ]);
 });

@@ -1,0 +1,24 @@
+{
+  "name": "{{SERVICE_NAME}}",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "go": "bun run ./scripts/go.ts",
+    "dev": "bun run go",
+    "gen": "bun run ./packages/api-client/scripts/codegen.ts",
+    "migrate": "bun run --cwd apps/api migrate",
+    "test": "bun test apps/api/test",
+    "lint": "bun run --cwd packages/api-client lint && bun run --cwd packages/tokens lint && bun run --cwd apps/api lint && bun run --cwd apps/web lint && bun run --cwd apps/mobile lint",
+    "validate:mobile": "bun run --cwd apps/mobile lint"
+  },
+  "devDependencies": {
+    "@bufbuild/buf": "^1.60.0",
+    "@bufbuild/protoc-gen-es": "^2.12.0",
+    "@types/bun": "latest",
+    "typescript": "^5.9.3"
+  }
+}

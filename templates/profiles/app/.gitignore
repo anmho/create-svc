@@ -1,0 +1,11 @@
+node_modules
+.env
+.env.local
+.next
+dist
+build
+coverage
+packages/api-client/src/gen
+apps/mobile/.expo
+apps/mobile/ios
+apps/mobile/android

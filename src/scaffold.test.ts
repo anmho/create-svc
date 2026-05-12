@@ -194,6 +194,59 @@ test("microservice profile does not generate a website package", async () => {
   expect(await Bun.file(join(generatedRoot, "website", "package.json")).exists()).toBeFalse();
 });
 
+test("app profile scaffolds an agent-first web and mobile workspace", async () => {
+  const root = await mkdtemp(join(tmpdir(), "create-svc-app-profile-"));
+  const generatedRoot = join(root, "app");
+
+  await scaffoldProject(
+    baseConfig({
+      directory: generatedRoot,
+      profile: "app",
+      runtime: "bun",
+      framework: "connectrpc",
+    })
+  );
+
+  const rootPackageJson = await Bun.file(join(generatedRoot, "package.json")).json();
+  expect(rootPackageJson.workspaces).toEqual(["apps/*", "packages/*"]);
+  expect(rootPackageJson.scripts.go).toBe("bun run ./scripts/go.ts");
+  expect(rootPackageJson.scripts.dev).toBe("bun run go");
+
+  expect(await Bun.file(join(generatedRoot, "apps", "api", "package.json")).exists()).toBeTrue();
+  expect(await Bun.file(join(generatedRoot, "apps", "web", "package.json")).exists()).toBeTrue();
+  expect(await Bun.file(join(generatedRoot, "apps", "mobile", "package.json")).exists()).toBeTrue();
+  expect(await Bun.file(join(generatedRoot, "packages", "api-client", "package.json")).exists()).toBeTrue();
+  expect(await Bun.file(join(generatedRoot, "packages", "tokens", "package.json")).exists()).toBeTrue();
+  expect(await Bun.file(join(generatedRoot, "protos", "chat", "v1", "chat.proto")).exists()).toBeTrue();
+  expect(await Bun.file(join(generatedRoot, "apps", "api", "protos", "chat", "v1", "chat.proto")).exists()).toBeFalse();
+
+  const bufGen = await Bun.file(join(generatedRoot, "buf.gen.yaml")).text();
+  expect(bufGen).toContain("packages/api-client/src/gen");
+  const apiClientCodegen = await Bun.file(join(generatedRoot, "packages", "api-client", "scripts", "codegen.ts")).text();
+  expect(apiClientCodegen).toContain("buf");
+  expect(apiClientCodegen).toContain("generate");
+
+  const webPackageJson = await Bun.file(join(generatedRoot, "apps", "web", "package.json")).text();
+  expect(webPackageJson).toContain('"next": "^16.2.6"');
+  expect(webPackageJson).toContain('"@svc/api-client": "workspace:*"');
+
+  const mobilePackageJson = await Bun.file(join(generatedRoot, "apps", "mobile", "package.json")).text();
+  expect(mobilePackageJson).toContain('"expo": "^55.0.23"');
+  expect(mobilePackageJson).toContain('"react-native": "^0.85.3"');
+  expect(mobilePackageJson).toContain('"@svc/tokens": "workspace:*"');
+  expect(mobilePackageJson).not.toContain('"@connectrpc/connect-web"');
+  expect(mobilePackageJson).not.toContain("nativewind");
+
+  const mobileScreen = await Bun.file(join(generatedRoot, "apps", "mobile", "app", "index.tsx")).text();
+  expect(mobileScreen).toContain("StyleSheet.create");
+  expect(mobileScreen).toContain("createHttpJsonChatClient");
+  expect(await Bun.file(join(generatedRoot, "apps", "mobile", "app", "custom-transport.ts")).exists()).toBeFalse();
+
+  const readme = await Bun.file(join(generatedRoot, "README.md")).text();
+  expect(readme).toContain("bun run go");
+  expect(readme).toContain("10.0.2.2:8080");
+});
+
 test("detects conflicting files before scaffold generation", async () => {
   const root = await mkdtemp(join(tmpdir(), "create-svc-conflict-"));
   const generatedRoot = join(root, "existing");

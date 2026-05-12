@@ -65,6 +65,17 @@ During scaffold, the generator can discover:
 Remote `bootstrap` and `deploy` use Neon credentials from `NEON_API_KEY`, or Vault via `VAULT_ADDR` plus `VAULT_TOKEN`, `VAULT_TOKEN_FILE`, or `~/.vault-token`.
 Provider runtime credentials can be supplied through environment variables or Vault paths under `secret/prod/providers/*`; generated Cloud Run services receive runtime values through app-project Secret Manager.
 
+For app-profile scaffolds, the interactive CLI first checks Vault at `secret/prod/providers/clerk`. If `publishable_key`, `secret_key`, and `webhook_secret` are already present, it skips Clerk key collection; otherwise it can optionally write them. The same write can be driven non-interactively:
+
+```bash
+create-svc my-app --profile app \
+  --clerk-publishable-key pk_live_... \
+  --clerk-secret-key sk_live_... \
+  --clerk-webhook-secret whsec_...
+```
+
+This writes `publishable_key`, `secret_key`, and `webhook_secret` fields while preserving existing fields in the KV v2 secret.
+
 Before running generated provisioning commands locally, authenticate `gcloud` on the machine:
 
 ```bash

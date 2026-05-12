@@ -1,0 +1,20 @@
+{
+  "name": "@svc/api-client",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "gen": "bun run ./scripts/codegen.ts",
+    "lint": "bunx tsc --noEmit"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "^2.12.0"
+  },
+  "devDependencies": {
+    "@bufbuild/protoc-gen-es": "^2.12.0",
+    "@types/bun": "latest",
+    "typescript": "^5.9.3"
+  }
+}

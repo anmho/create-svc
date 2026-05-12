@@ -13,6 +13,14 @@ type VaultSecretOptions = {
   field?: string;
 };
 
+type VaultWriteOptions = {
+  addr?: string;
+  token?: string;
+  mount?: string;
+  path: string;
+  fields: Record<string, string>;
+};
+
 export async function resolveNeonApiKey() {
   const direct = process.env.NEON_API_KEY?.trim();
   if (direct) {
@@ -26,24 +34,59 @@ export async function resolveNeonApiKey() {
 }
 
 export async function readVaultSecret(options: VaultSecretOptions = {}) {
-  const addr = options.addr ?? process.env.VAULT_ADDR?.trim() ?? "";
-  const token = options.token ?? (await resolveVaultToken());
+  const field = options.field?.trim() ?? "value";
+  const payload = await readVaultSecretData(options);
   const mount = options.mount ?? process.env.VAULT_SECRET_MOUNT?.trim() ?? DEFAULT_VAULT_SECRET_MOUNT;
   const path = options.path?.trim() ?? "";
-  const field = options.field?.trim() ?? "value";
-
-  if (!addr || !token || !path) {
-    throw new Error("Vault secret resolution requires VAULT_ADDR, a Vault token, and a secret path");
-  }
-
-  const normalizedAddr = addr.replace(/\/+$/g, "");
   const normalizedMount = mount.replace(/^\/+|\/+$/g, "");
   const normalizedPath = path.replace(/^\/+/g, "");
-  const url = `${normalizedAddr}/v1/${normalizedMount}/data/${normalizedPath}`;
+  const value = payload[field]?.trim();
+  if (!value) {
+    throw new Error(`Vault secret field ${field} is empty at ${normalizedMount}/${normalizedPath}`);
+  }
+
+  return value;
+}
+
+export async function readVaultSecretFields(options: VaultSecretOptions = {}) {
+  return readVaultSecretData(options);
+}
+
+export async function upsertVaultSecretFields(options: VaultWriteOptions) {
+  const connection = await resolveVaultConnection(options);
+  const url = vaultKv2Url(connection);
+
+  const existing = await readVaultSecretData({ ...options, path: connection.normalizedPath }).catch((error) => {
+    if (error instanceof Error && error.message.startsWith("Vault read failed: 404")) {
+      return {};
+    }
+    throw error;
+  });
 
   const response = await fetch(url, {
+    method: "POST",
     headers: {
-      "X-Vault-Token": token,
+      "Content-Type": "application/json",
+      "X-Vault-Token": connection.token,
+    },
+    body: JSON.stringify({
+      data: {
+        ...existing,
+        ...trimFields(options.fields),
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Vault write failed: ${response.status} ${response.statusText}`);
+  }
+}
+
+async function readVaultSecretData(options: VaultSecretOptions = {}) {
+  const connection = await resolveVaultConnection(options);
+  const response = await fetch(vaultKv2Url(connection), {
+    headers: {
+      "X-Vault-Token": connection.token,
     },
   });
 
@@ -57,12 +100,31 @@ export async function readVaultSecret(options: VaultSecretOptions = {}) {
     };
   };
 
-  const value = payload.data?.data?.[field]?.trim();
-  if (!value) {
-    throw new Error(`Vault secret field ${field} is empty at ${normalizedMount}/${normalizedPath}`);
+  return payload.data?.data ?? {};
+}
+
+async function resolveVaultConnection(options: Omit<VaultWriteOptions, "fields"> | VaultSecretOptions) {
+  const addr = options.addr ?? process.env.VAULT_ADDR?.trim() ?? "";
+  const token = options.token ?? (await resolveVaultToken());
+  const mount = options.mount ?? process.env.VAULT_SECRET_MOUNT?.trim() ?? DEFAULT_VAULT_SECRET_MOUNT;
+  const path = options.path?.trim() ?? "";
+
+  if (!addr || !token || !path) {
+    throw new Error("Vault secret resolution requires VAULT_ADDR, a Vault token, and a secret path");
   }
 
-  return value;
+  const normalizedAddr = addr.replace(/\/+$/g, "");
+  const normalizedMount = mount.replace(/^\/+|\/+$/g, "");
+  const normalizedPath = path.replace(/^\/+/g, "");
+  return { normalizedAddr, normalizedMount, normalizedPath, token };
+}
+
+function vaultKv2Url(connection: Awaited<ReturnType<typeof resolveVaultConnection>>) {
+  return `${connection.normalizedAddr}/v1/${connection.normalizedMount}/data/${connection.normalizedPath}`;
+}
+
+function trimFields(fields: Record<string, string>) {
+  return Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, value.trim()]));
 }
 
 async function resolveVaultToken() {

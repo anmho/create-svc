@@ -46,9 +46,13 @@ export async function scaffoldProject(config: ScaffoldConfig) {
   await ensureTargetDirectory(targetDir);
 
   const replacements = buildReplacements(config);
-  const sharedTemplateRoot = resolve(config.generatorRoot, "templates", "shared");
-  const variantTemplateRoot = resolve(config.generatorRoot, "templates", "variants", `${config.runtime}-${config.framework}`);
-  const templateRoots = [sharedTemplateRoot, variantTemplateRoot];
+  const templateRoots =
+    config.profile === "app"
+      ? [resolve(config.generatorRoot, "templates", "profiles", "app")]
+      : [
+          resolve(config.generatorRoot, "templates", "shared"),
+          resolve(config.generatorRoot, "templates", "variants", `${config.runtime}-${config.framework}`),
+        ];
 
   for (const templateRoot of templateRoots) {
     const files = await collectTemplateFiles(templateRoot);

@@ -1,0 +1,23 @@
+{
+  "name": "@svc/api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun run ./src/index.ts",
+    "migrate": "bun run ./scripts/migrate.ts",
+    "test": "bun test",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "^2.12.0",
+    "@connectrpc/connect": "^2.1.1",
+    "@connectrpc/connect-node": "^2.1.1",
+    "@google-cloud/storage": "^7.17.2",
+    "@svc/api-client": "workspace:*",
+    "drizzle-orm": "^0.44.5"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.9.3"
+  }
+}
