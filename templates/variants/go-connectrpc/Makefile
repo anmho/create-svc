@@ -1,13 +1,21 @@
-.PHONY: dev migrate gen lint test bootstrap deploy cleanup
+.PHONY: dev migrate migrate-lint gen lint test create deploy dashboards auth destroy
 
-CLOUDRUN := npx --no-install svc-cloudrun
+SERVICE := npx --no-install service
 WITH_ENV := set -a; [ ! -f .env.local ] || . ./.env.local; set +a;
+ATLAS ?= atlas
 
 dev:
-	@$(WITH_ENV) go run ./cmd/server
+	@bun run ./scripts/dev.ts go run ./cmd/server
 
 migrate:
-	@$(WITH_ENV) go run ./cmd/migrate
+	@bun run ./scripts/ensure-local-db.ts
+	@bun run ./scripts/wait-for-db.ts
+	@$(WITH_ENV) $(ATLAS) migrate apply --env local
+
+migrate-lint:
+	@bun run ./scripts/ensure-local-db.ts
+	@bun run ./scripts/wait-for-db.ts
+	@$(WITH_ENV) $(ATLAS) migrate lint --env local --latest 1
 
 gen:
 	buf generate
@@ -15,15 +23,24 @@ gen:
 lint:
 	go vet ./...
 	buf lint
+	@bun run ./scripts/ensure-local-db.ts
+	@bun run ./scripts/wait-for-db.ts
+	@$(WITH_ENV) $(ATLAS) migrate lint --env local --latest 1
 
 test:
 	bun test ./test
 
-bootstrap:
-	$(CLOUDRUN) bootstrap
+create:
+	$(SERVICE) create
 
 deploy:
-	$(CLOUDRUN) deploy $(ARGS)
+	$(SERVICE) deploy $(ARGS)
 
-cleanup:
-	$(CLOUDRUN) cleanup $(ARGS)
+dashboards:
+	$(SERVICE) dashboards
+
+auth:
+	$(SERVICE) auth $(ARGS)
+
+destroy:
+	$(SERVICE) destroy $(ARGS)

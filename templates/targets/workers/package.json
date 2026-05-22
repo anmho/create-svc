@@ -1,0 +1,35 @@
+{
+  "name": "{{SERVICE_NAME}}",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "service": "./scripts/workers/cli.ts"
+  },
+  "scripts": {
+    "dev": "wrangler dev",
+    "service": "bun run ./scripts/workers/cli.ts",
+    "migrate": "bun run ./scripts/workers/cli.ts migrate",
+    "seed": "bun run ./scripts/workers/cli.ts seed",
+    "lint": "bunx tsc --noEmit",
+    "test": "bun test",
+    "create": "bun run ./scripts/workers/cli.ts create",
+    "deploy": "bun run ./scripts/workers/cli.ts deploy",
+    "dashboards": "bun run ./scripts/workers/cli.ts dashboards",
+    "auth": "bun run ./scripts/workers/cli.ts auth",
+    "destroy": "bun run ./scripts/workers/cli.ts destroy"
+  },
+  "dependencies": {
+    "@anmho/authctl": "0.1.0",
+    "@clack/prompts": "^1.2.0",
+    "@neondatabase/api-client": "^2.7.1",
+    "hono": "^4.10.1",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "latest",
+    "@types/pg": "^8.16.0",
+    "@types/bun": "latest",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.49.0"
+  }
+}

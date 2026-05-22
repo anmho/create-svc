@@ -13,6 +13,11 @@ type NeonBranch = {
   name: string;
 };
 
+type NeonDatabase = {
+  name: string;
+  ownerName: string;
+};
+
 type ResolvedNeonConfig = {
   projectId: string;
   baseBranchId: string;
@@ -110,6 +115,18 @@ export async function listBranches(projectId: string) {
     .sort((left: NeonBranch, right: NeonBranch) => left.name.localeCompare(right.name));
 }
 
+export async function listDatabases(projectId: string, branchId: string) {
+  const payload = await (await neonClient()).listProjectBranchDatabases(projectId, branchId);
+  const databases = ((payload.data as { databases?: Array<{ name?: string; owner_name?: string }> } | undefined)?.databases ?? []);
+  return databases
+    .map((database: { name?: string; owner_name?: string }) => ({
+      name: database.name ?? "",
+      ownerName: database.owner_name ?? "",
+    }))
+    .filter((database: NeonDatabase): database is NeonDatabase => Boolean(database.name))
+    .sort((left: NeonDatabase, right: NeonDatabase) => left.name.localeCompare(right.name));
+}
+
 export async function resolveNeonConfig(): Promise<ResolvedNeonConfig> {
   const configuredProjectId = config.neon.projectId.trim();
   const configuredBaseBranchId = config.neon.baseBranchId.trim();
@@ -172,6 +189,7 @@ export async function ensureDatabase(projectId: string, branchId: string, databa
 }
 
 export async function deleteDatabase(projectId: string, branchId: string, databaseName: string) {
+  await assertDatabaseOwned(projectId, branchId, databaseName);
   try {
     await (await neonClient()).deleteProjectBranchDatabase(projectId, branchId, databaseName);
   } catch (error) {
@@ -213,6 +231,11 @@ export async function ensureBranch(projectId: string, branchName: string, parent
 }
 
 export async function deleteBranch(projectId: string, branchId: string) {
+  const branch = (await listBranches(projectId)).find((candidate) => candidate.id === branchId);
+  if (!branch) {
+    return;
+  }
+  assertDisposableBranchName(branch.name);
   try {
     await (await neonClient()).deleteProjectBranch(projectId, branchId);
   } catch (error) {
@@ -222,6 +245,28 @@ export async function deleteBranch(projectId: string, branchId: string) {
     }
     throw error;
   }
+}
+
+async function assertDatabaseOwned(projectId: string, branchId: string, databaseName: string) {
+  if (databaseName !== config.neon.databaseName) {
+    throw new Error(`Refusing to delete Neon database ${databaseName}; expected ${config.neon.databaseName}`);
+  }
+
+  const database = (await listDatabases(projectId, branchId)).find((candidate) => candidate.name === databaseName);
+  if (!database) {
+    return;
+  }
+
+  if (database.ownerName && database.ownerName !== config.neon.roleName) {
+    throw new Error(`Refusing to delete Neon database ${databaseName}; owner is ${database.ownerName}, expected ${config.neon.roleName}`);
+  }
+}
+
+function assertDisposableBranchName(branchName: string) {
+  if (branchName.startsWith(`${config.neon.previewBranchPrefix}-`) || branchName.startsWith(`${config.neon.personalBranchPrefix}-`)) {
+    return;
+  }
+  throw new Error(`Refusing to delete Neon branch ${branchName}; it is not owned by ${config.serviceName}`);
 }
 
 export async function getConnectionUri(projectId: string, branchId: string, databaseName: string, roleName: string) {

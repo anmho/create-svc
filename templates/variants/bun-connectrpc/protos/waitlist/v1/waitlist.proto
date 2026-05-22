@@ -1,0 +1,91 @@
+syntax = "proto3";
+
+package waitlist.v1;
+
+service WaitlistService {
+  rpc JoinWaitlist(JoinWaitlistRequest) returns (JoinWaitlistResponse) {}
+  rpc GetWaitlistEntry(GetWaitlistEntryRequest) returns (GetWaitlistEntryResponse) {}
+  rpc GetWaitlistEntryByEmail(GetWaitlistEntryByEmailRequest) returns (GetWaitlistEntryResponse) {}
+  rpc ListWaitlistEntries(ListWaitlistEntriesRequest) returns (ListWaitlistEntriesResponse) {}
+  rpc UpdateWaitlistEntry(UpdateWaitlistEntryRequest) returns (GetWaitlistEntryResponse) {}
+  rpc ExportWaitlistEntries(ExportWaitlistEntriesRequest) returns (ExportWaitlistEntriesResponse) {}
+  rpc RecordTrigger(RecordTriggerRequest) returns (RecordTriggerResponse) {}
+}
+
+message WaitlistEntry {
+  string id = 1;
+  string email = 2;
+  string name = 3;
+  string company = 4;
+  string source = 5;
+  string status = 6;
+  string created_at = 7;
+  string updated_at = 8;
+}
+
+message WaitlistTrigger {
+  string id = 1;
+  string type = 2;
+  string entry_id = 3;
+  string status = 4;
+  string payload_json = 5;
+  string created_at = 6;
+  string processed_at = 7;
+}
+
+message JoinWaitlistRequest {
+  string email = 1;
+  string name = 2;
+  string company = 3;
+  string source = 4;
+}
+
+message JoinWaitlistResponse {
+  WaitlistEntry entry = 1;
+  bool created = 2;
+}
+
+message GetWaitlistEntryRequest {
+  string entry_id = 1;
+}
+
+message GetWaitlistEntryByEmailRequest {
+  string email = 1;
+}
+
+message GetWaitlistEntryResponse {
+  WaitlistEntry entry = 1;
+}
+
+message ListWaitlistEntriesRequest {
+  string status = 1;
+  uint32 limit = 2;
+}
+
+message ListWaitlistEntriesResponse {
+  repeated WaitlistEntry entries = 1;
+}
+
+message UpdateWaitlistEntryRequest {
+  string entry_id = 1;
+  string status = 2;
+}
+
+message ExportWaitlistEntriesRequest {
+  string status = 1;
+  uint32 limit = 2;
+}
+
+message ExportWaitlistEntriesResponse {
+  string csv = 1;
+}
+
+message RecordTriggerRequest {
+  string type = 1;
+  string entry_id = 2;
+  string payload_json = 3;
+}
+
+message RecordTriggerResponse {
+  WaitlistTrigger trigger = 1;
+}

@@ -2,7 +2,8 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import { createServer } from "node:net";
 import { connect as connectHttp2, constants as http2Constants } from "node:http2";
-import { deriveDefaults, type Framework, type GcpProjectMode, type Runtime } from "../src/naming";
+import { deriveDefaults, type DeployTarget, type Framework, type GcpProjectMode, type Runtime } from "../src/naming";
+import type { Profile } from "../src/profiles";
 import { scaffoldProject, type ScaffoldConfig } from "../src/scaffold";
 
 export const GENERATED_VARIANTS = [
@@ -13,6 +14,7 @@ export const GENERATED_VARIANTS = [
 ] as const;
 
 export type GeneratedVariant = (typeof GENERATED_VARIANTS)[number];
+export type GeneratedTarget = GeneratedVariant;
 
 type VariantDefinition = {
   name: GeneratedVariant;
@@ -29,14 +31,16 @@ export type ValidationCommandStep = {
 
 export type SmokeCheck = {
   name: string;
-  kind?: "http" | "connect-client";
+  kind?: "http" | "connect-client" | "hono-rpc-client" | "web" | "ios-expo";
   path?: string;
   expectStatus?: number;
   protocol?: "http1" | "http2";
 };
 
 export type ValidationPlanItem = {
-  name: GeneratedVariant;
+  name: GeneratedTarget;
+  profile: Profile;
+  target: DeployTarget;
   runtime: Runtime;
   framework: Framework;
   serviceName: string;
@@ -48,6 +52,7 @@ export type ValidationPlanItem = {
 
 export type ValidationOptions = {
   selectedVariant?: GeneratedVariant;
+  selectedProfile: Profile;
   keep: boolean;
   runId?: string;
 };
@@ -99,7 +104,6 @@ const VARIANT_DEFINITIONS: Record<GeneratedVariant, VariantDefinition> = {
       { name: "install package tooling", command: ["bun", "install"] },
       { name: "start local postgres", command: ["docker", "compose", "up", "-d"] },
       { name: "run migrations", command: ["make", "migrate"] },
-      { name: "generate code", command: ["make", "gen"] },
       { name: "run tests", command: ["make", "test"] },
     ],
     smokeChecks: [{ name: "health endpoint", path: "/healthz" }],
@@ -126,6 +130,7 @@ const SMOKE_REQUEST_TIMEOUT_MS = 2_000;
 
 export function parseValidationArgs(args: string[]): ValidationOptions {
   let selectedVariant: GeneratedVariant | undefined;
+  let selectedProfile: Profile = "microservice";
   let keep = false;
 
   for (let index = 0; index < args.length; index += 1) {
@@ -154,10 +159,25 @@ export function parseValidationArgs(args: string[]): ValidationOptions {
       continue;
     }
 
+    if (token === "--profile") {
+      const value = args[index + 1];
+      if (!value) {
+        throw new Error("Missing value for --profile");
+      }
+      selectedProfile = parseGeneratedProfile(value);
+      index += 1;
+      continue;
+    }
+
+    if (token.startsWith("--profile=")) {
+      selectedProfile = parseGeneratedProfile(token.slice("--profile=".length));
+      continue;
+    }
+
     throw new Error(`Unknown argument: ${token}`);
   }
 
-  return { selectedVariant, keep };
+  return { selectedVariant, selectedProfile, keep };
 }
 
 export function planValidation(args: string[] | ValidationOptions): ValidationPlanItem[] {
@@ -171,6 +191,8 @@ export function planValidation(args: string[] | ValidationOptions): ValidationPl
     const serviceName = `validation${runSuffix}-${name}`;
     return {
       name,
+      profile: "microservice",
+      target: "cloudrun",
       runtime: definition.runtime,
       framework: definition.framework,
       serviceName,
@@ -252,6 +274,16 @@ function parseGeneratedVariant(value: string): GeneratedVariant {
   return value as GeneratedVariant;
 }
 
+function parseGeneratedProfile(value: string): Profile {
+  if (value === "microservice") {
+    return value;
+  }
+  if (value === "app") {
+    throw new Error("The app profile has moved out of create-service");
+  }
+  throw new Error(`Unknown generated profile: ${value}`);
+}
+
 function createScaffoldConfig(
   item: ValidationPlanItem,
   generatedRoot: string,
@@ -266,7 +298,8 @@ function createScaffoldConfig(
     modulePath: `example.com/${item.serviceName}`,
     runtime: item.runtime,
     framework: item.framework,
-    profile: "microservice",
+    target: item.target,
+    profile: item.profile,
     region: "us-west1",
     gcpProjectMode,
     gcpProject: defaults.projectId,
@@ -334,21 +367,19 @@ async function stopDockerCompose(cwd: string, item: ValidationPlanItem) {
 }
 
 function commandEnv(item: ValidationPlanItem, step: ValidationCommandStep) {
-  if (step.command[0] === "docker" && step.command[1] === "compose") {
-    return { COMPOSE_PROJECT_NAME: item.composeProjectName };
-  }
-  return undefined;
+  return { COMPOSE_PROJECT_NAME: item.composeProjectName };
 }
 
 async function runSmokeCheck(item: ValidationPlanItem, cwd: string, smoke: SmokeCheck) {
   const port = await getOpenPort();
-  const command = item.runtime === "bun" ? ["bun", "run", "./src/index.ts"] : ["make", "dev"];
+  const command = item.runtime === "bun" ? ["bun", "run", "dev"] : ["make", "dev"];
   const proc = Bun.spawn(command, {
     cwd,
     env: {
       ...process.env,
       PORT: String(port),
       ENABLE_RPC_INTROSPECTION: "true",
+      COMPOSE_PROJECT_NAME: item.composeProjectName,
     },
     stdin: "ignore",
     stdout: "pipe",
@@ -382,15 +413,15 @@ async function runConnectClientSmoke(item: ValidationPlanItem, cwd: string, port
       [
         'import { createClient } from "@connectrpc/connect";',
         'import { createConnectTransport } from "@connectrpc/connect-node";',
-        'import { ChatService } from "./gen/protos/chat/v1/chat_pb.js";',
+        'import { WaitlistService } from "./gen/protos/waitlist/v1/waitlist_pb.js";',
         "",
         'const baseUrl = Bun.env.BASE_URL;',
         'if (!baseUrl) throw new Error("BASE_URL is required");',
         'const transport = createConnectTransport({ baseUrl, httpVersion: "2" });',
-        "const client = createClient(ChatService, transport);",
-        'const username = `smoke-${Date.now()}`;',
-        "const response = await client.createUser({ username }, { timeoutMs: 10_000 });",
-        'if (response.user?.username !== username) throw new Error("typed Connect client smoke failed");',
+        "const client = createClient(WaitlistService, transport);",
+        'const email = `smoke-${Date.now()}@example.com`;',
+        "const response = await client.joinWaitlist({ email }, { timeoutMs: 10_000 });",
+        'if (response.entry?.email !== email) throw new Error("typed Connect client smoke failed");',
         "",
       ].join("\n")
     );
@@ -418,8 +449,8 @@ async function runConnectClientSmoke(item: ValidationPlanItem, cwd: string, port
         '\t"time"',
         "",
         '\t"connectrpc.com/connect"',
-        `\tchatv1 "example.com/${item.serviceName}/gen/chat/v1"`,
-        `\tchatv1connect "example.com/${item.serviceName}/gen/chat/v1/chatv1connect"`,
+        `\twaitlistv1 "example.com/${item.serviceName}/gen/waitlist/v1"`,
+        `\twaitlistv1connect "example.com/${item.serviceName}/gen/waitlist/v1/waitlistv1connect"`,
         '\t"golang.org/x/net/http2"',
         ")",
         "",
@@ -434,11 +465,11 @@ async function runConnectClientSmoke(item: ValidationPlanItem, cwd: string, port
         "\t\t},",
         "\t}",
         "\thttpClient := &http.Client{Transport: transport, Timeout: 10 * time.Second}",
-        "\tclient := chatv1connect.NewChatServiceClient(httpClient, baseURL, connect.WithGRPC())",
-        '\tusername := fmt.Sprintf("smoke-%d", time.Now().UnixNano())',
-        "\tresponse, err := client.CreateUser(context.Background(), connect.NewRequest(&chatv1.CreateUserRequest{Username: username}))",
+        "\tclient := waitlistv1connect.NewWaitlistServiceClient(httpClient, baseURL, connect.WithGRPC())",
+        '\temail := fmt.Sprintf("smoke-%d@example.com", time.Now().UnixNano())',
+        "\tresponse, err := client.JoinWaitlist(context.Background(), connect.NewRequest(&waitlistv1.JoinWaitlistRequest{Email: email}))",
         "\tif err != nil { panic(err) }",
-        '\tif response.Msg.User == nil || response.Msg.User.Username != username { panic("typed gRPC client smoke failed") }',
+        '\tif response.Msg.Entry == nil || response.Msg.Entry.Email != email { panic("typed gRPC client smoke failed") }',
         "}",
         "",
       ].join("\n")
@@ -460,7 +491,7 @@ async function waitForHttp(url: string, expectedStatus: number, proc: ServerProc
   while (Date.now() - started < 30_000) {
     if (proc.exitCode !== null) {
       const output = await readProcessOutput(proc);
-      throw new Error(`server exited before smoke check passed\n${output}`);
+      throw new Error(formatEarlyExit(output));
     }
 
     try {
@@ -480,6 +511,13 @@ async function waitForHttp(url: string, expectedStatus: number, proc: ServerProc
   await proc.exited.catch(() => {});
   const output = await readProcessOutput(proc);
   throw new Error(`timed out waiting for ${url}: ${lastError}\n${output}`);
+}
+
+function formatEarlyExit(output: string) {
+  if (output.includes("Cannot connect to the Docker daemon")) {
+    return `environment blocker: Docker daemon is not running\n${output}`;
+  }
+  return `server exited before smoke check passed\n${output}`;
 }
 
 function terminateProcessGroup(proc: ServerProcess) {

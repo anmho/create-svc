@@ -4,6 +4,7 @@ import {
   compactIdentifier,
   compactDatabaseName,
   deriveLocalPostgresPort,
+  type DeployTarget,
   type Framework,
   type GcpProjectMode,
   type Runtime,
@@ -14,6 +15,7 @@ export type ScaffoldConfig = {
   directory: string;
   serviceName: string;
   modulePath: string;
+  target: DeployTarget;
   runtime: Runtime;
   framework: Framework;
   profile: Profile;
@@ -46,15 +48,20 @@ export async function scaffoldProject(config: ScaffoldConfig) {
   await ensureTargetDirectory(targetDir);
 
   const replacements = buildReplacements(config);
-  const sharedTemplateRoot = resolve(config.generatorRoot, "templates", "shared");
-  const variantTemplateRoot = resolve(config.generatorRoot, "templates", "variants", `${config.runtime}-${config.framework}`);
-  const templateRoots = [sharedTemplateRoot, variantTemplateRoot];
+  const templateRoots = [
+    { kind: "shared" as const, root: resolve(config.generatorRoot, "templates", "shared") },
+    { kind: "variant" as const, root: resolve(config.generatorRoot, "templates", "variants", `${config.runtime}-${config.framework}`) },
+    { kind: "target" as const, root: resolve(config.generatorRoot, "templates", "targets", config.target) },
+  ];
 
-  for (const templateRoot of templateRoots) {
-    const files = await collectTemplateFiles(templateRoot);
+  for (const template of templateRoots) {
+    const files = await collectTemplateFiles(template.root);
 
     for (const relativePath of files) {
-      const sourcePath = join(templateRoot, relativePath);
+      if (shouldSkipForTarget(config.target, template.kind, relativePath)) {
+        continue;
+      }
+      const sourcePath = join(template.root, relativePath);
       const destinationPath = join(targetDir, relativePath);
       const raw = await Bun.file(sourcePath).text();
       const rendered = renderTemplate(raw, replacements);
@@ -65,6 +72,43 @@ export async function scaffoldProject(config: ScaffoldConfig) {
   }
 
   await writeLocalEnvFile(targetDir, replacements);
+}
+
+function shouldSkipForTarget(target: DeployTarget, templateKind: "shared" | "variant" | "target", relativePath: string) {
+  if (target === "workers") {
+    if (templateKind === "target") {
+      return false;
+    }
+
+    if (relativePath === "Dockerfile" || relativePath === "docker-compose.yml") {
+      return true;
+    }
+
+    if (templateKind === "shared") {
+      return (
+        relativePath === "service.yaml" ||
+        relativePath === "scripts/dev.ts" ||
+        relativePath === "scripts/ensure-local-db.ts" ||
+        relativePath === "scripts/local-docker.ts" ||
+        relativePath === "scripts/local-env.ts" ||
+        relativePath === "scripts/seed.ts" ||
+        relativePath === "scripts/wait-for-db.ts" ||
+        relativePath.startsWith("scripts/cloudrun/")
+      );
+    }
+
+    return (
+      relativePath.startsWith("src/db/") ||
+      relativePath.startsWith("src/temporal/") ||
+      relativePath.startsWith("src/waitlist/") ||
+      relativePath.startsWith("test/") ||
+      relativePath.startsWith("migrations/") ||
+      relativePath === "scripts/codegen.ts" ||
+      relativePath === "scripts/migrate.ts"
+    );
+  }
+
+  return relativePath.startsWith("scripts/workers/") || relativePath === "wrangler.toml";
 }
 
 async function ensureTargetDirectory(targetDir: string) {
@@ -88,19 +132,24 @@ export async function assertTargetDirectoryIsEmpty(targetDir: string) {
 
 async function collectTemplateFiles(root: string, relative = ""): Promise<string[]> {
   const cwd = join(root, relative);
-  const entries = await readdir(cwd, { withFileTypes: true });
+  let entries;
+  try {
+    entries = await readdir(cwd, { withFileTypes: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return [];
+    }
+    throw error;
+  }
   const files: string[] = [];
 
   for (const entry of entries) {
     const nextRelative = relative ? join(relative, entry.name) : entry.name;
     if (entry.isDirectory()) {
-      if (nextRelative === ".github" || nextRelative.startsWith(".github/")) {
+      if (entry.name === "node_modules" || entry.name === ".git") {
         continue;
       }
       files.push(...(await collectTemplateFiles(root, nextRelative)));
-      continue;
-    }
-    if (nextRelative === ".github" || nextRelative.startsWith(".github/")) {
       continue;
     }
     files.push(nextRelative);
@@ -115,16 +164,17 @@ function buildReplacements(config: ScaffoldConfig) {
   const runtimeServiceAccount = `${serviceAccountBase}-runtime@${config.gcpProject}.iam.gserviceaccount.com`;
   const previewBranchPrefix = `${config.serviceName}-pr`;
   const personalBranchPrefix = `${config.serviceName}-dev`;
-  const remoteAttachmentBucket = `${config.gcpProject}-${config.serviceName}-attachments`;
-  const remoteAttachmentPublicBaseUrl = `https://storage.googleapis.com/${remoteAttachmentBucket}`;
   const localDatabaseName = compactDatabaseName(config.serviceName);
   const localDatabasePort = deriveLocalPostgresPort(config.serviceName);
-  const localAttachmentBucket = `${config.serviceName}-local-attachments`;
-  const localAttachmentPublicBaseUrl = `https://storage.local.invalid/${localAttachmentBucket}`;
+  const authIssuer = "https://auth.anmho.com";
+  const authAudience = `api://${config.serviceName}`;
+  const authJwksUrl = `${authIssuer}/api/auth/jwks`;
 
   return {
     SERVICE_NAME: config.serviceName,
+    SERVICE_ID: config.serviceName,
     MODULE_PATH: config.modulePath,
+    TARGET: config.target,
     PROJECT_ID: config.gcpProject,
     PROJECT_NAME: config.gcpProjectName,
     REGION: config.region,
@@ -150,31 +200,36 @@ function buildReplacements(config: ScaffoldConfig) {
     RUNTIME_SERVICE_ACCOUNT: runtimeServiceAccount,
     API_HOSTNAME: config.apiHostname,
     API_BASE_DOMAIN: "anmho.com",
-    ATTACHMENT_BUCKET: remoteAttachmentBucket,
-    ATTACHMENT_PUBLIC_BASE_URL: remoteAttachmentPublicBaseUrl,
+    AUTH_ISSUER: authIssuer,
+    AUTH_AUDIENCE: authAudience,
+    AUTH_JWKS_URL: authJwksUrl,
     LOCAL_DATABASE_NAME: localDatabaseName,
     LOCAL_DATABASE_PORT: localDatabasePort,
     LOCAL_DATABASE_USER: "postgres",
     LOCAL_DATABASE_PASSWORD: "postgres",
-    LOCAL_ATTACHMENT_BUCKET: localAttachmentBucket,
-    LOCAL_ATTACHMENT_PUBLIC_BASE_URL: localAttachmentPublicBaseUrl,
     COMMAND_DEV: config.runtime === "bun" ? "bun run dev" : "make dev",
     COMMAND_MIGRATE: config.runtime === "bun" ? "bun run migrate" : "make migrate",
     COMMAND_GEN: config.runtime === "bun" ? "bun run gen" : "make gen",
     COMMAND_LINT: config.runtime === "bun" ? "bun run lint" : "make lint",
     COMMAND_TEST: config.runtime === "bun" ? "bun run test" : "make test",
-    COMMAND_BOOTSTRAP: config.runtime === "bun" ? "bun run bootstrap" : "make bootstrap",
+    COMMAND_BOOTSTRAP: config.runtime === "bun" ? "bun run create" : "make create",
     COMMAND_DEPLOY: config.runtime === "bun" ? "bun run deploy" : "make deploy",
+    COMMAND_AUTH_RESOURCE:
+      config.runtime === "bun" ? "bun run auth -- resource-server" : 'make auth ARGS="resource-server"',
+    COMMAND_AUTH_CLIENT:
+      config.runtime === "bun"
+        ? "bun run auth -- client create"
+        : 'make auth ARGS="client create"',
     COMMAND_DEPLOY_PERSONAL:
       config.runtime === "bun"
         ? 'bun run deploy -- --environment personal --name <slug>'
         : 'make deploy ARGS="--environment personal --name <slug>"',
     COMMAND_DEPLOY_DESTROY:
       config.runtime === "bun"
-        ? 'bun run deploy -- --destroy --environment personal --name <slug>'
-        : 'make deploy ARGS="--destroy --environment personal --name <slug>"',
-    COMMAND_CLEANUP: config.runtime === "bun" ? "bun run cleanup" : "make cleanup",
-    COMMAND_CLEANUP_PROJECT: config.runtime === "bun" ? "bun run cleanup -- --project" : 'make cleanup ARGS="--project"',
+        ? 'bun run destroy -- --environment personal --name <slug>'
+        : 'make destroy ARGS="--environment personal --name <slug>"',
+    COMMAND_CLEANUP: config.runtime === "bun" ? "bun run destroy" : "make destroy",
+    COMMAND_CLEANUP_PROJECT: config.runtime === "bun" ? "bun run destroy -- --project" : 'make destroy ARGS="--project"',
     GITIGNORE_EXTRA: config.framework === "connectrpc" ? "gen/" : "",
     LOCAL_INTROSPECTION_NOTE:
       config.framework === "connectrpc"
@@ -200,12 +255,10 @@ async function writeLocalEnvFile(targetDir: string, replacements: Record<string,
 
   const rendered = renderTemplate(
     [
-      "# Generated local development defaults for create-svc.",
+      "# Generated local development defaults for create-service.",
       "# This file is user-owned after scaffold and is gitignored.",
       "",
-      "DATABASE_URL=postgres://{{LOCAL_DATABASE_USER}}:{{LOCAL_DATABASE_PASSWORD}}@127.0.0.1:{{LOCAL_DATABASE_PORT}}/{{LOCAL_DATABASE_NAME}}",
-      "ATTACHMENT_BUCKET={{LOCAL_ATTACHMENT_BUCKET}}",
-      "ATTACHMENT_PUBLIC_BASE_URL={{LOCAL_ATTACHMENT_PUBLIC_BASE_URL}}",
+      "DATABASE_URL=postgres://{{LOCAL_DATABASE_USER}}:{{LOCAL_DATABASE_PASSWORD}}@127.0.0.1:{{LOCAL_DATABASE_PORT}}/{{LOCAL_DATABASE_NAME}}?sslmode=disable",
       "",
     ].join("\n"),
     replacements

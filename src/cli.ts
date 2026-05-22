@@ -19,10 +19,12 @@ import { runPostScaffoldFlow } from "./post-scaffold";
 import { listOpenBillingAccounts, listAccessibleProjects, type BillingAccount, type GcpProject } from "./gcp";
 import {
   BILLING_ACCOUNT_DEFAULT,
-  FRAMEWORKS_BY_RUNTIME,
   QUOTA_PROJECT_DEFAULT,
   deriveDefaults,
+  frameworksForTargetRuntime,
+  parseDeployTarget,
   slugify,
+  type DeployTarget,
   type Framework,
   type GcpProjectMode,
   type Runtime,
@@ -37,6 +39,7 @@ import {
 
 type ParsedArgs = {
   directory?: string;
+  target?: DeployTarget;
   runtime?: Runtime;
   framework?: Framework;
   modulePath?: string;
@@ -46,6 +49,8 @@ type ParsedArgs = {
   billingAccount?: string;
   quotaProjectId?: string;
   autoDeploy?: boolean;
+  autoUpdate?: boolean;
+  noUpdateCheck?: boolean;
   profile: Profile;
   yes: boolean;
   help: boolean;
@@ -67,7 +72,9 @@ export async function run(argv: string[]) {
       return;
     }
 
-    intro(`${pc.bold("create-svc")} ${pc.dim("backend bootstrap")}`);
+    await maybeCheckForUpdate(args);
+
+    intro(`${pc.bold("create-service")} ${pc.dim("microservice bootstrap")}`);
 
     const config = await resolveConfig(args);
     const targetDir = resolve(process.cwd(), config.directory);
@@ -75,6 +82,7 @@ export async function run(argv: string[]) {
     note(
       [
         `${pc.bold("Output")}: ${targetDir}`,
+        `${pc.bold("Target")}: ${config.target}`,
         `${pc.bold("Runtime")}: ${config.runtime} + ${config.framework}`,
         `${pc.bold("Project")}: ${config.gcpProjectMode === "create_new" ? "create" : "use"} ${config.gcpProjectName} (${config.gcpProject})`,
         `${pc.bold("API")}: https://${config.apiHostname}`,
@@ -105,11 +113,11 @@ export async function run(argv: string[]) {
     outro(
       [
         `Next: ${pc.cyan(`cd ${config.directory}`)}`,
-        `Local DB: ${pc.cyan("docker compose up -d")}`,
+        `Local DB: ${pc.cyan("started by local dev command")}`,
         `Migrate: ${pc.cyan(isBun ? "bun run migrate" : "make migrate")}`,
         `Local dev: ${pc.cyan(isBun ? "bun run dev" : "make dev")}`,
-        `Bootstrap: ${pc.cyan(isBun ? "bun run bootstrap" : "make bootstrap")}`,
-        `Deploy: ${pc.cyan(isBun ? "bun run deploy" : "make deploy")}`,
+        `Create: ${pc.cyan(isBun ? "bun run service -- create" : "make create")}`,
+        `Deploy: ${pc.cyan(isBun ? "bun run service -- deploy" : "make deploy")}`,
         `Personal env: ${pc.cyan(
           isBun
             ? `bun run deploy -- --environment personal --name ${config.serviceName}`
@@ -160,6 +168,16 @@ export function parseArgs(argv: string[]): ParsedArgs {
       continue;
     }
 
+    if (token === "--auto-update") {
+      parsed.autoUpdate = true;
+      continue;
+    }
+
+    if (token === "--no-update-check") {
+      parsed.noUpdateCheck = true;
+      continue;
+    }
+
     if (token === "--runtime") {
       parsed.runtime = readValue() as Runtime;
       continue;
@@ -167,6 +185,16 @@ export function parseArgs(argv: string[]): ParsedArgs {
 
     if (token.startsWith("--runtime=")) {
       parsed.runtime = token.slice("--runtime=".length) as Runtime;
+      continue;
+    }
+
+    if (token === "--target") {
+      parsed.target = parseDeployTarget(readValue());
+      continue;
+    }
+
+    if (token.startsWith("--target=")) {
+      parsed.target = parseDeployTarget(token.slice("--target=".length));
       continue;
     }
 
@@ -260,11 +288,6 @@ export function parseArgs(argv: string[]): ParsedArgs {
       continue;
     }
 
-    if (token === "--bootstrap") {
-      parsed.autoDeploy = true;
-      continue;
-    }
-
     if (token === "--no-auto-deploy") {
       parsed.autoDeploy = false;
       continue;
@@ -274,6 +297,69 @@ export function parseArgs(argv: string[]): ParsedArgs {
   }
 
   return parsed;
+}
+
+const CURRENT_VERSION = "0.1.9";
+const PACKAGE_NAME = "create-service";
+
+async function maybeCheckForUpdate(args: ParsedArgs) {
+  if (args.noUpdateCheck || shouldSkipUpdateCheck()) {
+    return;
+  }
+
+  const latest = await resolveLatestVersion().catch(() => "");
+  if (!latest || !isVersionGreater(latest, CURRENT_VERSION)) {
+    return;
+  }
+
+  const command = `bunx ${PACKAGE_NAME}@latest ${Bun.argv.slice(2).filter((arg) => arg !== "--auto-update").join(" ")}`.trim();
+  if (!args.autoUpdate) {
+    log.info(`A newer ${PACKAGE_NAME} is available: ${CURRENT_VERSION} -> ${latest}. Run ${command}`);
+    return;
+  }
+
+  const result = Bun.spawnSync(["bunx", `${PACKAGE_NAME}@latest`, ...Bun.argv.slice(2).filter((arg) => arg !== "--auto-update")], {
+    stdin: "inherit",
+    stdout: "inherit",
+    stderr: "inherit",
+    env: {
+      ...process.env,
+      CREATE_SERVICE_NO_UPDATE_CHECK: "1",
+    },
+  });
+  process.exit(result.exitCode);
+}
+
+function shouldSkipUpdateCheck() {
+  return Boolean(
+    process.env.CI ||
+      process.env.CODEX_CI ||
+      process.env.CREATE_SERVICE_NO_UPDATE_CHECK ||
+      process.env.BUN_TEST ||
+      process.env.npm_lifecycle_event
+  );
+}
+
+async function resolveLatestVersion() {
+  const response = await fetch(`https://registry.npmjs.org/${PACKAGE_NAME}/latest`, {
+    signal: AbortSignal.timeout(1_500),
+  });
+  if (!response.ok) {
+    return "";
+  }
+  const payload = (await response.json()) as { version?: string };
+  return payload.version?.trim() ?? "";
+}
+
+function isVersionGreater(left: string, right: string) {
+  const parse = (value: string) => value.split(".").map((part) => Number.parseInt(part, 10) || 0);
+  const [leftMajor = 0, leftMinor = 0, leftPatch = 0] = parse(left);
+  const [rightMajor = 0, rightMinor = 0, rightPatch = 0] = parse(right);
+  return (
+    leftMajor > rightMajor ||
+    (leftMajor === rightMajor && leftMinor > rightMinor) ||
+    (leftMajor === rightMajor && leftMinor === rightMinor && leftPatch > rightPatch)
+  );
 }
 
 export async function resolveConfig(args: ParsedArgs): Promise<ScaffoldConfig> {
@@ -287,8 +373,10 @@ export async function resolveConfig(args: ParsedArgs): Promise<ScaffoldConfig> {
 
   const discoveryPromise = discoverCloudInputs();
   const defaults = deriveDefaults(serviceName);
-  const runtime = await resolveRuntime(args);
-  const framework = await resolveFramework(args, runtime);
+  const target = await resolveTarget(args);
+  const runtime = await resolveRuntime(args, target);
+  const framework = await resolveFramework(args, target, runtime);
+  validateTargetRuntimeFramework(target, runtime, framework);
   const modulePath = await resolveModulePath(args, runtime, defaults.modulePath);
   const discovery = await waitForDiscovery(discoveryPromise);
   const gcpSelection = await resolveGcpSelection(args, defaults, discovery);
@@ -315,6 +403,7 @@ export async function resolveConfig(args: ParsedArgs): Promise<ScaffoldConfig> {
     directory,
     serviceName,
     modulePath,
+    target,
     runtime,
     framework,
     profile: args.profile,
@@ -344,22 +433,55 @@ async function waitForDiscovery(discoveryPromise: Promise<DiscoveryState>) {
   }
 }
 
-async function resolveRuntime(args: ParsedArgs): Promise<Runtime> {
+async function resolveTarget(args: ParsedArgs): Promise<DeployTarget> {
+  if (args.target) {
+    return args.target;
+  }
+
+  if (args.yes) {
+    return "cloudrun";
+  }
+
+  const value = await select({
+    message: "Deploy target",
+    initialValue: "cloudrun",
+    options: [
+      { value: "cloudrun", label: "Cloud Run", hint: "Default" },
+      { value: "workers", label: "Cloudflare Workers" },
+    ],
+  });
+
+  if (isCancel(value)) {
+    cancel("Aborted");
+    process.exit(1);
+  }
+
+  return value as DeployTarget;
+}
+
+async function resolveRuntime(args: ParsedArgs, target: DeployTarget): Promise<Runtime> {
   if (args.runtime) {
     return args.runtime;
   }
 
-  if (args.yes) {
+  if (target === "workers") {
     return "bun";
+  }
+
+  if (args.yes) {
+    return "go";
   }
 
   const value = await select({
     message: "Runtime",
-    initialValue: "bun",
-    options: [
-      { value: "bun", label: "Bun", hint: "Default" },
-      { value: "go", label: "Go" },
-    ],
+    initialValue: target === "cloudrun" ? "go" : "bun",
+    options:
+      target === "cloudrun"
+        ? [
+            { value: "go", label: "Go", hint: "Default" },
+            { value: "bun", label: "Bun" },
+          ]
+        : [{ value: "bun", label: "Bun/TypeScript", hint: "Workers runtime" }],
   });
 
   if (isCancel(value)) {
@@ -370,17 +492,17 @@ async function resolveRuntime(args: ParsedArgs): Promise<Runtime> {
   return value as Runtime;
 }
 
-async function resolveFramework(args: ParsedArgs, runtime: Runtime): Promise<Framework> {
-  const allowed = FRAMEWORKS_BY_RUNTIME[runtime];
+async function resolveFramework(args: ParsedArgs, target: DeployTarget, runtime: Runtime): Promise<Framework> {
+  const allowed = frameworksForTargetRuntime(target, runtime);
   if (args.framework) {
     if (allowed.some((framework) => framework === args.framework)) {
       return args.framework;
     }
-    throw new Error(`Framework ${args.framework} is not valid for runtime ${runtime}`);
+    throw new Error(`Framework ${args.framework} is not valid for target ${target} and runtime ${runtime}`);
   }
 
   if (args.yes) {
-    return allowed[0];
+    return target === "cloudrun" && runtime === "go" ? "connectrpc" : allowed[0]!;
   }
 
   const value = await select({
@@ -639,6 +761,17 @@ export function normalizeValidationResult(result: true | string): string | undef
   return result === true ? undefined : result;
 }
 
+export function validateProfileRuntimeFramework(profile: Profile, runtime: Runtime, framework: Framework) {
+  validateTargetRuntimeFramework("cloudrun", runtime, framework);
+}
+
+export function validateTargetRuntimeFramework(target: DeployTarget, runtime: Runtime, framework: Framework) {
+  const allowed = frameworksForTargetRuntime(target, runtime);
+  if (!allowed.some((candidate) => candidate === framework)) {
+    throw new Error(`Framework ${framework} is not valid for target ${target} and runtime ${runtime}`);
+  }
+}
+
 export function validateServiceNameInput(rawValue: string, directoryOverride?: string) {
   const serviceName = slugify(rawValue);
   if (!serviceName) {
@@ -665,10 +798,11 @@ export function validateServiceNameInput(rawValue: string, directoryOverride?: s
 function printHelp() {
   log.message(`
 Usage:
-  bun run index.ts [directory] [options]
+  bun run index.ts [service_id] [options]
 
 Options:
-  --profile <microservice>        Compatibility no-op; create-svc only generates microservices
+  --target <cloudrun|workers>     Deploy target for the generated service
+  --profile <microservice>        Compatibility no-op; app workspaces moved out
   --runtime <go|bun>              Runtime scaffold to generate
   --framework <name>              Framework for the selected runtime
   --module-path <path>            Go module path for generated Go scaffolds
@@ -677,9 +811,10 @@ Options:
   --billing-account <name>        Billing account resource name
   --quota-project <id>            Billing quota project for gcloud calls
   --region <region>               Cloud Run region
-  --auto-deploy                   Run bootstrap and first deploy after scaffold
-  --bootstrap                     Alias for --auto-deploy
+  --auto-deploy                   Run service create after scaffold
   --no-auto-deploy                Scaffold only
+  --auto-update                   Re-run through create-service@latest when a newer version exists
+  --no-update-check               Skip the best-effort npm update check
   --yes, -y                       Accept defaults without prompts
   --help, -h                      Show this message
 `);

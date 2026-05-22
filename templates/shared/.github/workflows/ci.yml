@@ -19,4 +19,5 @@ jobs:
       - run: bun install
       - run: bun lint
       - run: bun test
-
+      - if: ${{ vars.GCX_ENABLED == 'true' && github.ref == 'refs/heads/main' }}
+        run: bun run dashboards

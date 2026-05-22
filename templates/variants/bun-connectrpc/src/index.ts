@@ -1,133 +1,73 @@
-import { connectNodeAdapter } from "@connectrpc/connect-node";
 import { Code, ConnectError } from "@connectrpc/connect";
+import { connectNodeAdapter } from "@connectrpc/connect-node";
 import type { ServiceImpl } from "@connectrpc/connect";
 import { createServer } from "node:http2";
-import { ChatService as ChatRpcService } from "../gen/protos/chat/v1/chat_pb.js";
-import { AppError, createDefaultChatService, type ChatService } from "./chat/service";
+import { WaitlistService as WaitlistRpcService } from "../gen/protos/waitlist/v1/waitlist_pb.js";
+import { withServiceAuth } from "./auth";
+import { AppError, createDefaultWaitlistService, type WaitlistService } from "./waitlist/service";
+import { startTemporalWorker } from "./temporal/worker";
+import type { WaitlistEntry, WaitlistTrigger } from "./waitlist/types";
 
-type RpcService = ServiceImpl<typeof ChatRpcService>;
+type RpcService = ServiceImpl<typeof WaitlistRpcService>;
 type FallbackHandler = NonNullable<Parameters<typeof connectNodeAdapter>[0]["fallback"]>;
 
-export function createRpcService(service: ChatService): Partial<RpcService> {
+export function createRpcService(service: WaitlistService): Partial<RpcService> {
   return {
-    async createUser(request) {
-      const user = await service.createUser({
-        username: request.username,
-        displayName: request.displayName || null,
+    async joinWaitlist(request) {
+      const result = await service.joinWaitlist({
+        email: request.email,
+        name: request.name || null,
+        company: request.company || null,
+        source: request.source || null,
       });
-      return { user: toRpcUser(user) };
+      return { entry: toRpcEntry(result.entry), created: result.created };
     },
-    async getUser(request) {
-      return { user: toRpcUser(await service.getUser(request.userId)) };
+    async getWaitlistEntry(request) {
+      return { entry: toRpcEntry(await service.getWaitlistEntry(request.entryId)) };
     },
-    async getUserByUsername(request) {
-      return { user: toRpcUser(await service.getUserByUsername(request.username)) };
+    async getWaitlistEntryByEmail(request) {
+      return { entry: toRpcEntry(await service.getWaitlistEntryByEmail(request.email)) };
     },
-    async createConversation(request) {
-      return {
-        conversation: toRpcConversation(
-          await service.createConversation({
-            createdByUserId: request.createdByUserId,
-            title: request.title || null,
-            participantUserIds: request.participantUserIds,
-          })
-        ),
-      };
-    },
-    async getConversation(request) {
-      return { conversation: toRpcConversation(await service.getConversation(request.conversationId)) };
-    },
-    async updateConversation(request) {
-      return {
-        conversation: toRpcConversation(
-          await service.updateConversation(request.conversationId, { title: request.title || null })
-        ),
-      };
-    },
-    async deleteConversation(request) {
-      await service.deleteConversation(request.conversationId);
-      return {};
-    },
-    async addConversationParticipant(request) {
-      return {
-        conversation: toRpcConversation(
-          await service.addParticipant(request.conversationId, request.userId)
-        ),
-      };
-    },
-    async removeConversationParticipant(request) {
-      await service.removeParticipant(request.conversationId, request.userId);
-      return {};
-    },
-    async listMessages(request) {
-      const result = await service.listMessages(request.conversationId, {
-        cursor: request.cursor || null,
+    async listWaitlistEntries(request) {
+      const entries = await service.listWaitlistEntries({
+        status: request.status || null,
         limit: request.limit || null,
       });
-      return {
-        messages: result.messages.map(toRpcMessage),
-        nextCursor: result.nextCursor ?? "",
-      };
+      return { entries: entries.map(toRpcEntry) };
     },
-    async createMessage(request) {
+    async updateWaitlistEntry(request) {
       return {
-        message: toRpcMessage(
-          await service.createMessage(request.conversationId, {
-            userId: request.userId,
-            body: request.body,
+        entry: toRpcEntry(
+          await service.updateWaitlistEntry({
+            entryId: request.entryId,
+            status: request.status,
           })
         ),
       };
     },
-    async updateMessage(request) {
+    async exportWaitlistEntries(request) {
       return {
-        message: toRpcMessage(
-          await service.updateMessage(request.conversationId, request.messageId, { body: request.body })
-        ),
+        csv: await service.exportWaitlistEntries({
+          status: request.status || null,
+          limit: request.limit || null,
+        }),
       };
     },
-    async deleteMessage(request) {
-      await service.deleteMessage(request.conversationId, request.messageId);
-      return {};
-    },
-    async createAttachmentUpload(request) {
-      const result = await service.createAttachmentUpload({
-        conversationId: request.conversationId,
-        uploadedByUserId: request.userId,
-        filename: request.filename,
-        contentType: request.contentType,
-        byteSize: Number(request.byteSize),
-      });
-      return {
-        attachment: toRpcAttachment(result.attachment),
-        upload: {
-          method: result.upload.method,
-          url: result.upload.url,
-          headers: result.upload.headers,
-        },
-      };
-    },
-    async finalizeAttachment(request) {
-      return {
-        attachment: toRpcAttachment(
-          await service.finalizeAttachment(request.attachmentId, { messageId: request.messageId || null })
-        ),
-      };
-    },
-    async getAttachment(request) {
-      return { attachment: toRpcAttachment(await service.getAttachment(request.attachmentId)) };
-    },
-    async deleteAttachment(request) {
-      await service.deleteAttachment(request.attachmentId);
-      return {};
+    async recordTrigger(request) {
+      const trigger = (await service.recordTrigger({
+        type: request.type,
+        entryId: request.entryId || null,
+        payloadJson: request.payloadJson || "{}",
+      })) as WaitlistTrigger;
+      return { trigger: toRpcTrigger(trigger) };
     },
   };
 }
 
-export function createHandler(service: ChatService) {
+export function createHandler(service: WaitlistService) {
   return connectNodeAdapter({
     routes: (router) => {
-      router.service(ChatRpcService, createRpcService(service));
+      router.service(WaitlistRpcService, createRpcService(service));
     },
     fallback: (async (request: Parameters<FallbackHandler>[0], response: Parameters<FallbackHandler>[1]) => {
       const url = new URL(request.url ?? "/", "http://localhost");
@@ -141,7 +81,7 @@ export function createHandler(service: ChatService) {
       if (path === "/") {
         respondJson(response, 200, {
           service: "{{SERVICE_NAME}}",
-          domain: "chat",
+          domain: "waitlist",
           apiOrigin: "https://api.{{SERVICE_NAME}}.anmho.com",
         });
         return;
@@ -156,8 +96,11 @@ export function createHandler(service: ChatService) {
         try {
           const provider = path.split("/").filter(Boolean)[1] ?? "generic";
           const rawBody = await readRawBody(request);
-          const result = await service.processWebhook(provider, toHeaders(request), rawBody);
-          respondJson(response, result.duplicate ? 200 : 202, result);
+          const trigger = await service.recordTrigger({
+            type: `webhook.${provider}`,
+            payloadJson: JSON.stringify({ headers: request.headers, rawBody }),
+          });
+          respondJson(response, 202, { trigger });
         } catch (error) {
           respondAppError(response, error);
         }
@@ -177,9 +120,9 @@ export function createHandler(service: ChatService) {
 
 export function createIntrospectionDocument() {
   return {
-    service: ChatRpcService.typeName,
-    file: ChatRpcService.file.proto.name,
-    methods: ChatRpcService.methods.map((method) => ({
+    service: WaitlistRpcService.typeName,
+    file: WaitlistRpcService.file.proto.name,
+    methods: WaitlistRpcService.methods.map((method) => ({
       name: method.name,
       localName: method.localName,
       kind: method.methodKind,
@@ -197,62 +140,28 @@ export function isLocalRpcIntrospectionEnabled() {
   return !Bun.env.K_SERVICE && Bun.env.NODE_ENV !== "production";
 }
 
-function toRpcUser(user: Awaited<ReturnType<ChatService["getUser"]>>) {
+function toRpcEntry(entry: WaitlistEntry) {
   return {
-    id: user.id,
-    username: user.username,
-    displayName: user.displayName ?? "",
-    createdAt: user.createdAt,
-    updatedAt: user.updatedAt,
+    id: entry.id,
+    email: entry.email,
+    name: entry.name ?? "",
+    company: entry.company ?? "",
+    source: entry.source ?? "",
+    status: entry.status,
+    createdAt: entry.createdAt,
+    updatedAt: entry.updatedAt,
   };
 }
 
-function toRpcConversation(conversation: Awaited<ReturnType<ChatService["getConversation"]>>) {
+function toRpcTrigger(trigger: WaitlistTrigger) {
   return {
-    id: conversation.id,
-    title: conversation.title ?? "",
-    createdByUserId: conversation.createdByUserId,
-    participants: conversation.participants.map(toRpcUser),
-    createdAt: conversation.createdAt,
-    updatedAt: conversation.updatedAt,
-  };
-}
-
-function toRpcMessage(message: Awaited<ReturnType<ChatService["createMessage"]>>) {
-  return {
-    id: message.id,
-    conversationId: message.conversationId,
-    userId: message.userId,
-    body: message.body,
-    editedAt: message.editedAt ?? "",
-    createdAt: message.createdAt,
-    updatedAt: message.updatedAt,
-    attachments: message.attachments.map((attachment) => ({
-      id: attachment.id,
-      filename: attachment.filename,
-      contentType: attachment.contentType,
-      byteSize: BigInt(attachment.byteSize),
-      status: attachment.status,
-      publicUrl: attachment.publicUrl,
-    })),
-  };
-}
-
-function toRpcAttachment(attachment: Awaited<ReturnType<ChatService["getAttachment"]>>) {
-  return {
-    id: attachment.id,
-    conversationId: attachment.conversationId,
-    messageId: attachment.messageId ?? "",
-    uploadedByUserId: attachment.uploadedByUserId,
-    storageBucket: attachment.storageBucket,
-    storageKey: attachment.storageKey,
-    contentType: attachment.contentType,
-    byteSize: BigInt(attachment.byteSize),
-    filename: attachment.filename,
-    status: attachment.status,
-    publicUrl: attachment.publicUrl,
-    createdAt: attachment.createdAt,
-    updatedAt: attachment.updatedAt,
+    id: trigger.id,
+    type: trigger.type,
+    entryId: trigger.entryId ?? "",
+    status: trigger.status,
+    payloadJson: trigger.payloadJson,
+    createdAt: trigger.createdAt,
+    processedAt: trigger.processedAt ?? "",
   };
 }
 
@@ -271,7 +180,7 @@ function respondAppError(response: Parameters<FallbackHandler>[1], error: unknow
     respondJson(response, 500, { error: error.message, code: error.code });
     return;
   }
-  respondJson(response, 500, { error: error instanceof Error ? error.message : String(error) });
+  respondJson(response, 500, { error: error instanceof Error ? error.message : String(error), code: Code[Code.Internal] });
 }
 
 function readRawBody(request: Parameters<FallbackHandler>[0]) {
@@ -283,22 +192,13 @@ function readRawBody(request: Parameters<FallbackHandler>[0]) {
   });
 }
 
-function toHeaders(request: Parameters<FallbackHandler>[0]) {
-  const headers = new Headers();
-  for (const [key, value] of Object.entries(request.headers)) {
-    if (Array.isArray(value)) {
-      for (const item of value) {
-        headers.append(key, item);
-      }
-    } else if (value) {
-      headers.set(key, value);
-    }
-  }
-  return headers;
-}
-
 if (import.meta.main) {
+  const temporalWorker = await startTemporalWorker();
+  if (temporalWorker) {
+    console.log(`Temporal worker polling ${temporalWorker.taskQueue}`);
+  }
+
   const port = Number(Bun.env.PORT ?? 8080);
-  const server = createServer(createHandler(createDefaultChatService()));
+  const server = createServer(withServiceAuth(createHandler(createDefaultWaitlistService())));
   server.listen(port);
 }

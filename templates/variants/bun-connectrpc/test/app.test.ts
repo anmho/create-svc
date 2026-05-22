@@ -1,12 +1,12 @@
 import { expect, test } from "bun:test";
 import { createIntrospectionDocument, isLocalRpcIntrospectionEnabled } from "../src/index";
 
-test("local introspection document exposes chat service and methods", () => {
+test("local introspection document exposes waitlist service and methods", () => {
   const document = createIntrospectionDocument();
 
-  expect(document.service).toBe("chat.v1.ChatService");
-  expect(document.methods.map((method) => method.name)).toContain("CreateUser");
-  expect(document.methods.map((method) => method.name)).toContain("CreateAttachmentUpload");
+  expect(document.service).toBe("waitlist.v1.WaitlistService");
+  expect(document.methods.map((method) => method.name)).toContain("JoinWaitlist");
+  expect(document.methods.map((method) => method.name)).toContain("RecordTrigger");
 });
 
 test("local introspection defaults to enabled outside Cloud Run", () => {

@@ -23,9 +23,17 @@ export const config = {
     hostname: "{{API_HOSTNAME}}",
     baseDomain: "{{API_BASE_DOMAIN}}",
   },
-  storage: {
-    attachmentBucket: "{{ATTACHMENT_BUCKET}}",
-    attachmentPublicBaseUrl: "{{ATTACHMENT_PUBLIC_BASE_URL}}",
+  auth: {
+    issuer: "https://auth.anmho.com",
+    audience: "api://{{SERVICE_ID}}",
+    jwksUrl: "https://auth.anmho.com/api/auth/jwks",
+  },
+  temporal: {
+    enabled: false,
+    address: "localhost:7233",
+    namespace: "default",
+    taskQueue: "{{SERVICE_ID}}",
+    apiKeySecretName: "{{SERVICE_ID}}-temporal-api-key",
   },
   neon: {
     projectId: "{{NEON_PROJECT_ID}}",
@@ -44,7 +52,6 @@ export const config = {
     "iamcredentials.googleapis.com",
     "secretmanager.googleapis.com",
     "serviceusage.googleapis.com",
-    "storage.googleapis.com",
     "sts.googleapis.com",
   ],
 } as const;

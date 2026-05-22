@@ -3,21 +3,28 @@
   "private": true,
   "type": "module",
   "bin": {
-    "svc-cloudrun": "./scripts/cloudrun/cli.ts"
+    "service": "./scripts/cloudrun/cli.ts"
   },
   "scripts": {
-    "dev": "bun run ./src/index.ts",
+    "dev": "bun run ./scripts/dev.ts bun run ./src/index.ts",
+    "service": "bun run ./scripts/cloudrun/cli.ts",
     "migrate": "bun run ./scripts/migrate.ts",
     "gen": "bun run ./scripts/codegen.ts",
     "lint": "bunx tsc --noEmit",
     "test": "bun test",
-    "bootstrap": "bun run ./scripts/cloudrun/cli.ts bootstrap",
+    "create": "bun run ./scripts/cloudrun/cli.ts create",
     "deploy": "bun run ./scripts/cloudrun/cli.ts deploy",
-    "cleanup": "bun run ./scripts/cloudrun/cli.ts cleanup"
+    "dashboards": "bun run ./scripts/cloudrun/cli.ts dashboards",
+    "auth": "bun run ./scripts/cloudrun/cli.ts auth",
+    "destroy": "bun run ./scripts/cloudrun/cli.ts destroy"
   },
   "dependencies": {
-    "@google-cloud/storage": "^7.17.2",
+    "@anmho/authctl": "0.1.0",
     "@clack/prompts": "^1.2.0",
+    "@temporalio/activity": "1.17.1",
+    "@temporalio/client": "1.17.1",
+    "@temporalio/worker": "1.17.1",
+    "@temporalio/workflow": "1.17.1",
     "drizzle-orm": "^0.44.5",
     "@neondatabase/api-client": "^2.7.1",
     "hono": "^4.10.1"

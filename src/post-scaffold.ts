@@ -19,9 +19,8 @@ export async function runPostScaffoldFlow(config: ScaffoldConfig, cwd: string) {
   if (config.autoDeploy) {
     installProjectDependencies(cwd);
     const command = config.runtime === "bun" ? "bun" : "make";
-    run(command, config.runtime === "bun" ? ["run", "bootstrap"] : ["bootstrap"], { cwd });
-    run(command, config.runtime === "bun" ? ["run", "deploy"] : ["deploy"], { cwd });
-    return { message: "Dependencies installed and first deploy started" };
+    run(command, config.runtime === "bun" ? ["run", "create"] : ["create"], { cwd });
+    return { message: "Dependencies installed and service create started" };
   }
 
   return { message: "Backend package generated" };

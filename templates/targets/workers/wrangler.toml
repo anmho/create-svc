@@ -1,0 +1,24 @@
+name = "{{SERVICE_ID}}"
+main = "src/index.ts"
+compatibility_date = "2026-05-14"
+compatibility_flags = ["nodejs_compat"]
+
+[observability]
+enabled = true
+
+[vars]
+AUTH_ENABLED = "true"
+AUTH_ISSUER = "{{AUTH_ISSUER}}"
+AUTH_AUDIENCE = "{{AUTH_AUDIENCE}}"
+AUTH_JWKS_URL = "{{AUTH_JWKS_URL}}"
+
+[triggers]
+crons = ["*/15 * * * *"]
+
+[[routes]]
+pattern = "{{API_HOSTNAME}}/*"
+custom_domain = true
+
+[[hyperdrive]]
+binding = "HYPERDRIVE"
+id = ""

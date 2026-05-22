@@ -3,6 +3,7 @@ import { buildGcpProjectOptions, compactDatabaseName, compactIdentifier, deriveD
 
 test("deriveDefaults uses the service name for project, repo, and database naming", () => {
   expect(deriveDefaults("edge-api")).toEqual({
+    serviceId: "edge-api",
     serviceName: "edge-api",
     projectName: "edge-api",
     projectId: "anmho-edge-api",

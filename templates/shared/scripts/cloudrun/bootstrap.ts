@@ -1,5 +1,4 @@
 import { config } from "./config";
-import { publishProviderRuntimeSecrets } from "./integrations";
 import { ensureDatabase, getConnectionUri, resolveNeonConfig } from "./neon";
 import {
   addSecretVersion,
@@ -9,11 +8,11 @@ import {
   ensureProjectRole,
   ensureSecretAccessor,
   ensureServiceAccount,
-  ensureStorageBucket,
   gcloud,
   requireCommand,
   requireGcloudAuth,
   resolveDeploymentTarget,
+  resolveTemporalRuntimeConfig,
   runMain,
   runStep,
 } from "./lib";
@@ -31,8 +30,6 @@ export async function bootstrap() {
   });
 
   await runStep("Ensuring Artifact Registry repository", () => ensureArtifactRepository());
-  await runStep("Ensuring attachment storage bucket", () => ensureStorageBucket());
-
   await runStep("Granting project roles", () => {
     ensureProjectRole(`serviceAccount:${config.runtimeServiceAccount}`, "roles/secretmanager.secretAccessor");
   });
@@ -53,7 +50,19 @@ export async function bootstrap() {
     ensureSecretAccessor(target.databaseSecretName, `serviceAccount:${config.runtimeServiceAccount}`);
   });
 
-  await runStep("Publishing provider runtime secrets", () => publishProviderRuntimeSecrets(target));
+  await runStep("Publishing Temporal secrets", () => publishTemporalSecrets());
+}
+
+function publishTemporalSecrets() {
+  const temporal = resolveTemporalRuntimeConfig();
+  const apiKey = process.env.TEMPORAL_API_KEY?.trim();
+  if (!apiKey || !temporal.apiKeySecretName) {
+    return "No Temporal API key configured";
+  }
+
+  addSecretVersion(temporal.apiKeySecretName, apiKey);
+  ensureSecretAccessor(temporal.apiKeySecretName, `serviceAccount:${config.runtimeServiceAccount}`);
+  return temporal.apiKeySecretName;
 }
 
 if (import.meta.main) {

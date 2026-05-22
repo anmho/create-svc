@@ -1,6 +1,10 @@
 export const BILLING_ACCOUNT_DEFAULT = "billingAccounts/01BD2E-3A6949-8F4C84";
 export const QUOTA_PROJECT_DEFAULT = "anmho-infra-prod";
 
+export const DEPLOY_TARGETS = ["cloudrun", "workers"] as const;
+
+export type DeployTarget = (typeof DEPLOY_TARGETS)[number];
+
 export const FRAMEWORKS_BY_RUNTIME = {
   go: ["chi", "connectrpc"],
   bun: ["hono", "connectrpc"],
@@ -9,6 +13,24 @@ export const FRAMEWORKS_BY_RUNTIME = {
 export type Runtime = keyof typeof FRAMEWORKS_BY_RUNTIME;
 export type Framework = (typeof FRAMEWORKS_BY_RUNTIME)[Runtime][number];
 export type GcpProjectMode = "create_new" | "use_existing";
+
+export function parseDeployTarget(value: string): DeployTarget {
+  if (DEPLOY_TARGETS.includes(value as DeployTarget)) {
+    return value as DeployTarget;
+  }
+
+  throw new Error(`Unknown target: ${value}`);
+}
+
+export function frameworksForTargetRuntime(target: DeployTarget, runtime: Runtime): readonly Framework[] {
+  if (target === "workers") {
+    if (runtime === "bun") {
+      return ["hono"];
+    }
+    return [];
+  }
+  return FRAMEWORKS_BY_RUNTIME[runtime];
+}
 
 export function slugify(value: string, maxLength = 63) {
   return value
@@ -64,6 +86,7 @@ export function deriveDefaults(serviceName: string) {
   const normalizedServiceName = slugify(serviceName) || "my-service";
 
   return {
+    serviceId: normalizedServiceName,
     serviceName: normalizedServiceName,
     projectName: normalizedServiceName,
     projectId: compactIdentifier(`anmho-${normalizedServiceName}`, 30),
