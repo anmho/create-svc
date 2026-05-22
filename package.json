@@ -1,6 +1,6 @@
 {
   "name": "create-svc",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "Local backend bootstrap CLI for Bun-first Cloud Run API services with Neon and Vault provisioning.",
   "module": "index.ts",
   "type": "module",
