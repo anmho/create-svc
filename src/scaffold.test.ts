@@ -20,6 +20,11 @@ function baseConfig(overrides: Partial<ScaffoldConfig> = {}): ScaffoldConfig {
     billingAccount: "billingAccounts/01BD2E-3A6949-8F4C84",
     quotaProjectId: "anmho-infra-prod",
     profile: "microservice",
+    git: {
+      enabled: false,
+      owner: "anmho",
+      repository: "dns-api",
+    },
     neonDatabaseName: "dns_api",
     apiHostname: "api.dns-api.anmho.com",
     generatorRoot: join(import.meta.dir, ".."),
@@ -54,7 +59,7 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
     expect(serviceConfig).toContain('service_id: "dns-api"');
     expect(serviceConfig).toContain('target: "cloudrun"');
     expect(serviceConfig).toContain('module: "buf.build/anmho/dns-api"');
-    expect(serviceConfig).toContain('issuer: "https://auth.anmho.com"');
+    expect(serviceConfig).toContain('issuer: "https://auth.anmho.com/api/auth"');
     expect(serviceConfig).toContain('audience: "api://dns-api"');
     expect(serviceConfig).toContain('vault_path_prefix: "prod/apps/dns-api/server/oauth-clients"');
     expect(serviceConfig).toContain('api_key_secret_name: "dns-api-temporal-api-key"');
@@ -78,8 +83,11 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
 
     const deployScript = await Bun.file(join(generatedRoot, "scripts", "cloudrun", "lib.ts")).text();
     expect(deployScript).toContain('--billing-project", config.project.quotaProjectId');
+    expect(deployScript).toContain('config.project.mode === "use_existing"');
     expect(deployScript).toContain("serviceDomain");
     expect(deployScript).toContain("ensureProductionDomainMapping");
+    expect(deployScript).toContain('"domain-mappings",');
+    expect(deployScript).toContain('"--region",');
     expect(deployScript).toContain("assertProductionDomainAvailable");
     expect(deployScript).toContain("assertServiceNameAvailable");
     expect(deployScript).not.toContain("ensureStorageBucket");
@@ -182,7 +190,7 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
       expect(goMod).toContain("go.temporal.io/sdk");
     } else {
       const packageJson = await Bun.file(join(generatedRoot, "package.json")).text();
-      expect(packageJson).toContain('"@anmho/authctl": "0.1.0"');
+      expect(packageJson).toContain('"@anmho/authctl": "0.1.1"');
       expect(packageJson).toContain("@temporalio/worker");
       expect(packageJson).toContain('"service": "./scripts/cloudrun/cli.ts"');
       expect(packageJson).toContain('"dev": "bun run ./scripts/dev.ts bun run ./src/index.ts"');
@@ -200,13 +208,17 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
       const cloudrunLib = await Bun.file(join(generatedRoot, "scripts", "cloudrun", "lib.ts")).text();
       expect(cloudrunLib).toContain("resolveTemporalRuntimeConfig");
       expect(cloudrunLib).toContain("TEMPORAL_API_KEY_ENV");
+      expect(cloudrunLib).toContain("value === undefined");
 
       const authctlScript = await Bun.file(join(generatedRoot, "scripts", "authctl.ts")).text();
       expect(authctlScript).toContain("authctl");
       expect(authctlScript).toContain("resource-servers");
       expect(authctlScript).toContain("clients");
       expect(authctlScript).toContain("defaultClientTargetArgs");
+      expect(authctlScript).toContain('existsSync("./node_modules/.bin/authctl") ? "./node_modules/.bin/authctl" : Bun.which("authctl")');
       expect(authctlScript).not.toContain('defaultAuthResourceServerArgs(), "--yes", "--json"');
+      const authScript = await Bun.file(join(generatedRoot, "src", "auth.ts")).text();
+      expect(authScript).toContain('"Ed25519"');
 
       const makefile = await Bun.file(join(generatedRoot, "Makefile")).text();
       expect(makefile).toContain("npx --no-install service");
@@ -304,7 +316,7 @@ test("scaffolds the workers target with wrangler lifecycle commands", async () =
   );
 
   const packageJson = await Bun.file(join(generatedRoot, "package.json")).text();
-  expect(packageJson).toContain('"@anmho/authctl": "0.1.0"');
+  expect(packageJson).toContain('"@anmho/authctl": "0.1.1"');
   expect(packageJson).toContain('"service": "./scripts/workers/cli.ts"');
   expect(packageJson).toContain('"dev": "wrangler dev"');
   expect(packageJson).toContain('"auth": "bun run ./scripts/workers/cli.ts auth"');

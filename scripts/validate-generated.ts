@@ -307,6 +307,11 @@ function createScaffoldConfig(
     billingAccount: "billingAccounts/01BD2E-3A6949-8F4C84",
     quotaProjectId: "anmho-infra-prod",
     autoDeploy: false,
+    git: {
+      enabled: false,
+      owner: "anmho",
+      repository: item.serviceName,
+    },
     neonDatabaseName: defaults.neonDatabaseName,
     apiHostname: defaults.apiHostname,
     generatorRoot,

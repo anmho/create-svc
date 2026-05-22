@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto"
 	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -170,6 +171,15 @@ func verifySignature(alg string, key jwk, signingInput []byte, encodedSignature 
 			return errors.New("invalid ES256 signature")
 		}
 		return nil
+	case "EdDSA":
+		publicKey, err := ed25519PublicKey(key)
+		if err != nil {
+			return err
+		}
+		if !ed25519.Verify(publicKey, signingInput, signature) {
+			return errors.New("invalid EdDSA signature")
+		}
+		return nil
 	default:
 		return errors.New("unsupported jwt alg")
 	}
@@ -204,6 +214,20 @@ func ecdsaPublicKey(key jwk) (*ecdsa.PublicKey, error) {
 		return nil, err
 	}
 	return &ecdsa.PublicKey{Curve: elliptic.P256(), X: new(big.Int).SetBytes(x), Y: new(big.Int).SetBytes(y)}, nil
+}
+
+func ed25519PublicKey(key jwk) (ed25519.PublicKey, error) {
+	if key.Crv != "Ed25519" {
+		return nil, errors.New("unsupported eddsa curve")
+	}
+	x, err := base64.RawURLEncoding.DecodeString(key.X)
+	if err != nil {
+		return nil, err
+	}
+	if len(x) != ed25519.PublicKeySize {
+		return nil, errors.New("invalid Ed25519 public key")
+	}
+	return ed25519.PublicKey(x), nil
 }
 
 func validateClaims(claims jwtClaims, cfg Config) error {

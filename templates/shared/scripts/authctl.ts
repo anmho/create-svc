@@ -55,7 +55,7 @@ export function runAuthCommand(args: string[]) {
     const command = resolveResourceServerCommand();
     if (!command) {
       throw new Error(
-        "authctl is installed but does not expose resource-server commands; update authctl before managing auth resource servers"
+        "authctl is installed but does not expose resource-server commands; install @anmho/authctl@0.1.1 or newer before managing auth resource servers"
       );
     }
     if (action === "get" || action === "list") {
@@ -115,7 +115,7 @@ export function runAuthDoctor(): AuthDoctorResult {
       hasResourceServerCommands: false,
       resourceServerCommand,
       detail:
-        "authctl is installed but does not expose resource-server upsert/create; update authctl or add the resource-server control-plane command before service create",
+        "authctl is installed but does not expose resource-server upsert/create; install @anmho/authctl@0.1.1 or newer before service create",
     };
   }
 
@@ -227,5 +227,5 @@ function authctl(args: string[], options: { allowFailure?: boolean; quiet?: bool
 }
 
 function authctlPath() {
-  return Bun.which("authctl") ?? (existsSync("./node_modules/.bin/authctl") ? "./node_modules/.bin/authctl" : undefined);
+  return existsSync("./node_modules/.bin/authctl") ? "./node_modules/.bin/authctl" : Bun.which("authctl");
 }

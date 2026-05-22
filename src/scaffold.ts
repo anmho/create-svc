@@ -10,6 +10,7 @@ import {
   type Runtime,
 } from "./naming";
 import { exampleForProfile, type Profile } from "./profiles";
+import type { GitBootstrapConfig } from "./git-bootstrap";
 
 export type ScaffoldConfig = {
   directory: string;
@@ -26,6 +27,7 @@ export type ScaffoldConfig = {
   billingAccount: string;
   quotaProjectId: string;
   autoDeploy: boolean;
+  git: GitBootstrapConfig;
   neonDatabaseName: string;
   apiHostname: string;
   generatorRoot: string;
@@ -166,9 +168,9 @@ function buildReplacements(config: ScaffoldConfig) {
   const personalBranchPrefix = `${config.serviceName}-dev`;
   const localDatabaseName = compactDatabaseName(config.serviceName);
   const localDatabasePort = deriveLocalPostgresPort(config.serviceName);
-  const authIssuer = "https://auth.anmho.com";
+  const authIssuer = "https://auth.anmho.com/api/auth";
   const authAudience = `api://${config.serviceName}`;
-  const authJwksUrl = `${authIssuer}/api/auth/jwks`;
+  const authJwksUrl = `${authIssuer}/jwks`;
 
   return {
     SERVICE_NAME: config.serviceName,

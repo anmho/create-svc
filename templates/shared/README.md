@@ -121,9 +121,8 @@ resource-server control-plane command:
 ```
 
 If this fails with `authctl is installed but does not expose resource-server
-commands`, update `@anmho/authctl` to a published build newer than the current
-`0.1.0` package that includes `resource-servers upsert` before running
-`{{COMMAND_BOOTSTRAP}}`.
+commands`, make sure the generated package installed `@anmho/authctl@0.1.1` or
+newer before running `{{COMMAND_BOOTSTRAP}}`.
 
 Optional remote-only Vault overrides for Neon admin key lookup:
 
