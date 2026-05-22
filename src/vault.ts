@@ -2,8 +2,8 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 const DEFAULT_VAULT_SECRET_MOUNT = "secret";
-const DEFAULT_NEON_API_KEY_PATH = "provider/neon-api-key";
-const DEFAULT_NEON_API_KEY_FIELD = "value";
+const DEFAULT_NEON_API_KEY_PATH = "prod/providers/neon";
+const DEFAULT_NEON_API_KEY_FIELD = "api_key";
 
 type VaultSecretOptions = {
   addr?: string;
