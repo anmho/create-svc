@@ -14,17 +14,41 @@ test("resolveNeonApiKey prefers NEON_API_KEY from env", async () => {
   await expect(resolveNeonApiKey()).resolves.toBe("direct-token");
 });
 
+test("resolveNeonApiKey reads the purpose-named Neon provider secret by default", async () => {
+  delete process.env.NEON_API_KEY;
+  process.env.VAULT_ADDR = "https://vault.example.com";
+  process.env.VAULT_TOKEN = "token-123";
+
+  const fetchMock = mock(async (input: string | URL | Request) => {
+    expect(String(input)).toBe("https://vault.example.com/v1/secret/data/prod/providers/neon");
+    return new Response(
+      JSON.stringify({
+        data: {
+          data: {
+            api_key: "vault-token",
+          },
+        },
+      }),
+      { status: 200 }
+    );
+  });
+
+  globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+  await expect(resolveNeonApiKey()).resolves.toBe("vault-token");
+});
+
 test("readVaultSecret reads KV v2 secret data using existing vault login env", async () => {
   process.env.VAULT_ADDR = "https://vault.example.com";
   process.env.VAULT_TOKEN = "token-123";
 
   const fetchMock = mock(async (input: string | URL | Request) => {
-    expect(String(input)).toBe("https://vault.example.com/v1/secret/data/provider/neon-api-key");
+    expect(String(input)).toBe("https://vault.example.com/v1/secret/data/prod/providers/neon");
     return new Response(
       JSON.stringify({
         data: {
           data: {
-            value: "vault-token",
+            api_key: "vault-token",
           },
         },
       }),
@@ -36,8 +60,8 @@ test("readVaultSecret reads KV v2 secret data using existing vault login env", a
 
   await expect(
     readVaultSecret({
-      path: "provider/neon-api-key",
-      field: "value",
+      path: "prod/providers/neon",
+      field: "api_key",
     })
   ).resolves.toBe("vault-token");
 });
@@ -56,7 +80,7 @@ test("readVaultSecret falls back to ~/.vault-token", async () => {
       JSON.stringify({
         data: {
           data: {
-            value: "vault-token",
+            api_key: "vault-token",
           },
         },
       }),
@@ -68,8 +92,8 @@ test("readVaultSecret falls back to ~/.vault-token", async () => {
 
   await expect(
     readVaultSecret({
-      path: "provider/neon-api-key",
-      field: "value",
+      path: "prod/providers/neon",
+      field: "api_key",
     })
   ).resolves.toBe("vault-token");
 });
