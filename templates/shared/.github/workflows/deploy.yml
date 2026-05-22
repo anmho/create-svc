@@ -28,3 +28,5 @@ jobs:
       - run: bun run deploy -- --ci
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+      - if: ${{ vars.GCX_ENABLED == 'true' }}
+        run: bun run dashboards

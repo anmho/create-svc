@@ -18,6 +18,10 @@ test("plans only the selected variant when --variant is provided", () => {
   expect(plan.map((variant) => variant.name)).toEqual(["bun-hono"]);
 });
 
+test("rejects the removed app profile", () => {
+  expect(() => planValidation(["--profile", "app"])).toThrow("app profile has moved");
+});
+
 test("plans the public commands for the bun hono tracer bullet", () => {
   const plan = planValidation(["--variant", "bun-hono"]);
 
@@ -59,6 +63,7 @@ test("parses keep mode and rejects unknown variants", () => {
   expect(parseValidationArgs(["--keep", "--variant", "go-chi"])).toEqual({
     keep: true,
     selectedVariant: "go-chi",
+    selectedProfile: "microservice",
   });
   expect(() => parseValidationArgs(["--variant", "bad"])).toThrow("Unknown generated service variant: bad");
 });

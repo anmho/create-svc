@@ -1,5 +1,0 @@
-.DS_Store
-.cloudrun.rendered.yaml
-.env
-dist
-node_modules

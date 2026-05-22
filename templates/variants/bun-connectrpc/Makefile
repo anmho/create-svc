@@ -1,9 +1,9 @@
-.PHONY: dev migrate gen lint test bootstrap deploy cleanup
+.PHONY: dev migrate gen lint test create deploy dashboards auth destroy
 
-CLOUDRUN := npx --no-install svc-cloudrun
+SERVICE := npx --no-install service
 
 dev:
-	bun run ./src/index.ts
+	bun run dev
 
 migrate:
 	bun run ./scripts/migrate.ts
@@ -17,11 +17,17 @@ lint:
 test:
 	bun test
 
-bootstrap:
-	$(CLOUDRUN) bootstrap
+create:
+	$(SERVICE) create
 
 deploy:
-	$(CLOUDRUN) deploy $(ARGS)
+	$(SERVICE) deploy $(ARGS)
 
-cleanup:
-	$(CLOUDRUN) cleanup $(ARGS)
+dashboards:
+	$(SERVICE) dashboards
+
+auth:
+	$(SERVICE) auth $(ARGS)
+
+destroy:
+	$(SERVICE) destroy $(ARGS)

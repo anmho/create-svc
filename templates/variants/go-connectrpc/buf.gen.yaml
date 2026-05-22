@@ -4,9 +4,9 @@ plugins:
     out: gen
     opt:
       - paths=source_relative
-      - Mchat/v1/chat.proto={{MODULE_PATH}}/gen/chat/v1
+      - Mwaitlist/v1/waitlist.proto={{MODULE_PATH}}/gen/waitlist/v1
   - local: protoc-gen-connect-go
     out: gen
     opt:
       - paths=source_relative
-      - Mchat/v1/chat.proto={{MODULE_PATH}}/gen/chat/v1
+      - Mwaitlist/v1/waitlist.proto={{MODULE_PATH}}/gen/waitlist/v1

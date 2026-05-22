@@ -4,6 +4,7 @@ import { config } from "./config";
 type CommandOptions = {
   allowFailure?: boolean;
   input?: string;
+  env?: Record<string, string | undefined>;
 };
 
 type DeployArgs = {
@@ -15,6 +16,7 @@ type DeployArgs = {
 
 type CleanupArgs = {
   destroyProject: boolean;
+  force: boolean;
 };
 
 export type DeploymentTarget = {
@@ -22,6 +24,13 @@ export type DeploymentTarget = {
   serviceName: string;
   branchName: string;
   databaseSecretName: string;
+};
+
+type GcpResourceWithLabels = {
+  metadata?: {
+    labels?: Record<string, string>;
+  };
+  labels?: Record<string, string>;
 };
 
 type CommandResult = {
@@ -67,7 +76,7 @@ export function requireGcloudAuth() {
     throw new Error(
       [
         "gcloud is installed but no active Google Cloud account is available.",
-        "Run `gcloud auth login` on this machine before using bootstrap, deploy, or cleanup.",
+        "Run `gcloud auth login` on this machine before using service create, deploy, doctor, dns, or destroy.",
         "If you also rely on Application Default Credentials for other tooling, run `gcloud auth application-default login` as well.",
       ].join(" ")
     );
@@ -77,7 +86,7 @@ export function requireGcloudAuth() {
 export function run(command: string, args: string[], options: CommandOptions = {}): CommandResult {
   const result = Bun.spawnSync([command, ...args], {
     cwd: process.cwd(),
-    env: process.env,
+    env: { ...process.env, ...options.env },
     stdin: options.input === undefined ? undefined : encoder.encode(options.input),
     stdout: "pipe",
     stderr: "pipe",
@@ -119,7 +128,7 @@ export async function runStep<T>(label: string, task: () => Promise<T> | T) {
   }
 }
 
-export async function runMain(name: string, task: () => Promise<string | void>) {
+export async function runMain(name: string, task: () => Promise<string | void> | string | void) {
   intro(name);
 
   try {
@@ -192,12 +201,26 @@ export function ensureSecret(secretName: string) {
     return;
   }
 
-  gcloud(["secrets", "create", secretName, "--project", config.project.id, "--replication-policy", "automatic"]);
+  gcloud([
+    "secrets",
+    "create",
+    secretName,
+    "--project",
+    config.project.id,
+    "--replication-policy",
+    "automatic",
+    "--labels",
+    ownershipLabelsArg(),
+  ]);
 }
 
 export function addSecretVersion(secretName: string, value: string) {
   ensureSecret(secretName);
   gcloud(["secrets", "versions", "add", secretName, "--project", config.project.id, "--data-file=-"], { input: value });
+}
+
+export function accessSecretVersion(secretName: string) {
+  return gcloud(["secrets", "versions", "access", "latest", "--secret", secretName, "--project", config.project.id]).stdout;
 }
 
 export function ensureSecretAccessor(secretName: string, member: string) {
@@ -214,6 +237,11 @@ export function listSecrets() {
 
 export function deleteSecret(secretName: string) {
   gcloud(["secrets", "delete", secretName, "--project", config.project.id, "--quiet"], { allowFailure: true });
+}
+
+export function describeSecret(secretName: string): GcpResourceWithLabels | undefined {
+  const result = gcloud(["secrets", "describe", secretName, "--project", config.project.id, "--format=json"], { allowFailure: true });
+  return parseOptionalJson(result.stdout, result.success);
 }
 
 export function ensureArtifactRepository() {
@@ -237,24 +265,6 @@ export function ensureArtifactRepository() {
     config.region,
     "--repository-format",
     "docker",
-  ]);
-}
-
-export function ensureStorageBucket() {
-  if (gcloud(["storage", "buckets", "describe", `gs://${config.storage.attachmentBucket}`, "--project", config.project.id], { allowFailure: true }).success) {
-    return;
-  }
-
-  gcloud([
-    "storage",
-    "buckets",
-    "create",
-    `gs://${config.storage.attachmentBucket}`,
-    "--project",
-    config.project.id,
-    "--location",
-    config.region,
-    "--uniform-bucket-level-access",
   ]);
 }
 
@@ -330,11 +340,16 @@ export function parseDeployArgs(argv: string[]): DeployArgs {
 export function parseCleanupArgs(argv: string[]): CleanupArgs {
   const parsed: CleanupArgs = {
     destroyProject: false,
+    force: false,
   };
 
   for (const token of argv) {
     if (token === "--project") {
       parsed.destroyProject = true;
+      continue;
+    }
+    if (token === "--force") {
+      parsed.force = true;
       continue;
     }
   }
@@ -374,31 +389,33 @@ export function resolveDeploymentTarget(environment: DeployArgs["environment"], 
   };
 }
 
-export function runtimeSecretNames(target: DeploymentTarget) {
-  return {
-    CLERK_SECRET_KEY: `${target.serviceName}-clerk-secret-key`,
-    CLERK_WEBHOOK_SECRET: `${target.serviceName}-clerk-webhook-secret`,
-    STRIPE_SECRET_KEY: `${target.serviceName}-stripe-secret-key`,
-    STRIPE_WEBHOOK_SECRET: `${target.serviceName}-stripe-webhook-secret`,
-    REVENUECAT_API_KEY: `${target.serviceName}-revenuecat-api-key`,
-    REVENUECAT_WEBHOOK_SECRET: `${target.serviceName}-revenuecat-webhook-secret`,
-    RESEND_API_KEY: `${target.serviceName}-resend-api-key`,
-    POSTHOG_API_KEY: `${target.serviceName}-posthog-api-key`,
-  } as const;
-}
-
 export async function renderManifest(image: string, target: DeploymentTarget) {
   const template = await Bun.file(new URL("../../service.yaml", import.meta.url)).text();
+  const temporal = resolveTemporalRuntimeConfig();
   const values = {
     SERVICE_NAME: target.serviceName,
+    SERVICE_ID: config.serviceName,
     RUNTIME_SERVICE_ACCOUNT: config.runtimeServiceAccount,
     IMAGE_URL: image,
     DATABASE_URL_SECRET: target.databaseSecretName,
-    ...runtimeSecretNames(target),
     SERVICE_RUNTIME: config.runtime,
     SERVICE_FRAMEWORK: config.framework,
-    ATTACHMENT_BUCKET: config.storage.attachmentBucket,
-    ATTACHMENT_PUBLIC_BASE_URL: config.storage.attachmentPublicBaseUrl,
+    TEMPORAL_ENABLED: String(temporal.enabled),
+    TEMPORAL_ADDRESS: temporal.address,
+    TEMPORAL_NAMESPACE: temporal.namespace,
+    TEMPORAL_TASK_QUEUE: temporal.taskQueue,
+    TEMPORAL_API_KEY_ENV: temporal.apiKeySecretName
+      ? [
+          "            - name: TEMPORAL_API_KEY",
+          "              valueFrom:",
+          "                secretKeyRef:",
+          `                  name: ${temporal.apiKeySecretName}`,
+          "                  key: latest",
+        ].join("\n")
+      : "",
+    AUTH_ISSUER: config.auth.issuer,
+    AUTH_AUDIENCE: config.auth.audience,
+    AUTH_JWKS_URL: config.auth.jwksUrl,
   };
 
   return template.replace(/\$\{([A-Z0-9_]+)\}/g, (_, key: string) => {
@@ -408,6 +425,25 @@ export async function renderManifest(image: string, target: DeploymentTarget) {
     }
     return value;
   });
+}
+
+export function resolveTemporalRuntimeConfig() {
+  const enabledOverride = process.env.TEMPORAL_ENABLED?.trim();
+  const address = process.env.TEMPORAL_ADDRESS?.trim() || config.temporal.address;
+  const namespace = process.env.TEMPORAL_NAMESPACE?.trim() || config.temporal.namespace;
+  const taskQueue = process.env.TEMPORAL_TASK_QUEUE?.trim() || config.temporal.taskQueue;
+  const apiKeySecretName = process.env.TEMPORAL_API_KEY_SECRET?.trim() || (process.env.TEMPORAL_API_KEY?.trim() ? config.temporal.apiKeySecretName : "");
+  const enabled = enabledOverride
+    ? ["1", "true", "yes", "on"].includes(enabledOverride.toLowerCase())
+    : Boolean(process.env.TEMPORAL_ADDRESS?.trim() || process.env.TEMPORAL_API_KEY?.trim() || process.env.TEMPORAL_API_KEY_SECRET?.trim());
+
+  return {
+    enabled,
+    address,
+    namespace,
+    taskQueue,
+    apiKeySecretName,
+  };
 }
 
 export async function writeRenderedManifest(image: string, target: DeploymentTarget) {
@@ -441,8 +477,13 @@ export function serviceOrigin(target: DeploymentTarget) {
 }
 
 export function ensureProductionDomainMapping(serviceName: string) {
-  if (gcloud(["beta", "run", "domain-mappings", "describe", "--domain", config.domain.hostname, "--project", config.project.id], { allowFailure: true }).success) {
-    return;
+  const existing = describeProductionDomainMapping();
+  if (existing) {
+    const mappedService = existing.spec?.routeName ?? existing.status?.resourceRecords?.[0]?.rrdata;
+    if (!mappedService || mappedService === serviceName) {
+      return;
+    }
+    throw new Error(`${config.domain.hostname} is already mapped to ${mappedService}; refusing to take it over`);
   }
 
   gcloud([
@@ -461,6 +502,48 @@ export function ensureProductionDomainMapping(serviceName: string) {
   ]);
 }
 
+export function describeProductionDomainMapping():
+  | { spec?: { routeName?: string }; status?: { resourceRecords?: Array<{ rrdata?: string }> } }
+  | undefined {
+  const result = gcloud(
+    ["beta", "run", "domain-mappings", "describe", "--domain", config.domain.hostname, "--project", config.project.id, "--format=json"],
+    { allowFailure: true }
+  );
+  if (!result.success || !result.stdout) {
+    return undefined;
+  }
+
+  try {
+    return JSON.parse(result.stdout);
+  } catch {
+    throw new Error(`Unable to parse Cloud Run domain mapping for ${config.domain.hostname}`);
+  }
+}
+
+export function assertProductionDomainAvailable(serviceName: string) {
+  const existing = describeProductionDomainMapping();
+  if (!existing) {
+    return;
+  }
+
+  const mappedService = existing.spec?.routeName;
+  if (mappedService && mappedService !== serviceName) {
+    throw new Error(`${config.domain.hostname} is already mapped to ${mappedService}; choose a different service_id before provisioning resources`);
+  }
+
+  throw new Error(`${config.domain.hostname} already has a domain mapping; use service deploy to redeploy or service dns to repair it`);
+}
+
+export function assertServiceNameAvailable(serviceName: string) {
+  const result = gcloud(
+    ["run", "services", "describe", serviceName, "--project", config.project.id, "--region", config.region, "--format=value(metadata.name)"],
+    { allowFailure: true }
+  );
+  if (result.success) {
+    throw new Error(`${serviceName} already exists in Cloud Run; use service deploy to redeploy or service destroy to remove owned resources`);
+  }
+}
+
 export function deleteProductionDomainMapping() {
   gcloud(["beta", "run", "domain-mappings", "delete", "--domain", config.domain.hostname, "--project", config.project.id, "--quiet"], {
     allowFailure: true,
@@ -472,6 +555,14 @@ export function listCloudRunServices() {
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
+}
+
+export function describeCloudRunService(serviceName: string): GcpResourceWithLabels | undefined {
+  const result = gcloud(
+    ["run", "services", "describe", serviceName, "--project", config.project.id, "--region", config.region, "--format=json"],
+    { allowFailure: true }
+  );
+  return parseOptionalJson(result.stdout, result.success);
 }
 
 export function deleteService(serviceName: string) {
@@ -490,4 +581,31 @@ function slugify(value: string) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+export function assertOwnedResource(name: string, resource: GcpResourceWithLabels | undefined) {
+  if (!resource) {
+    throw new Error(`${name} does not exist`);
+  }
+
+  const labels = resource.metadata?.labels ?? resource.labels ?? {};
+  if (labels.managed_by !== "create-service" || labels.service_id !== config.serviceName) {
+    throw new Error(`${name} is missing ownership labels for service_id=${config.serviceName}`);
+  }
+}
+
+function ownershipLabelsArg() {
+  return `managed_by=create-service,service_id=${config.serviceName}`;
+}
+
+function parseOptionalJson<T>(stdout: string, success: boolean): T | undefined {
+  if (!success || !stdout) {
+    return undefined;
+  }
+
+  try {
+    return JSON.parse(stdout) as T;
+  } catch {
+    throw new Error("Unable to parse gcloud JSON response");
+  }
 }

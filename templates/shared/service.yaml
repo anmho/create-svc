@@ -2,10 +2,17 @@ apiVersion: serving.knative.dev/v1
 kind: Service
 metadata:
   name: ${SERVICE_NAME}
+  labels:
+    managed_by: create-service
+    service_id: ${SERVICE_ID}
   annotations:
     run.googleapis.com/ingress: all
 spec:
   template:
+    metadata:
+      labels:
+        managed_by: create-service
+        service_id: ${SERVICE_ID}
     spec:
       serviceAccountName: ${RUNTIME_SERVICE_ACCOUNT}
       containers:
@@ -17,55 +24,28 @@ spec:
               value: ${SERVICE_RUNTIME}
             - name: APP_FRAMEWORK
               value: ${SERVICE_FRAMEWORK}
+            - name: TEMPORAL_ENABLED
+              value: "${TEMPORAL_ENABLED}"
+            - name: TEMPORAL_ADDRESS
+              value: "${TEMPORAL_ADDRESS}"
+            - name: TEMPORAL_NAMESPACE
+              value: "${TEMPORAL_NAMESPACE}"
+            - name: TEMPORAL_TASK_QUEUE
+              value: "${TEMPORAL_TASK_QUEUE}"
+${TEMPORAL_API_KEY_ENV}
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
                   name: ${DATABASE_URL_SECRET}
                   key: latest
-            - name: CLERK_SECRET_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: ${CLERK_SECRET_KEY}
-                  key: latest
-            - name: CLERK_WEBHOOK_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: ${CLERK_WEBHOOK_SECRET}
-                  key: latest
-            - name: STRIPE_SECRET_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: ${STRIPE_SECRET_KEY}
-                  key: latest
-            - name: STRIPE_WEBHOOK_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: ${STRIPE_WEBHOOK_SECRET}
-                  key: latest
-            - name: REVENUECAT_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: ${REVENUECAT_API_KEY}
-                  key: latest
-            - name: REVENUECAT_WEBHOOK_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: ${REVENUECAT_WEBHOOK_SECRET}
-                  key: latest
-            - name: RESEND_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: ${RESEND_API_KEY}
-                  key: latest
-            - name: POSTHOG_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: ${POSTHOG_API_KEY}
-                  key: latest
-            - name: ATTACHMENT_BUCKET
-              value: ${ATTACHMENT_BUCKET}
-            - name: ATTACHMENT_PUBLIC_BASE_URL
-              value: ${ATTACHMENT_PUBLIC_BASE_URL}
+            - name: AUTH_ENABLED
+              value: "true"
+            - name: AUTH_ISSUER
+              value: ${AUTH_ISSUER}
+            - name: AUTH_AUDIENCE
+              value: ${AUTH_AUDIENCE}
+            - name: AUTH_JWKS_URL
+              value: ${AUTH_JWKS_URL}
   traffic:
     - latestRevision: true
       percent: 100

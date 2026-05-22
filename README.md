@@ -1,25 +1,29 @@
-# create-svc
+# create-service
 
-`create-svc` is a local backend bootstrap CLI for generating standalone Cloud Run API services with:
+`create-service` is a local microservice bootstrap CLI for generating standalone API services with:
 
 - a single `microservice` generation path
-- a Bun-first backend path built around `hono` and ConnectRPC
+- explicit deploy target selection: Cloud Run or Cloudflare Workers
+- Go or Bun runtime choices where the target supports them
+- HTTP frameworks (`chi` or `hono`) and ConnectRPC variants
 - standalone package output that does not assume repo bootstrap
-- compatibility with future monorepo use in layouts like `apps/<service>`
-- a real `service.yaml` manifest
-- shared Cloud Run bootstrap, deploy, and cleanup automation
+- a generated `service.config.ts` manifest
+- a generated `service` lifecycle CLI for create, deploy, migrate, seed, dashboards, doctor, and destroy
 - local Docker Compose Postgres for first-run development
-- Neon-backed remote main, preview, and personal environments
-- GCS-backed image attachments
-- typed HTTP webhook ingress
-- a production API origin at `https://api.<appname>.anmho.com`
+- Neon-backed remote environments
+- a production API origin at `https://api.<service_id>.anmho.com`
 
-Local provisioning intentionally prefers known-good CLIs, especially `gcloud`, over SDK-heavy orchestration for Google Cloud operations.
-Terraform, control planes, and platform consoles are optional advanced paths, not default prerequisites.
+Local provisioning intentionally prefers known-good CLIs over SDK-heavy orchestration where that keeps the generated service easier to inspect and repair.
 
-npm: <https://www.npmjs.com/package/create-svc>
+npm: <https://www.npmjs.com/package/create-service>
 
 ## Usage
+
+```bash
+bun create service my-service
+```
+
+Compatibility alias:
 
 ```bash
 bun create svc my-service
@@ -28,16 +32,16 @@ bun create svc my-service
 or:
 
 ```bash
-bunx create-svc my-service
+bunx create-service my-service
 ```
 
 For the strict one-command production path:
 
 ```bash
-bun create svc my-service --profile microservice --bootstrap --yes
+bun create service my-service --yes
 ```
 
-`--profile microservice` is accepted as a compatibility no-op. Full app workspaces live in the private GitHub template repos `anmho/create-app-consumer` and `anmho/create-app-saas`.
+`--profile microservice` is accepted as a compatibility no-op. App workspaces live outside this package in private app template repositories.
 
 ## Local Testing
 
@@ -46,15 +50,15 @@ Without publishing to npm:
 ```bash
 bun install
 npm pack
-bunx ./create-svc-*.tgz my-service
+bunx ./create-service-*.tgz my-service
 ```
 
 For faster iteration against your working tree:
 
 ```bash
 bun link
-bun link create-svc
-create-svc my-service
+bun link create-service
+create-service my-service
 ```
 
 During scaffold, the generator can discover:
@@ -62,8 +66,8 @@ During scaffold, the generator can discover:
 - accessible GCP projects
 - open billing accounts
 
-Remote `bootstrap` and `deploy` use Neon credentials from `NEON_API_KEY`, or Vault via `VAULT_ADDR` plus `VAULT_TOKEN`, `VAULT_TOKEN_FILE`, or `~/.vault-token`.
-Provider runtime credentials can be supplied through environment variables or Vault paths under `secret/prod/providers/*`; generated Cloud Run services receive runtime values through app-project Secret Manager.
+Generated provisioning commands use Neon credentials from `NEON_API_KEY`, or Vault via `VAULT_ADDR` plus `VAULT_TOKEN`, `VAULT_TOKEN_FILE`, or `~/.vault-token`.
+The base waitlist service keeps provider integrations out of the runtime by default; add provider-specific secrets only when the generated service actually uses that provider.
 
 Before running generated provisioning commands locally, authenticate `gcloud` on the machine:
 
@@ -71,13 +75,11 @@ Before running generated provisioning commands locally, authenticate `gcloud` on
 gcloud auth login
 ```
 
-## Generated Backend Package
+## Generated Service Package
 
 First local run:
 
-```bash
-docker compose up -d
-```
+`bun run migrate`, `make migrate`, `bun run dev`, and `make dev` open Docker Desktop when needed, wait for Docker readiness, and start Docker Compose Postgres before touching the local database.
 
 For Bun variants:
 
@@ -87,9 +89,9 @@ bun run dev
 bun run gen
 bun run lint
 bun run test
-bun run bootstrap
+bun run create
 bun run deploy
-bun run cleanup
+bun run destroy
 ```
 
 For Go variants:
@@ -100,18 +102,16 @@ make dev
 make gen
 make lint
 make test
-make bootstrap
+make create
 make deploy
-make cleanup
+make destroy
 ```
 
-The generated package is intended to be consumed by a Next.js web app or a mobile client over HTTPS. In v1, production is expected to live at `https://api.<appname>.anmho.com`, while preview and personal environments keep using deterministic Cloud Run URLs.
+Language-specific tasks such as local running, linting, formatting, testing, and building stay in package scripts or Make targets. Service lifecycle operations are exposed through the generated `service` CLI.
 
-The microservice profile is moving toward a small waitlist/launch service example. The current generated plumbing still includes:
+The generated service is intended to be consumed by a web app, mobile client, or another service over HTTPS. In v1, production is expected to live at `https://api.<service_id>.anmho.com`, while preview and personal environments keep using deterministic platform URLs where appropriate.
 
-- Postgres-backed `users`, `conversations`, `conversation_participants`, and `messages`
-- image attachment upload/finalize plumbing via GCS
-- generic typed webhook ingestion on plain HTTP
+The generated microservice domain is a small waitlist/launch service example with public submit/status APIs and target-specific scheduled work.
 
 ## Development
 
@@ -129,33 +129,29 @@ bun run validate:generated -- --variant bun-hono
 bun run validate:generated -- --variant go-connectrpc --keep
 ```
 
-The validation harness scaffolds generated apps into ignored `bin/generated/run-*` workspaces, runs the generated public commands, starts the local server, and smoke-tests health or typed ConnectRPC clients where applicable.
+The validation harness scaffolds generated services into ignored `bin/generated/run-*` workspaces, runs the generated public commands, starts the local server, and smoke-tests health or typed ConnectRPC clients where applicable.
 
 ## npm Trusted Publishing
 
-`create-svc` is set up for npm trusted publishing from GitHub Actions, so there is no long-lived npm publish token to store in Vault.
+`create-service` is set up for npm trusted publishing from GitHub Actions, so there is no long-lived npm publish token to store in Vault.
 
 Repository workflow:
+
 - [publish.yml](.github/workflows/publish.yml)
-- Trigger: Git tags matching `v*`
+- Trigger: pushes to `main`, Git tags matching `v*`, or manual `workflow_dispatch`
 - CI runtime: Bun for install/test/typecheck, npm for the final publish step
 
 npm package setup still has to be configured once in the npm UI to trust this repository and workflow:
 
-1. Open the `create-svc` package settings on npm.
+1. Open the `create-service` package settings on npm.
 2. Go to `Settings` -> `Trusted Publisher`.
 3. Select `GitHub Actions`.
 4. Enter:
    - Organization or user: `anmho`
-   - Repository: `create-svc`
+   - Repository: `create-service`
    - Workflow filename: `publish.yml`
 5. Save the trusted publisher.
 
-After that, publishing is:
+After that, publishing can be triggered by pushing to `main`, creating a `v*` tag, or running the workflow manually.
 
-```bash
-git tag v0.1.10
-git push origin v0.1.10
-```
-
-The GitHub Actions workflow will authenticate with npm via OIDC and run `npm publish` without an npm token.
+The GitHub Actions workflow authenticates with npm via OIDC and runs `npm publish` without an npm token.
