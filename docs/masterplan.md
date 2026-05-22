@@ -119,6 +119,14 @@ These items finish the current baseline before deeper integration expansion:
 
 - Keep the repo-owned generated-app validation harness green across all four variants.
 - Prove remote `service create` and deploy path end to end for all four variants.
+- Republish or update `@anmho/authctl` so generated projects install a package
+  that exposes `resource-servers upsert`. The current smoke generated a service
+  and separately installed `@anmho/authctl@latest`; both resolve to package
+  version `0.1.0`. That package proves `service auth doctor` reaches authctl,
+  and it exposes `clients`, `doctor`, `version`, and `update`, but
+  `authctl resource-servers upsert --json` exits with `unknown command
+  'resource-servers'`. Until a newer package includes `resource-servers`,
+  `service create` correctly stops before auth resource-server registration.
 - Prove remote Neon database creation in the shared Neon instance.
 - Keep Secret Manager as the Cloud Run runtime source and improve Vault/env create input handling.
 - Add webhook idempotency acceptance tests across all variants.

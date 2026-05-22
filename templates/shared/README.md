@@ -113,6 +113,18 @@ export CLOUDFLARE_ACCESS_SERVICE_TOKEN_CLIENT_ID="$(vault kv get -mount=secret -
 export CLOUDFLARE_ACCESS_SERVICE_TOKEN_CLIENT_SECRET="$(vault kv get -mount=secret -field=CLOUDFLARE_ACCESS_SERVICE_TOKEN_CLIENT_SECRET prod/apps/auth/authctl/cloudflare-access)"
 ```
 
+Before first production create, verify the installed `authctl` exposes the
+resource-server control-plane command:
+
+```bash
+{{COMMAND_AUTH_RESOURCE}} --help
+```
+
+If this fails with `authctl is installed but does not expose resource-server
+commands`, update `@anmho/authctl` to a published build newer than the current
+`0.1.0` package that includes `resource-servers upsert` before running
+`{{COMMAND_BOOTSTRAP}}`.
+
 Optional remote-only Vault overrides for Neon admin key lookup:
 
 - `VAULT_SECRET_MOUNT` default `secret`
@@ -162,9 +174,8 @@ Use `service auth` for follow-up auth operations:
 
 ```bash
 {{COMMAND_BOOTSTRAP}} # includes resource-server registration
-npx --no-install service auth doctor
-npx --no-install service auth resource-server
-npx --no-install service auth client create --resource-server <target-service> --scope <scope>
+{{COMMAND_AUTH_RESOURCE}}
+{{COMMAND_AUTH_CLIENT}} --resource-server <target-service> --scope <scope>
 ```
 
 `authctl clients create` prints a one-time client secret plus the recommended
