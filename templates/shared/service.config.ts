@@ -13,7 +13,7 @@ export default {
     service_id: "{{SERVICE_ID}}",
   },
   auth: {
-    issuer: "https://auth.anmho.com",
+    issuer: "{{AUTH_ISSUER}}",
     token_endpoint: "https://auth.anmho.com/api/auth/oauth2/token",
     jwks_url: "https://auth.anmho.com/api/auth/jwks",
     resource_server: {

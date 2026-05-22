@@ -161,6 +161,9 @@ export function ensureProject() {
 }
 
 export function attachBilling() {
+  if (config.project.mode === "use_existing") {
+    return "Using existing project billing";
+  }
   gcloud(["beta", "billing", "projects", "link", config.project.id, "--billing-account", config.project.billingAccount]);
 }
 
@@ -420,7 +423,7 @@ export async function renderManifest(image: string, target: DeploymentTarget) {
 
   return template.replace(/\$\{([A-Z0-9_]+)\}/g, (_, key: string) => {
     const value = values[key as keyof typeof values];
-    if (!value) {
+    if (value === undefined) {
       throw new Error(`missing manifest value for ${key}`);
     }
     return value;
@@ -506,7 +509,19 @@ export function describeProductionDomainMapping():
   | { spec?: { routeName?: string }; status?: { resourceRecords?: Array<{ rrdata?: string }> } }
   | undefined {
   const result = gcloud(
-    ["beta", "run", "domain-mappings", "describe", "--domain", config.domain.hostname, "--project", config.project.id, "--format=json"],
+    [
+      "beta",
+      "run",
+      "domain-mappings",
+      "describe",
+      "--domain",
+      config.domain.hostname,
+      "--project",
+      config.project.id,
+      "--region",
+      config.region,
+      "--format=json",
+    ],
     { allowFailure: true }
   );
   if (!result.success || !result.stdout) {

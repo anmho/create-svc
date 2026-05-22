@@ -42,6 +42,7 @@ test("parseArgs defaults to microservice and cloudrun target", () => {
     yes: true,
   });
   expect(parseArgs(["launch-api", "--yes"]).autoDeploy).toBeUndefined();
+  expect(parseArgs(["launch-api", "--yes", "--no-git"]).noGit).toBeTrue();
 
   expect(() => parseArgs(["launch-api", "--profile", "microservice", "--bootstrap"])).toThrow("Unknown argument");
 });

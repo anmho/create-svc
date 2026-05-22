@@ -43,6 +43,13 @@ bun create service my-service --yes
 
 `--profile microservice` is accepted as a compatibility no-op. App workspaces live outside this package in private app template repositories.
 
+By default, a standalone generated service is initialized as a git repository,
+committed with `Initial commit`, created as a private GitHub repository at
+`anmho/<service-name>`, and pushed to `origin/main`. If the target directory is
+inside an existing git worktree, create-service skips git and GitHub setup so the
+parent repository remains in control. Pass `--no-git` to skip all git and GitHub
+side effects.
+
 ## Local Testing
 
 Without publishing to npm:

@@ -11,7 +11,7 @@
     "dashboards": "bun run ./scripts/cloudrun/cli.ts dashboards"
   },
   "dependencies": {
-    "@anmho/authctl": "0.1.0",
+    "@anmho/authctl": "0.1.1",
     "@clack/prompts": "^1.2.0",
     "@neondatabase/api-client": "^2.7.1"
   }

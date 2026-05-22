@@ -19,7 +19,7 @@
     "destroy": "bun run ./scripts/cloudrun/cli.ts destroy"
   },
   "dependencies": {
-    "@anmho/authctl": "0.1.0",
+    "@anmho/authctl": "0.1.1",
     "@bufbuild/protobuf": "^2.7.0",
     "@clack/prompts": "^1.2.0",
     "@connectrpc/connect": "^2.0.2",

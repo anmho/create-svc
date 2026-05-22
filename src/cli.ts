@@ -16,6 +16,7 @@ import { readdirSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runPostScaffoldFlow } from "./post-scaffold";
+import { bootstrapGitHubRepository, buildGitBootstrapConfig } from "./git-bootstrap";
 import { listOpenBillingAccounts, listAccessibleProjects, type BillingAccount, type GcpProject } from "./gcp";
 import {
   BILLING_ACCOUNT_DEFAULT,
@@ -51,6 +52,7 @@ type ParsedArgs = {
   autoDeploy?: boolean;
   autoUpdate?: boolean;
   noUpdateCheck?: boolean;
+  noGit?: boolean;
   profile: Profile;
   yes: boolean;
   help: boolean;
@@ -87,6 +89,7 @@ export async function run(argv: string[]) {
         `${pc.bold("Project")}: ${config.gcpProjectMode === "create_new" ? "create" : "use"} ${config.gcpProjectName} (${config.gcpProject})`,
         `${pc.bold("API")}: https://${config.apiHostname}`,
         `${pc.bold("Local DB")}: docker compose postgres`,
+        `${pc.bold("GitHub")}: ${config.git.enabled ? `anmho/${config.git.repository}` : "disabled"}`,
       ].join("\n"),
       "Scaffold"
     );
@@ -95,6 +98,17 @@ export async function run(argv: string[]) {
     buildSpinner.start("Generating project files");
     await scaffoldProject(config);
     buildSpinner.stop("Project files generated");
+
+    const gitSpinner = spinner();
+    gitSpinner.start("Preparing git repository");
+    const gitResult = await bootstrapGitHubRepository(targetDir, config.git);
+    if (gitResult.status === "created") {
+      gitSpinner.stop(`GitHub repository created: ${gitResult.url}`);
+    } else if (gitResult.status === "skipped-existing-worktree") {
+      gitSpinner.stop(`Existing git worktree detected: ${gitResult.root}`);
+    } else {
+      gitSpinner.stop("Git bootstrap disabled");
+    }
 
     const shouldRunPostScaffoldFlow = config.autoDeploy;
     if (shouldRunPostScaffoldFlow) {
@@ -118,13 +132,14 @@ export async function run(argv: string[]) {
         `Local dev: ${pc.cyan(isBun ? "bun run dev" : "make dev")}`,
         `Create: ${pc.cyan(isBun ? "bun run service -- create" : "make create")}`,
         `Deploy: ${pc.cyan(isBun ? "bun run service -- deploy" : "make deploy")}`,
+        config.git.enabled ? `Repository: ${pc.cyan(`https://github.com/anmho/${config.git.repository}`)}` : undefined,
         `Personal env: ${pc.cyan(
           isBun
             ? `bun run deploy -- --environment personal --name ${config.serviceName}`
             : `make deploy ARGS="--environment personal --name ${config.serviceName}"`
         )}`,
         `Production API: ${pc.cyan(`https://${config.apiHostname}`)}`,
-      ].join("\n")
+      ].filter(Boolean).join("\n")
     );
   } catch (error) {
     handleCliError(error);
@@ -175,6 +190,11 @@ export function parseArgs(argv: string[]): ParsedArgs {
 
     if (token === "--no-update-check") {
       parsed.noUpdateCheck = true;
+      continue;
+    }
+
+    if (token === "--no-git") {
+      parsed.noGit = true;
       continue;
     }
 
@@ -383,6 +403,7 @@ export async function resolveConfig(args: ParsedArgs): Promise<ScaffoldConfig> {
   const region = args.region ?? DEFAULT_REGION;
   const billingAccount = chooseBillingAccount(args.billingAccount, discovery.billingAccounts);
   const autoDeploy = resolveAutoDeploy(args.autoDeploy);
+  const git = buildGitBootstrapConfig(serviceName, args.noGit);
 
   if (!args.yes) {
     const okay = await confirm({
@@ -414,6 +435,7 @@ export async function resolveConfig(args: ParsedArgs): Promise<ScaffoldConfig> {
     billingAccount,
     quotaProjectId: args.quotaProjectId ?? QUOTA_PROJECT_DEFAULT,
     autoDeploy,
+    git,
     neonDatabaseName: defaults.neonDatabaseName,
     apiHostname: defaults.apiHostname,
     generatorRoot: resolve(dirname(fileURLToPath(import.meta.url)), ".."),
@@ -798,7 +820,7 @@ export function validateServiceNameInput(rawValue: string, directoryOverride?: s
 function printHelp() {
   log.message(`
 Usage:
-  bun run index.ts [service_id] [options]
+  create-service [service_id] [options]
 
 Options:
   --target <cloudrun|workers>     Deploy target for the generated service
@@ -813,6 +835,7 @@ Options:
   --region <region>               Cloud Run region
   --auto-deploy                   Run service create after scaffold
   --no-auto-deploy                Scaffold only
+  --no-git                        Skip git init, initial commit, GitHub repo creation, and push
   --auto-update                   Re-run through create-service@latest when a newer version exists
   --no-update-check               Skip the best-effort npm update check
   --yes, -y                       Accept defaults without prompts

@@ -129,6 +129,12 @@ function importAlgorithm(alg: string, key: JsonWebKey) {
       verify: { name: "ECDSA", hash: "SHA-256" },
     } as const;
   }
+  if (alg === "EdDSA" && key.crv === "Ed25519") {
+    return {
+      import: { name: "Ed25519" },
+      verify: { name: "Ed25519" },
+    } as const;
+  }
   throw new Error(`unsupported jwt alg: ${alg}`);
 }
 
