@@ -15,8 +15,13 @@ import pc from "picocolors";
 import { readdirSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { runPostScaffoldFlow } from "./post-scaffold";
-import { bootstrapGitHubRepository, buildGitBootstrapConfig, commitAndPushGeneratedArtifacts } from "./git-bootstrap";
+import { buildDeploymentVerificationCommands, runPostScaffoldFlow } from "./post-scaffold";
+import {
+  bootstrapGitHubRepository,
+  buildGitBootstrapConfig,
+  commitAndPushGeneratedArtifacts,
+  type GitBootstrapResult,
+} from "./git-bootstrap";
 import { listOpenBillingAccounts, listAccessibleProjects, type BillingAccount, type GcpProject } from "./gcp";
 import {
   BILLING_ACCOUNT_DEFAULT,
@@ -39,6 +44,7 @@ import {
 } from "./scaffold";
 
 type ParsedArgs = {
+  serviceName?: string;
   directory?: string;
   target?: DeployTarget;
   runtime?: Runtime;
@@ -50,8 +56,6 @@ type ParsedArgs = {
   billingAccount?: string;
   quotaProjectId?: string;
   autoDeploy?: boolean;
-  autoUpdate?: boolean;
-  noUpdateCheck?: boolean;
   noGit?: boolean;
   profile: Profile;
   yes: boolean;
@@ -73,8 +77,6 @@ export async function run(argv: string[]) {
       printHelp();
       return;
     }
-
-    await maybeCheckForUpdate(args);
 
     intro(`${pc.bold("service")} ${pc.dim("microservice bootstrap")}`);
 
@@ -130,25 +132,73 @@ export async function run(argv: string[]) {
       }
     }
 
-    const isBun = config.runtime === "bun";
-    outro(
-      [
-        `Next: ${pc.cyan(`cd ${config.directory}`)}`,
-        `Local DB: ${pc.cyan("started by local dev command")}`,
-        `Migrate: ${pc.cyan(isBun ? "bun run migrate" : "make migrate")}`,
-        `Local dev: ${pc.cyan(isBun ? "bun run dev" : "make dev")}`,
-        `Create: ${pc.cyan("service create")}`,
-        `Deploy: ${pc.cyan("service deploy")}`,
-        config.git.enabled ? `Repository: ${pc.cyan(`https://github.com/anmho/${config.git.repository}`)}` : undefined,
-        `Personal env: ${pc.cyan(
-          `service deploy --environment personal --name ${config.serviceName}`
-        )}`,
-        `Production API: ${pc.cyan(`https://${config.apiHostname}`)}`,
-      ].filter(Boolean).join("\n")
-    );
+    outro(config.autoDeploy ? "Created and deployed" : "Created");
+    console.log(formatCompletionSummary(config, targetDir, gitResult));
   } catch (error) {
     handleCliError(error);
   }
+}
+
+function formatCompletionSummary(config: ScaffoldConfig, targetDir: string, gitResult: GitBootstrapResult) {
+  const isBun = config.runtime === "bun";
+  const devCommand = isBun ? "bun run dev" : "make dev";
+  const migrateCommand = isBun ? "bun run migrate" : "make migrate";
+  const lifecycleCommands: Array<[string, string]> = config.autoDeploy
+    ? [
+        ["service deploy", "Deploys later changes."],
+        [`service deploy --environment personal --name ${config.serviceName}`, "Deploys your personal environment."],
+      ]
+    : [
+        ["service create", "Provisions auth, database, migrations, and the first deploy."],
+        ["service deploy", "Deploys later changes."],
+      ];
+  const repository =
+    gitResult.status === "created"
+      ? gitResult.url
+      : config.git.enabled
+        ? `https://github.com/${config.git.owner}/${config.git.repository}`
+        : undefined;
+
+  return [
+    "",
+    `Success! Created ${config.serviceName} at ${targetDir}`,
+    "",
+    "Inside that directory, you can run:",
+    formatCommand(devCommand, "Starts local development."),
+    formatCommand(migrateCommand, "Applies local database migrations."),
+    ...lifecycleCommands.map(([command, description]) => formatCommand(command, description)),
+    "",
+    "Control-plane defaults:",
+    `  Auth issuer: https://auth.anmho.com/api/auth`,
+    `  Auth resource: api://${config.serviceName}`,
+    `  Auth token URL: https://auth.anmho.com/api/auth/oauth2/token`,
+    `  Temporal: disabled by default`,
+    `  Temporal address: localhost:7233`,
+    `  Temporal task queue: ${config.serviceName}`,
+    `  Temporal API key secret: ${config.serviceName}-temporal-api-key`,
+    config.runtime === "go" ? `  Go module: ${config.modulePath}` : undefined,
+    "",
+    config.autoDeploy ? "Verified after deploy:" : "After deploy, verify with:",
+    ...buildDeploymentVerificationCommands(config).map(formatShellCommand),
+    "",
+    "We suggest that you begin by typing:",
+    "",
+    `  cd ${config.directory}`,
+    `  ${devCommand}`,
+    "",
+    repository ? `Repository: ${repository}` : undefined,
+    `Production API: https://${config.apiHostname}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function formatCommand(command: string, description: string) {
+  return [`  ${command}`, `    ${description}`].join("\n");
+}
+
+function formatShellCommand(command: { command: string; args: string[] }) {
+  return `  ${[command.command, ...command.args].join(" ")}`;
 }
 
 export function parseArgs(argv: string[]): ParsedArgs {
@@ -164,8 +214,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
       continue;
     }
 
-    if (!token.startsWith("-") && !parsed.directory) {
-      parsed.directory = token;
+    if (!token.startsWith("-") && !parsed.serviceName) {
+      parsed.serviceName = token;
       continue;
     }
 
@@ -188,16 +238,6 @@ export function parseArgs(argv: string[]): ParsedArgs {
       continue;
     }
 
-    if (token === "--auto-update") {
-      parsed.autoUpdate = true;
-      continue;
-    }
-
-    if (token === "--no-update-check") {
-      parsed.noUpdateCheck = true;
-      continue;
-    }
-
     if (token === "--no-git") {
       parsed.noGit = true;
       continue;
@@ -205,6 +245,16 @@ export function parseArgs(argv: string[]): ParsedArgs {
 
     if (token === "--runtime") {
       parsed.runtime = readValue() as Runtime;
+      continue;
+    }
+
+    if (token === "--dir") {
+      parsed.directory = readValue();
+      continue;
+    }
+
+    if (token.startsWith("--dir=")) {
+      parsed.directory = token.slice("--dir=".length);
       continue;
     }
 
@@ -324,71 +374,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
   return parsed;
 }
 
-const CURRENT_VERSION = "0.1.9";
-const PACKAGE_NAME = "create-svc";
-
-async function maybeCheckForUpdate(args: ParsedArgs) {
-  if (args.noUpdateCheck || shouldSkipUpdateCheck()) {
-    return;
-  }
-
-  const latest = await resolveLatestVersion().catch(() => "");
-  if (!latest || !isVersionGreater(latest, CURRENT_VERSION)) {
-    return;
-  }
-
-  const command = `bunx ${PACKAGE_NAME}@latest ${Bun.argv.slice(2).filter((arg) => arg !== "--auto-update").join(" ")}`.trim();
-  if (!args.autoUpdate) {
-    log.info(`A newer ${PACKAGE_NAME} is available: ${CURRENT_VERSION} -> ${latest}. Run ${command}`);
-    return;
-  }
-
-  const result = Bun.spawnSync(["bunx", `${PACKAGE_NAME}@latest`, ...Bun.argv.slice(2).filter((arg) => arg !== "--auto-update")], {
-    stdin: "inherit",
-    stdout: "inherit",
-    stderr: "inherit",
-    env: {
-      ...process.env,
-      CREATE_SERVICE_NO_UPDATE_CHECK: "1",
-    },
-  });
-  process.exit(result.exitCode);
-}
-
-function shouldSkipUpdateCheck() {
-  return Boolean(
-    process.env.CI ||
-      process.env.CODEX_CI ||
-      process.env.CREATE_SERVICE_NO_UPDATE_CHECK ||
-      process.env.BUN_TEST ||
-      process.env.npm_lifecycle_event
-  );
-}
-
-async function resolveLatestVersion() {
-  const response = await fetch(`https://registry.npmjs.org/${PACKAGE_NAME}/latest`, {
-    signal: AbortSignal.timeout(1_500),
-  });
-  if (!response.ok) {
-    return "";
-  }
-  const payload = (await response.json()) as { version?: string };
-  return payload.version?.trim() ?? "";
-}
-
-function isVersionGreater(left: string, right: string) {
-  const parse = (value: string) => value.split(".").map((part) => Number.parseInt(part, 10) || 0);
-  const [leftMajor = 0, leftMinor = 0, leftPatch = 0] = parse(left);
-  const [rightMajor = 0, rightMinor = 0, rightPatch = 0] = parse(right);
-  return (
-    leftMajor > rightMajor ||
-    (leftMajor === rightMajor && leftMinor > rightMinor) ||
-    (leftMajor === rightMajor && leftMinor === rightMinor && leftPatch > rightPatch)
-  );
-}
-
 export async function resolveConfig(args: ParsedArgs): Promise<ScaffoldConfig> {
-  const inferredName = slugify(basename(args.directory ?? "my-service"));
+  const inferredName = slugify(args.serviceName ?? basename(args.directory ?? "my-service"));
   const serviceName = args.yes
     ? inferredName
     : await promptText("Service name", inferredName, (value) => validateServiceNameInput(value, args.directory));
@@ -704,11 +691,11 @@ function chooseBillingAccount(input: string | undefined, accounts: BillingAccoun
   return accounts[0]?.name ?? BILLING_ACCOUNT_DEFAULT;
 }
 
-function resolveAutoDeploy(value: boolean | undefined) {
+export function resolveAutoDeploy(value: boolean | undefined) {
   if (value !== undefined) {
     return value;
   }
-  return false;
+  return true;
 }
 
 async function promptText(
@@ -823,29 +810,37 @@ export function validateServiceNameInput(rawValue: string, directoryOverride?: s
 }
 
 function printHelp() {
-  log.message(`
-Usage:
-  service create [service_id] [options]
+  console.log(formatScaffoldHelp());
+}
 
-Options:
-  --target <cloudrun|workers>     Deploy target for the generated service
-  --profile <microservice>        Compatibility no-op; app workspaces moved out
-  --runtime <go|bun>              Runtime scaffold to generate
-  --framework <name>              Framework for the selected runtime
-  --module-path <path>            Go module path for generated Go scaffolds
-  --project-mode <mode>           create_new or use_existing
-  --project-id <id>               GCP project id
-  --billing-account <name>        Billing account resource name
-  --quota-project <id>            Billing quota project for gcloud calls
-  --region <region>               Cloud Run region
-  --auto-deploy                   Run service create and service deploy after scaffold
-  --no-auto-deploy                Scaffold only
-  --no-git                        Skip git init, initial commit, GitHub repo creation, and push
-  --auto-update                   Re-run through create-svc@latest when a newer version exists
-  --no-update-check               Skip the best-effort npm update check
-  --yes, -y                       Accept defaults without prompts
-  --help, -h                      Show this message
-`);
+export function formatScaffoldHelp() {
+  return [
+    "Usage:",
+    "  service create <service_id> [options]",
+    "",
+    "Examples:",
+    "  service create waitlist-api --target cloudrun --runtime bun --framework hono",
+    "  service create waitlist-api --auto-deploy",
+    "",
+    "Options:",
+    "  --dir <path>                    Output directory; defaults to ./<service_id>",
+    "  --target <cloudrun|workers>     Deploy target for the generated service",
+    "  --runtime <go|bun>              Runtime scaffold to generate",
+    "  --framework <name>              Framework for the selected runtime",
+    "  --module-path <path>            Go module path for generated Go scaffolds",
+    "  --project-mode <mode>           create_new or use_existing",
+    "  --project-id <id>               GCP project id",
+    "  --billing-account <name>        Billing account resource name",
+    "  --quota-project <id>            Billing quota project for gcloud calls",
+    "  --region <region>               Cloud Run region",
+    "  --auto-deploy                   Scaffold, run service create, then service deploy (default)",
+    "  --no-auto-deploy                Scaffold only",
+    "  --no-git                        Skip default private GitHub repo: anmho/<service_id>",
+    "  --yes, -y                       Accept defaults without prompts",
+    "  --help, -h                      Show this message",
+    "",
+    "Inside a generated service repo, run service --help for create, deploy, doctor, auth, and sdk commands.",
+  ].join("\n");
 }
 
 function matchesProject(project: GcpProject, query: string) {

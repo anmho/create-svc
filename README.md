@@ -23,6 +23,13 @@ npm: <https://www.npmjs.com/package/create-svc>
 service create my-service
 ```
 
+That creates `./my-service` by default. To write somewhere else while keeping
+the service id as `my-service`, pass `--dir`:
+
+```bash
+service create my-service --dir /Users/andrewho/repos/projects/my-service
+```
+
 Inside a generated service repo, the same command operates that repo:
 
 ```bash
@@ -34,7 +41,7 @@ service deploy
 To install from npm:
 
 ```bash
-bun add -g create-svc
+npm install -g create-svc
 ```
 
 For the strict one-command production path:
@@ -43,14 +50,19 @@ For the strict one-command production path:
 service create my-service --yes
 ```
 
+By default, that scaffolds the repo, installs dependencies, runs the generated
+repo's `service create`, and then runs `service deploy`. Pass
+`--no-auto-deploy` for scaffold-only generation.
+
 `--profile microservice` is accepted as a compatibility no-op. App workspaces live outside this package in private app template repositories.
 
 By default, a standalone generated service is initialized as a git repository,
 committed with `Initial commit`, created as a private GitHub repository at
-`anmho/<service-name>`, and pushed to `origin/main`. If the target directory is
-inside an existing git worktree, `service` skips git and GitHub setup so the
-parent repository remains in control. Pass `--no-git` to skip all git and GitHub
-side effects.
+`https://github.com/anmho/<service_id>`, and pushed to `origin/main`. Go
+services also default their module path to `github.com/anmho/<service_id>`.
+If the target directory is inside an existing git worktree, `service` skips git
+and GitHub setup so the parent repository remains in control. Pass `--no-git`
+to skip all git and GitHub side effects.
 
 ## Local Testing
 
@@ -59,7 +71,8 @@ Without publishing to npm:
 ```bash
 bun install
 npm pack
-bunx ./create-svc-*.tgz create my-service
+npm install -g ./create-svc-*.tgz
+service create my-service
 ```
 
 For faster iteration against your working tree:

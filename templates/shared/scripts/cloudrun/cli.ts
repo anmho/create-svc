@@ -27,7 +27,7 @@ async function main(argv = Bun.argv.slice(2)) {
   const [command, ...rest] = argv;
 
   if (!command || command === "--help" || command === "-h" || command === "help") {
-    console.log("Usage: service <create|deploy|migrate|seed|dashboards|dns|doctor|destroy|auth|sdk> [args]");
+    console.log(formatHelp());
     return;
   }
 
@@ -92,7 +92,26 @@ async function main(argv = Bun.argv.slice(2)) {
     return;
   }
 
-  throw new Error("Usage: service <create|deploy|migrate|seed|dashboards|dns|doctor|destroy|auth|sdk> [args]");
+  throw new Error(`Unknown command: ${command}\n\n${formatHelp()}`);
+}
+
+function formatHelp() {
+  return [
+    "Usage:",
+    "  service <command> [args]",
+    "",
+    "Commands:",
+    "  create      Provision auth, database, migrations, and first deploy",
+    "  deploy      Deploy the current service",
+    "  migrate     Apply database migrations",
+    "  seed        Run the seed script when configured",
+    "  doctor      Check local tools and cloud access",
+    "  auth        Manage auth resource server and clients",
+    "  sdk         Build or publish generated SDK artifacts",
+    "  dns         Repair or inspect DNS mappings",
+    "  dashboards  Publish Grafana resources",
+    "  destroy     Remove service-managed cloud resources",
+  ].join("\n");
 }
 
 function runLanguageTask(task: "migrate", env?: Record<string, string | undefined>) {

@@ -4,6 +4,7 @@ type CommandOptions = {
   cwd: string;
   allowFailure?: boolean;
   input?: string;
+  quiet?: boolean;
 };
 
 type CommandResult = {
@@ -26,10 +27,30 @@ export async function runPostScaffoldFlow(config: ScaffoldConfig, cwd: string) {
     for (const command of buildPostScaffoldCommands(config)) {
       run(command.command, command.args, { cwd });
     }
-    return { message: "Dependencies installed, service created, and service deployed" };
+    for (const command of buildDeploymentVerificationCommands(config)) {
+      run(command.command, command.args, { cwd, quiet: true });
+    }
+    return { message: "Dependencies installed, service created, service deployed, and production health verified" };
   }
 
   return { message: "Backend package generated" };
+}
+
+export function buildDeploymentVerificationCommands(
+  config: Pick<ScaffoldConfig, "apiHostname" | "framework" | "runtime">
+): PostScaffoldCommand[] {
+  const origin = `https://${config.apiHostname}`;
+  return [
+    { command: "curl", args: ["--fail", "--show-error", "--silent", `${origin}/healthz`] },
+    { command: "curl", args: ["--fail", "--show-error", "--silent", `${origin}/readyz`] },
+    ...(config.framework === "connectrpc"
+      ? [
+          config.runtime === "go"
+            ? { command: "grpcurl", args: [`${config.apiHostname}:443`, "list"] }
+            : { command: "curl", args: ["--fail", "--show-error", "--silent", `${origin}/debug/connectrpc`] },
+        ]
+      : []),
+  ];
 }
 
 export function buildPostScaffoldCommands(config: Pick<ScaffoldConfig, "framework">): PostScaffoldCommand[] {
@@ -56,8 +77,8 @@ function run(command: string, args: string[], options: CommandOptions): CommandR
     cwd: options.cwd,
     env: process.env,
     stdin: options.input === undefined ? undefined : encoder.encode(options.input),
-    stdout: options.allowFailure ? "pipe" : "inherit",
-    stderr: options.allowFailure ? "pipe" : "inherit",
+    stdout: options.allowFailure || options.quiet ? "pipe" : "inherit",
+    stderr: options.allowFailure || options.quiet ? "pipe" : "inherit",
   });
 
   const stdout = result.stdout ? decoder.decode(result.stdout).trim() : "";

@@ -2,8 +2,10 @@ import { expect, test } from "bun:test";
 import { mkdir } from "node:fs/promises";
 import {
   assertDiscoveryReady,
+  formatScaffoldHelp,
   normalizeValidationResult,
   parseArgs,
+  resolveAutoDeploy,
   validateTargetRuntimeFramework,
   validateServiceNameInput,
 } from "./cli";
@@ -32,12 +34,12 @@ test("assertDiscoveryReady no longer blocks scaffold when remote discovery is un
 
 test("parseArgs defaults to microservice and cloudrun target", () => {
   expect(parseArgs(["launch-api", "--yes"])).toMatchObject({
-    directory: "launch-api",
+    serviceName: "launch-api",
     profile: "microservice",
     yes: true,
   });
   expect(parseArgs(["launch-api", "--target", "workers", "--yes"])).toMatchObject({
-    directory: "launch-api",
+    serviceName: "launch-api",
     target: "workers",
     yes: true,
   });
@@ -45,6 +47,33 @@ test("parseArgs defaults to microservice and cloudrun target", () => {
   expect(parseArgs(["launch-api", "--yes", "--no-git"]).noGit).toBeTrue();
 
   expect(() => parseArgs(["launch-api", "--profile", "microservice", "--bootstrap"])).toThrow("Unknown argument");
+});
+
+test("resolveAutoDeploy defaults to one-shot create and deploy", () => {
+  expect(resolveAutoDeploy(undefined)).toBeTrue();
+  expect(resolveAutoDeploy(true)).toBeTrue();
+  expect(resolveAutoDeploy(false)).toBeFalse();
+});
+
+test("parseArgs supports an explicit output directory", () => {
+  expect(parseArgs(["launch-api", "--dir", "/tmp/generated-launch-api", "--yes"])).toMatchObject({
+    serviceName: "launch-api",
+    directory: "/tmp/generated-launch-api",
+    yes: true,
+  });
+  expect(parseArgs(["--dir=/tmp/generated-launch-api", "--yes"])).toMatchObject({
+    directory: "/tmp/generated-launch-api",
+    yes: true,
+  });
+});
+
+test("formatScaffoldHelp is compact and starts at usage", () => {
+  const help = formatScaffoldHelp();
+  expect(help.startsWith("Usage:\n")).toBeTrue();
+  expect(help).not.toContain("\n\n\n");
+  expect(help).not.toContain("│");
+  expect(help).toContain("service create <service_id> [options]");
+  expect(help).toContain("--dir <path>");
 });
 
 test("parseArgs rejects the removed app profile", () => {

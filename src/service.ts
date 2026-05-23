@@ -48,6 +48,8 @@ function isGeneratedServiceRoot(path: string) {
 }
 
 function delegateToGeneratedService(serviceRoot: string, argv: string[]) {
+  ensureGeneratedDependencies(serviceRoot);
+
   const cliPath = existsSync(join(serviceRoot, "scripts", "cloudrun", "cli.ts"))
     ? "./scripts/cloudrun/cli.ts"
     : "./scripts/workers/cli.ts";
@@ -60,6 +62,30 @@ function delegateToGeneratedService(serviceRoot: string, argv: string[]) {
   });
 
   if (!result.success) {
+    process.exit(result.exitCode || 1);
+  }
+}
+
+export function generatedDependenciesInstalled(serviceRoot: string) {
+  return !existsSync(join(serviceRoot, "package.json")) || existsSync(join(serviceRoot, "node_modules"));
+}
+
+function ensureGeneratedDependencies(serviceRoot: string) {
+  if (generatedDependenciesInstalled(serviceRoot)) {
+    return;
+  }
+
+  const result = Bun.spawnSync(["bun", "install", "--silent"], {
+    cwd: serviceRoot,
+    env: process.env,
+    stdin: "inherit",
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+
+  if (!result.success) {
+    const output = [result.stdout.toString().trim(), result.stderr.toString().trim()].filter(Boolean).join("\n");
+    console.error(["Failed to install generated service dependencies with bun install --silent", output].filter(Boolean).join("\n"));
     process.exit(result.exitCode || 1);
   }
 }

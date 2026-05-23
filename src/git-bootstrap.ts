@@ -30,19 +30,21 @@ export async function bootstrapGitHubRepository(targetDir: string, config: GitBo
     return { status: "skipped-existing-worktree", root: existingRoot };
   }
 
-  run(["git", "--version"], targetDir, "git is required to initialize the generated repository");
-  run(["gh", "--version"], targetDir, "GitHub CLI `gh` is required to create the generated repository");
-  run(["gh", "auth", "status"], targetDir, "Authenticate GitHub CLI with `gh auth login` before creating the repository");
+  run(["git", "--version"], targetDir, "git is required to initialize the generated repository", { quiet: true });
+  run(["gh", "--version"], targetDir, "GitHub CLI `gh` is required to create the generated repository", { quiet: true });
+  run(["gh", "auth", "status"], targetDir, "Authenticate GitHub CLI with `gh auth login` before creating the repository", { quiet: true });
 
-  run(["git", "init", "-b", "main"], targetDir);
+  run(["git", "init", "-b", "main", "--quiet"], targetDir);
   run(["git", "add", "."], targetDir);
 
   if (hasStagedChanges(targetDir)) {
-    run(["git", "commit", "-m", "Initial commit"], targetDir);
+    run(["git", "commit", "--quiet", "-m", "Initial commit"], targetDir);
   }
 
   const repository = `${config.owner}/${config.repository}`;
-  run(["gh", "repo", "create", repository, "--private", "--source", ".", "--remote", "origin", "--push"], targetDir);
+  run(["gh", "repo", "create", repository, "--private", "--source", ".", "--remote", "origin", "--push"], targetDir, undefined, {
+    quiet: true,
+  });
 
   return {
     status: "created",
@@ -55,8 +57,8 @@ export function commitAndPushGeneratedArtifacts(targetDir: string, message: stri
   if (!hasStagedChanges(targetDir)) {
     return { committed: false };
   }
-  run(["git", "commit", "-m", message], targetDir);
-  run(["git", "push"], targetDir);
+  run(["git", "commit", "--quiet", "-m", message], targetDir);
+  run(["git", "push", "--quiet"], targetDir, undefined, { quiet: true });
   return { committed: true };
 }
 
@@ -94,17 +96,18 @@ function hasStagedChanges(cwd: string) {
   return result.exitCode === 1;
 }
 
-function run(command: string[], cwd: string, message?: string) {
+function run(command: string[], cwd: string, message?: string, options: { quiet?: boolean } = {}) {
   const result = Bun.spawnSync(command, {
     cwd,
     stdin: "inherit",
-    stdout: "inherit",
+    stdout: options.quiet ? "pipe" : "inherit",
     stderr: "pipe",
   });
   if (result.exitCode === 0) {
     return;
   }
 
+  const output = result.stdout?.toString().trim() ?? "";
   const detail = result.stderr.toString().trim();
-  throw new Error([message, `Command failed: ${command.join(" ")}`, detail].filter(Boolean).join("\n"));
+  throw new Error([message, `Command failed: ${command.join(" ")}`, output, detail].filter(Boolean).join("\n"));
 }

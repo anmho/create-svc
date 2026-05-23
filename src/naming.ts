@@ -94,7 +94,7 @@ export function deriveDefaults(serviceName: string) {
     neonDatabaseName: compactDatabaseName(normalizedServiceName),
     localDatabasePort: deriveLocalPostgresPort(normalizedServiceName),
     apiHostname: `api.${normalizedServiceName}.anmho.com`,
-    modulePath: `example.com/${normalizedServiceName}`,
+    modulePath: `github.com/anmho/${normalizedServiceName}`,
   };
 }
 

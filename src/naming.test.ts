@@ -11,7 +11,7 @@ test("deriveDefaults uses the service name for project, repo, and database namin
     neonDatabaseName: "edge_api",
     localDatabasePort: deriveLocalPostgresPort("edge-api"),
     apiHostname: "api.edge-api.anmho.com",
-    modulePath: "example.com/edge-api",
+    modulePath: "github.com/anmho/edge-api",
   });
 });
 

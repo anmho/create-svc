@@ -6,9 +6,17 @@
     "service": "./scripts/cloudrun/cli.ts"
   },
   "scripts": {
+    "dev": "make dev",
     "service": "bun run ./scripts/cloudrun/cli.ts",
+    "migrate": "make migrate",
+    "gen": "make gen",
+    "lint": "make lint",
+    "test": "make test",
+    "create": "bun run ./scripts/cloudrun/cli.ts create",
+    "deploy": "bun run ./scripts/cloudrun/cli.ts deploy",
     "auth": "bun run ./scripts/cloudrun/cli.ts auth",
-    "dashboards": "bun run ./scripts/cloudrun/cli.ts dashboards"
+    "dashboards": "bun run ./scripts/cloudrun/cli.ts dashboards",
+    "destroy": "bun run ./scripts/cloudrun/cli.ts destroy"
   },
   "dependencies": {
     "@anmho/authctl": "0.1.1",
