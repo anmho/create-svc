@@ -4,17 +4,18 @@ import { confirm, intro, isCancel, log, outro } from "@clack/prompts";
 import { createApiClient } from "@neondatabase/api-client";
 import { Client } from "pg";
 import { ensureAuthClient, ensureAuthResourceServer, runAuthCommand, runAuthDoctor } from "../authctl";
+import { serviceConfig } from "../runtime";
 
 const config = {
-  serviceName: "{{SERVICE_NAME}}",
-  hostname: "{{API_HOSTNAME}}",
-  neonDatabaseName: "{{NEON_DATABASE_NAME}}",
-  neonRoleName: "neondb_owner",
+  serviceName: serviceConfig.service_id,
+  hostname: serviceConfig.dns.hostname,
+  neonDatabaseName: serviceConfig.neon.database_name,
+  neonRoleName: serviceConfig.neon.role_name,
 };
 
 type DoctorStatus = "pass" | "warn" | "fail";
 
-async function main(argv = Bun.argv.slice(2)) {
+export async function main(argv = Bun.argv.slice(2)) {
   const [command, ...rest] = argv;
 
   if (!command || command === "--help" || command === "-h" || command === "help") {
@@ -255,7 +256,7 @@ async function deleteNeonDatabase() {
 
   const payload = await neon.getProjectBranchDatabase(projectId, branchId, config.neonDatabaseName);
   const database = (payload.data as { database?: { name?: string; owner_name?: string } } | undefined)?.database;
-  if (database?.name !== config.neonDatabaseName || (database.owner_name && database.owner_name !== config.neonRoleName)) {
+  if (!database || database.name !== config.neonDatabaseName || (database.owner_name && database.owner_name !== config.neonRoleName)) {
     throw new Error(`Refusing to delete Neon database ${database?.name ?? config.neonDatabaseName}; ownership metadata does not match`);
   }
 

@@ -1,5 +1,5 @@
-import serviceConfig from "../service.config";
 import { existsSync } from "node:fs";
+import { serviceConfig } from "./runtime";
 
 type CommandResult = {
   success: boolean;
@@ -47,7 +47,7 @@ export function defaultAuthResourceServerArgs() {
     auth.resource_server.audience,
     "--stage",
     serviceConfig.stage_default,
-    ...auth.resource_server.default_scopes.flatMap((scope) => ["--scope", scope]),
+    ...(auth.resource_server.default_scopes as string[]).flatMap((scope: string) => ["--scope", scope]),
   ];
 }
 
@@ -244,7 +244,7 @@ function defaultClientTargetArgs(rest: string[]) {
   const hasScope = hasFlag(rest, "--scope");
   return [
     ...(hasResourceServer ? [] : ["--resource-server", serviceConfig.auth.resource_server.id]),
-    ...(hasScope ? [] : serviceConfig.auth.resource_server.default_scopes.flatMap((scope) => ["--scope", scope])),
+    ...(hasScope ? [] : (serviceConfig.auth.resource_server.default_scopes as string[]).flatMap((scope: string) => ["--scope", scope])),
   ];
 }
 

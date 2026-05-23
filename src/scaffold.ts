@@ -77,6 +77,14 @@ export async function scaffoldProject(config: ScaffoldConfig) {
 }
 
 function shouldSkipForTarget(target: DeployTarget, templateKind: "shared" | "variant" | "target", relativePath: string) {
+  if (
+    relativePath === "scripts/authctl.ts" ||
+    relativePath.startsWith("scripts/cloudrun/") ||
+    relativePath.startsWith("scripts/workers/")
+  ) {
+    return true;
+  }
+
   if (target === "workers") {
     if (templateKind === "target") {
       return false;
@@ -94,8 +102,7 @@ function shouldSkipForTarget(target: DeployTarget, templateKind: "shared" | "var
         relativePath === "scripts/local-docker.ts" ||
         relativePath === "scripts/local-env.ts" ||
         relativePath === "scripts/seed.ts" ||
-        relativePath === "scripts/wait-for-db.ts" ||
-        relativePath.startsWith("scripts/cloudrun/")
+        relativePath === "scripts/wait-for-db.ts"
       );
     }
 
@@ -110,7 +117,7 @@ function shouldSkipForTarget(target: DeployTarget, templateKind: "shared" | "var
     );
   }
 
-  return relativePath.startsWith("scripts/workers/") || relativePath === "wrangler.toml";
+  return relativePath === "wrangler.toml";
 }
 
 async function ensureTargetDirectory(targetDir: string) {

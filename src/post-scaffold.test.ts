@@ -4,23 +4,23 @@ import { buildDeploymentVerificationCommands, buildPostScaffoldCommands } from "
 describe("buildPostScaffoldCommands", () => {
   test("runs create and deploy for HTTP services", () => {
     expect(buildPostScaffoldCommands({ framework: "hono" })).toEqual([
-      { command: "bun", args: ["./scripts/cloudrun/cli.ts", "create"] },
-      { command: "bun", args: ["./scripts/cloudrun/cli.ts", "deploy"] },
+      { command: "service", args: ["create"] },
+      { command: "service", args: ["deploy"] },
     ]);
   });
 
   test("builds SDK artifacts before create and deploy for ConnectRPC services", () => {
     expect(buildPostScaffoldCommands({ framework: "connectrpc" })).toEqual([
-      { command: "bun", args: ["./scripts/cloudrun/cli.ts", "sdk", "build"] },
-      { command: "bun", args: ["./scripts/cloudrun/cli.ts", "create"] },
-      { command: "bun", args: ["./scripts/cloudrun/cli.ts", "deploy"] },
+      { command: "service", args: ["sdk", "build"] },
+      { command: "service", args: ["create"] },
+      { command: "service", args: ["deploy"] },
     ]);
   });
 
   test("uses the workers service CLI for workers services", () => {
     expect(buildPostScaffoldCommands({ target: "workers", framework: "hono" })).toEqual([
-      { command: "bun", args: ["./scripts/workers/cli.ts", "create"] },
-      { command: "bun", args: ["./scripts/workers/cli.ts", "deploy"] },
+      { command: "service", args: ["create"] },
+      { command: "service", args: ["deploy"] },
     ]);
   });
 });
@@ -34,7 +34,7 @@ describe("buildDeploymentVerificationCommands", () => {
         command: "sh",
         args: [
           "-c",
-          'TOKEN="$(bun ./scripts/cloudrun/cli.ts auth token)" && curl --fail --show-error --silent -H "Authorization: Bearer $TOKEN" "https://api.launch.anmho.com/v1/admin/waitlist?limit=1"',
+          'TOKEN="$(service auth token)" && curl --fail --show-error --silent -H "Authorization: Bearer $TOKEN" "https://api.launch.anmho.com/v1/admin/waitlist?limit=1"',
         ],
       },
     ]);
@@ -64,7 +64,7 @@ describe("buildDeploymentVerificationCommands", () => {
       command: "sh",
       args: [
         "-c",
-        'TOKEN="$(bun ./scripts/cloudrun/cli.ts auth token)" && grpcurl -H "Authorization: Bearer $TOKEN" -d \'{"limit":1}\' -proto protos/waitlist/v1/waitlist.proto "api.launch.anmho.com:443" waitlist.v1.WaitlistService/ListWaitlistEntries',
+        'TOKEN="$(service auth token)" && grpcurl -H "Authorization: Bearer $TOKEN" -d \'{"limit":1}\' -proto protos/waitlist/v1/waitlist.proto "api.launch.anmho.com:443" waitlist.v1.WaitlistService/ListWaitlistEntries',
       ],
     });
   });
@@ -81,7 +81,7 @@ describe("buildDeploymentVerificationCommands", () => {
       command: "sh",
       args: [
         "-c",
-        'TOKEN="$(bun ./scripts/workers/cli.ts auth token)" && curl --fail --show-error --silent -H "Authorization: Bearer $TOKEN" "https://api.launch.anmho.com/v1/admin/waitlist?limit=1"',
+        'TOKEN="$(service auth token)" && curl --fail --show-error --silent -H "Authorization: Bearer $TOKEN" "https://api.launch.anmho.com/v1/admin/waitlist?limit=1"',
       ],
     });
   });

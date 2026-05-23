@@ -20,10 +20,8 @@ test("findGeneratedServiceRoot detects generated service context from nested dir
   const root = await mkdtemp(join(tmpdir(), "create-svc-service-root-"));
   const serviceRoot = join(root, "generated-api");
   const nested = join(serviceRoot, "src", "waitlist");
-  await mkdir(join(serviceRoot, "scripts", "cloudrun"), { recursive: true });
   await mkdir(nested, { recursive: true });
   await writeFile(join(serviceRoot, "service.config.ts"), "export default {}");
-  await writeFile(join(serviceRoot, "scripts", "cloudrun", "cli.ts"), "");
 
   expect(findGeneratedServiceRoot(nested)).toBe(serviceRoot);
   expect(findGeneratedServiceRoot(root)).toBeUndefined();

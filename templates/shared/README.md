@@ -59,7 +59,7 @@ No cloud credentials are required for local HTTP development after Docker and Po
 
 ## Remote provisioning
 
-The generated Cloud Run config lives in [scripts/cloudrun/config.ts](scripts/cloudrun/config.ts).
+The generated service config lives in [service.config.ts](service.config.ts).
 
 Create, deploy, and destroy use:
 
