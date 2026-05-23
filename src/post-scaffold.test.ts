@@ -4,16 +4,16 @@ import { buildDeploymentVerificationCommands, buildPostScaffoldCommands } from "
 describe("buildPostScaffoldCommands", () => {
   test("runs create and deploy for HTTP services", () => {
     expect(buildPostScaffoldCommands({ framework: "hono" })).toEqual([
-      { command: "bun", args: ["run", "service", "--", "create"] },
-      { command: "bun", args: ["run", "service", "--", "deploy"] },
+      { command: "bun", args: ["./scripts/cloudrun/cli.ts", "create"] },
+      { command: "bun", args: ["./scripts/cloudrun/cli.ts", "deploy"] },
     ]);
   });
 
   test("builds SDK artifacts before create and deploy for ConnectRPC services", () => {
     expect(buildPostScaffoldCommands({ framework: "connectrpc" })).toEqual([
-      { command: "bun", args: ["run", "service", "--", "sdk", "build"] },
-      { command: "bun", args: ["run", "service", "--", "create"] },
-      { command: "bun", args: ["run", "service", "--", "deploy"] },
+      { command: "bun", args: ["./scripts/cloudrun/cli.ts", "sdk", "build"] },
+      { command: "bun", args: ["./scripts/cloudrun/cli.ts", "create"] },
+      { command: "bun", args: ["./scripts/cloudrun/cli.ts", "deploy"] },
     ]);
   });
 });

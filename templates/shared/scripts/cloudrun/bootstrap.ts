@@ -17,13 +17,13 @@ import {
   runStep,
 } from "./lib";
 
-export async function bootstrap() {
+export async function bootstrap(options: { skipProjectSetup?: boolean } = {}) {
   requireCommand("gcloud");
   requireGcloudAuth();
 
-  await runStep("Ensuring GCP project", () => ensureProject());
-  await runStep("Attaching billing", () => attachBilling());
-  await runStep("Enabling required GCP APIs", () => gcloud(["services", "enable", ...config.requiredApis, "--project", config.project.id]));
+  if (!options.skipProjectSetup) {
+    await prepareGcpProject();
+  }
 
   await runStep("Ensuring runtime service account", () => {
     ensureServiceAccount(config.runtimeServiceAccount);
@@ -51,6 +51,12 @@ export async function bootstrap() {
   });
 
   await runStep("Publishing Temporal secrets", () => publishTemporalSecrets());
+}
+
+export async function prepareGcpProject() {
+  await runStep("Ensuring GCP project", () => ensureProject());
+  await runStep("Attaching billing", () => attachBilling());
+  await runStep("Enabling required GCP APIs", () => gcloud(["services", "enable", ...config.requiredApis, "--project", config.project.id]));
 }
 
 function publishTemporalSecrets() {

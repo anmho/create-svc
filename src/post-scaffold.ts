@@ -55,9 +55,9 @@ export function buildDeploymentVerificationCommands(
 
 export function buildPostScaffoldCommands(config: Pick<ScaffoldConfig, "framework">): PostScaffoldCommand[] {
   return [
-    ...(config.framework === "connectrpc" ? [{ command: "bun", args: ["run", "service", "--", "sdk", "build"] }] : []),
-    { command: "bun", args: ["run", "service", "--", "create"] },
-    { command: "bun", args: ["run", "service", "--", "deploy"] },
+    ...(config.framework === "connectrpc" ? [{ command: "bun", args: ["./scripts/cloudrun/cli.ts", "sdk", "build"] }] : []),
+    { command: "bun", args: ["./scripts/cloudrun/cli.ts", "create"] },
+    { command: "bun", args: ["./scripts/cloudrun/cli.ts", "deploy"] },
   ];
 }
 
