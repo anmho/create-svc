@@ -1,4 +1,5 @@
 import type { ScaffoldConfig } from "./scaffold";
+import { dirname } from "node:path";
 
 type CommandOptions = {
   cwd: string;
@@ -169,7 +170,7 @@ function requireCommand(name: string) {
 function run(command: string, args: string[], options: CommandOptions): CommandResult {
   const result = Bun.spawnSync([command, ...args], {
     cwd: options.cwd,
-    env: process.env,
+    env: postScaffoldEnv(),
     stdin: options.input === undefined ? undefined : encoder.encode(options.input),
     stdout: options.allowFailure || options.quiet ? "pipe" : "inherit",
     stderr: options.allowFailure || options.quiet ? "pipe" : "inherit",
@@ -186,5 +187,13 @@ function run(command: string, args: string[], options: CommandOptions): CommandR
     success: result.success,
     stdout,
     stderr,
+  };
+}
+
+function postScaffoldEnv() {
+  const currentBinDir = dirname(Bun.argv[1] ?? "");
+  return {
+    ...process.env,
+    PATH: currentBinDir ? `${currentBinDir}:${process.env.PATH ?? ""}` : process.env.PATH,
   };
 }
