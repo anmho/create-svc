@@ -59,6 +59,7 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
     expect(serviceConfig).toContain('service_id: "dns-api"');
     expect(serviceConfig).toContain('target: "cloudrun"');
     expect(serviceConfig).toContain('module: "buf.build/anmho/dns-api"');
+    expect(serviceConfig).toContain('cloudflare_vault_path: "prod/providers/cloudflare"');
     expect(serviceConfig).toContain('issuer: "https://auth.anmho.com/api/auth"');
     expect(serviceConfig).toContain('audience: "api://dns-api"');
     expect(serviceConfig).toContain('vault_path_prefix: "prod/apps/dns-api/server/oauth-clients"');
@@ -79,6 +80,7 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
     expect(configScript).toContain('baseBranchName: "main"');
     expect(configScript).toContain('previewBranchPrefix: "dns-api-pr"');
     expect(configScript).toContain('hostname: "api.dns-api.anmho.com"');
+    expect(configScript).toContain('cloudflareVaultPath: "prod/providers/cloudflare"');
     expect(configScript).not.toContain("github:");
     expect(configScript).not.toContain("attachmentBucket");
 
@@ -87,6 +89,8 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
     expect(deployScript).toContain('projectMode === "use_existing"');
     expect(deployScript).toContain("serviceDomain");
     expect(deployScript).toContain("ensureProductionDomainMapping");
+    expect(deployScript).toContain("ensureCloudflareDnsRecord");
+    expect(deployScript).toContain("CLOUDFLARE_API_TOKEN");
     expect(deployScript).toContain('"domain-mappings",');
     expect(deployScript).toContain('"--region",');
     expect(deployScript).toContain("assertProductionDomainAvailable");
@@ -152,6 +156,7 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
     expect(localEnv).toContain(`DATABASE_URL=postgres://postgres:postgres@127.0.0.1:${localPort}/dns_api?sslmode=disable`);
     expect(localEnv).toContain("VAULT_AUTHCTL_ACCESS_PATH=prod/apps/auth/authctl/cloudflare-access");
     expect(localEnv).toContain("VAULT_NEON_API_KEY_PATH=prod/providers/neon");
+    expect(localEnv).toContain("VAULT_CLOUDFLARE_API_TOKEN_PATH=prod/providers/cloudflare");
     expect(localEnv).not.toContain("ATTACHMENT_PUBLIC_BASE_URL=");
 
     const ciWorkflow = await Bun.file(join(generatedRoot, ".github", "workflows", "ci.yml")).text();

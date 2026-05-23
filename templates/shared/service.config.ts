@@ -7,6 +7,9 @@ export default {
   dns: {
     hostname: "{{API_HOSTNAME}}",
     base_domain: "{{API_BASE_DOMAIN}}",
+    cloudflare_api_base_url: "https://api.cloudflare.com/client/v4",
+    cloudflare_vault_path: "prod/providers/cloudflare",
+    cloudflare_vault_field: "api_token",
   },
   ownership: {
     managed_by: "create-service",
@@ -38,6 +41,7 @@ export default {
     vault: {
       mount: "secret",
       neon_path: "prod/providers/neon",
+      cloudflare_path: "prod/providers/cloudflare",
       grafana_path: "prod/providers/grafana",
       clerk_m2m_path: "prod/providers/clerk-m2m",
       temporal_path: "prod/providers/temporal",

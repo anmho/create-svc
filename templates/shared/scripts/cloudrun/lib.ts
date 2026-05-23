@@ -42,6 +42,7 @@ type CommandResult = {
 
 const decoder = new TextDecoder();
 const encoder = new TextEncoder();
+const CLOUDFLARE_DNS_TTL_AUTO = 1;
 
 export class CommandError extends Error {
   command: string;
@@ -485,12 +486,13 @@ export function ensureProductionDomainMapping(serviceName: string) {
   if (existing) {
     const mappedService = existing.spec?.routeName ?? existing.status?.resourceRecords?.[0]?.rrdata;
     if (!mappedService || mappedService === serviceName) {
+      ensureCloudflareDnsRecord(existing);
       return;
     }
     throw new Error(`${config.domain.hostname} is already mapped to ${mappedService}; refusing to take it over`);
   }
 
-  gcloud([
+  const result = gcloud([
     "beta",
     "run",
     "domain-mappings",
@@ -504,6 +506,8 @@ export function ensureProductionDomainMapping(serviceName: string) {
     "--region",
     config.region,
   ]);
+  const created = parseDomainMappingOutput(result.stdout) ?? describeProductionDomainMapping();
+  ensureCloudflareDnsRecord(created);
 }
 
 export function describeProductionDomainMapping():
@@ -561,6 +565,7 @@ export function assertServiceNameAvailable(serviceName: string) {
 }
 
 export function deleteProductionDomainMapping() {
+  deleteCloudflareDnsRecord();
   gcloud(["beta", "run", "domain-mappings", "delete", "--domain", config.domain.hostname, "--project", config.project.id, "--quiet"], {
     allowFailure: true,
   });
@@ -571,6 +576,165 @@ export function listCloudRunServices() {
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
+}
+
+function parseDomainMappingOutput(stdout: string) {
+  if (!stdout.trim().startsWith("{")) {
+    return undefined;
+  }
+  try {
+    return JSON.parse(stdout) as ReturnType<typeof describeProductionDomainMapping>;
+  } catch {
+    return undefined;
+  }
+}
+
+function ensureCloudflareDnsRecord(
+  mapping:
+    | { status?: { resourceRecords?: Array<{ name?: string; rrdata?: string; type?: string }> } }
+    | undefined
+) {
+  const desired = desiredCloudflareRecord(mapping);
+  const zoneId = cloudflareZoneId();
+  const records = listCloudflareDnsRecords(zoneId, config.domain.hostname);
+  const conflicting = records.find((record) => record.type !== desired.type);
+  if (conflicting) {
+    throw new Error(
+      `Cloudflare DNS record ${config.domain.hostname} already exists as ${conflicting.type}; remove or update it before provisioning`
+    );
+  }
+  const existing = records.find((record) => record.type === desired.type);
+  if (!existing) {
+    cloudflareFetch("POST", `/zones/${zoneId}/dns_records`, desired);
+    return;
+  }
+  if (existing.content === desired.content && existing.proxied === desired.proxied) {
+    return;
+  }
+  cloudflareFetch("PUT", `/zones/${zoneId}/dns_records/${existing.id}`, desired);
+}
+
+function deleteCloudflareDnsRecord() {
+  const token = resolveCloudflareApiToken({ required: false });
+  if (!token) {
+    return;
+  }
+  const zoneId = cloudflareZoneId(token);
+  const records = listCloudflareDnsRecords(zoneId, config.domain.hostname, token);
+  for (const record of records) {
+    cloudflareFetch("DELETE", `/zones/${zoneId}/dns_records/${record.id}`, undefined, token);
+  }
+}
+
+function desiredCloudflareRecord(
+  mapping:
+    | { status?: { resourceRecords?: Array<{ name?: string; rrdata?: string; type?: string }> } }
+    | undefined
+) {
+  const cname = mapping?.status?.resourceRecords?.find((record) => record.type === "CNAME" && record.rrdata);
+  const content = (cname?.rrdata ?? "ghs.googlehosted.com.").replace(/\.$/, "");
+  return {
+    type: "CNAME",
+    name: config.domain.hostname,
+    content,
+    ttl: CLOUDFLARE_DNS_TTL_AUTO,
+    proxied: false,
+  };
+}
+
+function cloudflareZoneId(token = resolveCloudflareApiToken({ required: true })) {
+  const response = cloudflareFetch("GET", `/zones?name=${encodeURIComponent(config.domain.baseDomain)}`, undefined, token);
+  const zone = response.result?.[0] as { id?: string } | undefined;
+  if (!zone?.id) {
+    throw new Error(`Cloudflare zone not found for ${config.domain.baseDomain}`);
+  }
+  return zone.id;
+}
+
+function listCloudflareDnsRecords(zoneId: string, name: string, token = resolveCloudflareApiToken({ required: true })) {
+  const response = cloudflareFetch(
+    "GET",
+    `/zones/${zoneId}/dns_records?name=${encodeURIComponent(name)}&per_page=100`,
+    undefined,
+    token
+  );
+  return (response.result ?? []) as Array<{ id: string; type: string; content: string; proxied: boolean }>;
+}
+
+function cloudflareFetch(method: string, path: string, body?: unknown, token = resolveCloudflareApiToken({ required: true })) {
+  const response = fetchJsonSync(`${config.domain.cloudflareApiBaseUrl}${path}`, {
+    method,
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+      accept: "application/json",
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (response.status < 200 || response.status >= 300) {
+    throw new Error(`Cloudflare ${method} ${path} failed: ${response.status} ${response.body}`);
+  }
+  const parsed = response.body ? JSON.parse(response.body) : {};
+  if (parsed.success === false) {
+    throw new Error(`Cloudflare ${method} ${path} failed: ${response.body}`);
+  }
+  return parsed;
+}
+
+function resolveCloudflareApiToken(options: { required: boolean }) {
+  const direct = process.env.CLOUDFLARE_API_TOKEN?.trim();
+  if (direct) {
+    return direct;
+  }
+
+  const vault = Bun.which("vault");
+  if (vault) {
+    const path = process.env.VAULT_CLOUDFLARE_API_TOKEN_PATH?.trim() || config.domain.cloudflareVaultPath;
+    const field = process.env.VAULT_CLOUDFLARE_API_TOKEN_FIELD?.trim() || config.domain.cloudflareVaultField;
+    const result = Bun.spawnSync(
+      [vault, "kv", "get", `-mount=${process.env.VAULT_SECRET_MOUNT || "secret"}`, `-field=${field}`, path],
+      {
+        cwd: process.cwd(),
+        env: process.env,
+        stdout: "pipe",
+        stderr: "pipe",
+      }
+    );
+    if (result.success && result.stdout) {
+      return decoder.decode(result.stdout).trim();
+    }
+  }
+
+  if (!options.required) {
+    return "";
+  }
+  throw new Error(
+    [
+      "CLOUDFLARE_API_TOKEN is required to create DNS records for the production Cloud Run domain.",
+      `Set CLOUDFLARE_API_TOKEN or store it at secret/${config.domain.cloudflareVaultPath} field ${config.domain.cloudflareVaultField}.`,
+    ].join(" ")
+  );
+}
+
+function fetchJsonSync(url: string, init: { method: string; headers: Record<string, string>; body?: string }) {
+  const script = [
+    "const url = process.argv[1];",
+    "const init = JSON.parse(process.argv[2]);",
+    "const response = await fetch(url, init);",
+    "const body = await response.text();",
+    "console.log(JSON.stringify({ status: response.status, body }));",
+  ].join("\n");
+  const result = Bun.spawnSync([process.execPath, "--eval", script, url, JSON.stringify(init)], {
+    cwd: process.cwd(),
+    env: process.env,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (!result.success) {
+    const stderr = result.stderr ? decoder.decode(result.stderr).trim() : "";
+    throw new Error(`Cloudflare request process failed\n${stderr}`);
+  }
+  return JSON.parse(decoder.decode(result.stdout).trim()) as { status: number; body: string };
 }
 
 export function describeCloudRunService(serviceName: string): GcpResourceWithLabels | undefined {
