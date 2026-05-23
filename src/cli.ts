@@ -3,7 +3,7 @@ import pc from "picocolors";
 import { readdirSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildDeploymentVerificationCommands, runPostScaffoldFlow } from "./post-scaffold";
+import { buildDeploymentVerificationCommands, buildLocalVerificationCommands, runPostScaffoldFlow } from "./post-scaffold";
 import {
   bootstrapGitHubRepository,
   buildGitBootstrapConfig,
@@ -184,13 +184,20 @@ function formatCompletionSummary(config: ScaffoldConfig, targetDir: string, gitR
     `  Temporal API key secret: ${config.serviceName}-temporal-api-key`,
     config.runtime === "go" ? `  Go module: ${config.modulePath}` : undefined,
     "",
-    config.autoDeploy ? "Verified after deploy:" : "After deploy, verify with:",
+    config.autoDeploy ? "Verified production after deploy:" : "After deploy, verify production with:",
     ...buildDeploymentVerificationCommands(config).map(formatShellCommand),
+    config.autoDeploy ? "" : undefined,
+    config.autoDeploy ? "Local dev started:" : undefined,
+    config.autoDeploy ? "  .service/local-dev.pid" : undefined,
+    config.autoDeploy ? "  .service/local-dev.log" : undefined,
+    config.autoDeploy ? "" : undefined,
+    config.autoDeploy ? "Verified local dev:" : undefined,
+    ...(config.autoDeploy ? buildLocalVerificationCommands(config).map(formatShellCommand) : []),
     "",
-    "We suggest that you begin by typing:",
+    config.autoDeploy ? "Next:" : "We suggest that you begin by typing:",
     "",
     `  cd ${config.directory}`,
-    `  ${devCommand}`,
+    config.autoDeploy ? "  tail -f .service/local-dev.log" : `  ${devCommand}`,
     "",
     repository ? `Repository: ${repository}` : undefined,
     `Production API: https://${config.apiHostname}`,

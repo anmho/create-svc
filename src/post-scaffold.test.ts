@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { buildDeploymentVerificationCommands, buildPostScaffoldCommands } from "./post-scaffold";
+import { buildDeploymentVerificationCommands, buildLocalVerificationCommands, buildPostScaffoldCommands } from "./post-scaffold";
 
 describe("buildPostScaffoldCommands", () => {
   test("runs create and deploy for HTTP services", () => {
@@ -22,6 +22,32 @@ describe("buildPostScaffoldCommands", () => {
       { command: "service", args: ["create"] },
       { command: "service", args: ["deploy"] },
     ]);
+  });
+});
+
+describe("buildLocalVerificationCommands", () => {
+  test("uses local curl checks for Bun Hono services", () => {
+    expect(buildLocalVerificationCommands({ apiHostname: "api.launch.anmho.com", framework: "hono", runtime: "bun" })).toEqual([
+      { command: "sh", args: ["-c", 'curl --fail --show-error --silent "http://127.0.0.1:3000/"'] },
+      { command: "sh", args: ["-c", 'curl --fail --show-error --silent "http://127.0.0.1:3000/readyz"'] },
+      {
+        command: "sh",
+        args: [
+          "-c",
+          'TOKEN="$(service auth token)" && curl --fail --show-error --silent -H "Authorization: Bearer $TOKEN" "http://127.0.0.1:3000/v1/admin/waitlist?limit=1"',
+        ],
+      },
+    ]);
+  });
+
+  test("uses plaintext grpcurl for local Go ConnectRPC services", () => {
+    expect(buildLocalVerificationCommands({ apiHostname: "api.launch.anmho.com", framework: "connectrpc", runtime: "go" })).toContainEqual({
+      command: "sh",
+      args: [
+        "-c",
+        'TOKEN="$(service auth token)" && grpcurl -plaintext -H "Authorization: Bearer $TOKEN" -d \'{"limit":1}\' -proto protos/waitlist/v1/waitlist.proto "127.0.0.1:8080" waitlist.v1.WaitlistService/ListWaitlistEntries',
+      ],
+    });
   });
 });
 
