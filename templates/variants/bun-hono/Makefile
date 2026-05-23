@@ -12,7 +12,7 @@ gen:
 	bun run ./scripts/codegen.ts
 
 lint:
-	bunx tsc --noEmit
+	bun run lint
 
 test:
 	bun test

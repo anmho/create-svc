@@ -10,7 +10,7 @@
     "service": "bun run ./scripts/cloudrun/cli.ts",
     "migrate": "bun run ./scripts/migrate.ts",
     "gen": "bun run ./scripts/codegen.ts",
-    "lint": "bunx tsc --noEmit",
+    "lint": "tsc --noEmit",
     "test": "bun test",
     "create": "bun run ./scripts/cloudrun/cli.ts create",
     "deploy": "bun run ./scripts/cloudrun/cli.ts deploy",

@@ -12,7 +12,7 @@ gen:
 	@echo "no generated code for workers"
 
 lint:
-	bunx tsc --noEmit
+	bun run lint
 
 test:
 	bun test

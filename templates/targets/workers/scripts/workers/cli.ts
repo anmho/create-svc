@@ -3,7 +3,7 @@
 import { confirm, intro, isCancel, log, outro } from "@clack/prompts";
 import { createApiClient } from "@neondatabase/api-client";
 import { Client } from "pg";
-import { ensureAuthResourceServer, runAuthCommand, runAuthDoctor } from "../authctl";
+import { ensureAuthClient, ensureAuthResourceServer, runAuthCommand, runAuthDoctor } from "../authctl";
 
 const config = {
   serviceName: "{{SERVICE_NAME}}",
@@ -25,6 +25,7 @@ async function main(argv = Bun.argv.slice(2)) {
   if (command === "create") {
     return runMain("Create", async () => {
       ensureAuthResourceServer();
+      ensureAuthClient();
       const databaseUrl = await resolveDatabaseUrl();
       await applySchema(databaseUrl);
       await ensureHyperdrive(databaseUrl);
@@ -68,6 +69,10 @@ async function main(argv = Bun.argv.slice(2)) {
   }
 
   if (command === "auth") {
+    if (rest[0] === "token") {
+      console.log(runAuthCommand(rest));
+      return;
+    }
     return runMain("Auth", () => runAuthCommand(rest));
   }
 
@@ -102,6 +107,7 @@ function formatHelp() {
     "  seed        Report seed status",
     "  doctor      Check local tools and cloud access",
     "  auth        Manage auth resource server and clients",
+    "  auth token  Mint a bearer token for protected API checks",
     "  dns         Show Workers custom-domain configuration",
     "  dashboards  Publish Grafana resources",
     "  destroy     Remove service-managed Worker resources",

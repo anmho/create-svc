@@ -16,6 +16,13 @@ describe("buildPostScaffoldCommands", () => {
       { command: "bun", args: ["./scripts/cloudrun/cli.ts", "deploy"] },
     ]);
   });
+
+  test("uses the workers service CLI for workers services", () => {
+    expect(buildPostScaffoldCommands({ target: "workers", framework: "hono" })).toEqual([
+      { command: "bun", args: ["./scripts/workers/cli.ts", "create"] },
+      { command: "bun", args: ["./scripts/workers/cli.ts", "deploy"] },
+    ]);
+  });
 });
 
 describe("buildDeploymentVerificationCommands", () => {
@@ -23,13 +30,40 @@ describe("buildDeploymentVerificationCommands", () => {
     expect(buildDeploymentVerificationCommands({ apiHostname: "api.launch.anmho.com", framework: "hono", runtime: "bun" })).toEqual([
       { command: "curl", args: ["--fail", "--show-error", "--silent", "https://api.launch.anmho.com/healthz"] },
       { command: "curl", args: ["--fail", "--show-error", "--silent", "https://api.launch.anmho.com/readyz"] },
+      {
+        command: "sh",
+        args: [
+          "-c",
+          'TOKEN="$(bun ./scripts/cloudrun/cli.ts auth token)" && curl --fail --show-error --silent -H "Authorization: Bearer $TOKEN" "https://api.launch.anmho.com/v1/admin/waitlist?limit=1"',
+        ],
+      },
     ]);
   });
 
-  test("uses grpcurl for Go ConnectRPC services", () => {
+  test("uses auth token and grpcurl for Go ConnectRPC services", () => {
     expect(buildDeploymentVerificationCommands({ apiHostname: "api.launch.anmho.com", framework: "connectrpc", runtime: "go" })).toContainEqual({
-      command: "grpcurl",
-      args: ["api.launch.anmho.com:443", "list"],
+      command: "sh",
+      args: [
+        "-c",
+        'TOKEN="$(bun ./scripts/cloudrun/cli.ts auth token)" && grpcurl -H "Authorization: Bearer $TOKEN" -d \'{"limit":1}\' -proto protos/waitlist/v1/waitlist.proto api.launch.anmho.com:443 waitlist.v1.WaitlistService/ListWaitlistEntries',
+      ],
+    });
+  });
+
+  test("uses the workers service CLI for protected workers verification", () => {
+    expect(
+      buildDeploymentVerificationCommands({
+        target: "workers",
+        apiHostname: "api.launch.anmho.com",
+        framework: "hono",
+        runtime: "bun",
+      })
+    ).toContainEqual({
+      command: "sh",
+      args: [
+        "-c",
+        'TOKEN="$(bun ./scripts/workers/cli.ts auth token)" && curl --fail --show-error --silent -H "Authorization: Bearer $TOKEN" "https://api.launch.anmho.com/v1/admin/waitlist?limit=1"',
+      ],
     });
   });
 });

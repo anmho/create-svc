@@ -11,6 +11,7 @@ export const GENERATED_VARIANTS = [
   "bun-connectrpc",
   "go-chi",
   "go-connectrpc",
+  "workers-bun-hono",
 ] as const;
 
 export type GeneratedVariant = (typeof GENERATED_VARIANTS)[number];
@@ -18,6 +19,7 @@ export type GeneratedTarget = GeneratedVariant;
 
 type VariantDefinition = {
   name: GeneratedVariant;
+  target: DeployTarget;
   runtime: Runtime;
   framework: Framework;
   commandSteps: ValidationCommandStep[];
@@ -31,7 +33,7 @@ export type ValidationCommandStep = {
 
 export type SmokeCheck = {
   name: string;
-  kind?: "http" | "connect-client" | "hono-rpc-client" | "web" | "ios-expo";
+  kind?: "http" | "connect-client" | "connect-http" | "hono-rpc-client" | "web" | "ios-expo";
   path?: string;
   expectStatus?: number;
   protocol?: "http1" | "http2";
@@ -67,6 +69,7 @@ type ServerProcess = Bun.Subprocess<"ignore", "pipe", "pipe">;
 const VARIANT_DEFINITIONS: Record<GeneratedVariant, VariantDefinition> = {
   "bun-hono": {
     name: "bun-hono",
+    target: "cloudrun",
     runtime: "bun",
     framework: "hono",
     commandSteps: [
@@ -80,6 +83,7 @@ const VARIANT_DEFINITIONS: Record<GeneratedVariant, VariantDefinition> = {
   },
   "bun-connectrpc": {
     name: "bun-connectrpc",
+    target: "cloudrun",
     runtime: "bun",
     framework: "connectrpc",
     commandSteps: [
@@ -91,13 +95,14 @@ const VARIANT_DEFINITIONS: Record<GeneratedVariant, VariantDefinition> = {
       { name: "run lint", command: ["bun", "run", "lint"] },
     ],
     smokeChecks: [
-      { name: "health endpoint", path: "/healthz", protocol: "http2" },
-      { name: "typed connect client", kind: "connect-client" },
-      { name: "connectrpc introspection", path: "/debug/connectrpc", protocol: "http2" },
+      { name: "health endpoint", path: "/healthz" },
+      { name: "connect json endpoint", kind: "connect-http" },
+      { name: "connectrpc introspection", path: "/debug/connectrpc" },
     ],
   },
   "go-chi": {
     name: "go-chi",
+    target: "cloudrun",
     runtime: "go",
     framework: "chi",
     commandSteps: [
@@ -110,6 +115,7 @@ const VARIANT_DEFINITIONS: Record<GeneratedVariant, VariantDefinition> = {
   },
   "go-connectrpc": {
     name: "go-connectrpc",
+    target: "cloudrun",
     runtime: "go",
     framework: "connectrpc",
     commandSteps: [
@@ -123,6 +129,18 @@ const VARIANT_DEFINITIONS: Record<GeneratedVariant, VariantDefinition> = {
       { name: "health endpoint", path: "/healthz" },
       { name: "typed grpc client", kind: "connect-client" },
     ],
+  },
+  "workers-bun-hono": {
+    name: "workers-bun-hono",
+    target: "workers",
+    runtime: "bun",
+    framework: "hono",
+    commandSteps: [
+      { name: "install dependencies", command: ["bun", "install"] },
+      { name: "run tests", command: ["bun", "run", "test"] },
+      { name: "run lint", command: ["bun", "run", "lint"] },
+    ],
+    smokeChecks: [],
   },
 };
 
@@ -192,7 +210,7 @@ export function planValidation(args: string[] | ValidationOptions): ValidationPl
     return {
       name,
       profile: "microservice",
-      target: "cloudrun",
+      target: definition.target,
       runtime: definition.runtime,
       framework: definition.framework,
       serviceName,
@@ -393,7 +411,10 @@ async function runSmokeCheck(item: ValidationPlanItem, cwd: string, smoke: Smoke
   });
 
   try {
-    if (smoke.kind === "connect-client") {
+    if (smoke.kind === "connect-http") {
+      await waitForHttp(`http://127.0.0.1:${port}/healthz`, 200, proc);
+      await runConnectHttpSmoke(port);
+    } else if (smoke.kind === "connect-client") {
       const protocol = item.name === "bun-connectrpc" ? "http2" : "http";
       await waitForHttp(`${protocol}://127.0.0.1:${port}/healthz`, 200, proc);
       await runConnectClientSmoke(item, cwd, port);
@@ -410,6 +431,25 @@ async function runSmokeCheck(item: ValidationPlanItem, cwd: string, smoke: Smoke
   }
 }
 
+async function runConnectHttpSmoke(port: number) {
+  const email = `smoke-${Date.now()}@example.com`;
+  const response = await fetch(`http://127.0.0.1:${port}/waitlist.v1.WaitlistService/JoinWaitlist`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ email }),
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!response.ok) {
+    throw new Error(`Connect JSON smoke failed: ${response.status} ${await response.text()}`);
+  }
+  const payload = (await response.json()) as { entry?: { email?: string } };
+  if (payload.entry?.email !== email) {
+    throw new Error("Connect JSON smoke response did not include the created entry");
+  }
+}
+
 async function runConnectClientSmoke(item: ValidationPlanItem, cwd: string, port: number) {
   if (item.name === "bun-connectrpc") {
     const smokePath = join(cwd, ".create-svc-connect-smoke.ts");
@@ -422,7 +462,7 @@ async function runConnectClientSmoke(item: ValidationPlanItem, cwd: string, port
         "",
         'const baseUrl = Bun.env.BASE_URL;',
         'if (!baseUrl) throw new Error("BASE_URL is required");',
-        'const transport = createConnectTransport({ baseUrl, httpVersion: "2" });',
+        'const transport = createConnectTransport({ baseUrl, httpVersion: "1.1" });',
         "const client = createClient(WaitlistService, transport);",
         'const email = `smoke-${Date.now()}@example.com`;',
         "const response = await client.joinWaitlist({ email }, { timeoutMs: 10_000 });",

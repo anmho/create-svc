@@ -218,6 +218,7 @@ function buildReplacements(config: ScaffoldConfig) {
     COMMAND_DEPLOY: "service deploy",
     COMMAND_AUTH_RESOURCE: "service auth resource-server",
     COMMAND_AUTH_CLIENT: "service auth client create",
+    COMMAND_AUTH_TOKEN: "service auth token",
     COMMAND_DEPLOY_PERSONAL: "service deploy --environment personal --name <name>",
     COMMAND_DEPLOY_DESTROY: "service destroy --environment personal --name <name>",
     COMMAND_CLEANUP: "service destroy",
@@ -236,7 +237,40 @@ function buildReplacements(config: ScaffoldConfig) {
             "- override with `ENABLE_RPC_INTROSPECTION=true|false`",
           ].join("\n")
         : "",
+    PRODUCTION_PROTECTED_CHECKS: buildProtectedChecks(config),
   };
+}
+
+function buildProtectedChecks(config: ScaffoldConfig) {
+  const tokenCommand = 'TOKEN="$(service auth token)"';
+  if (config.framework === "connectrpc" && config.runtime === "go") {
+    return [
+      "After deploy, verify protected reads with:",
+      "",
+      "```bash",
+      tokenCommand,
+      `grpcurl -H "Authorization: Bearer $TOKEN" -d '{"limit":1}' -proto protos/waitlist/v1/waitlist.proto ${config.apiHostname}:443 waitlist.v1.WaitlistService/ListWaitlistEntries`,
+      "```",
+    ].join("\n");
+  }
+  if (config.framework === "connectrpc") {
+    return [
+      "After deploy, verify protected reads with:",
+      "",
+      "```bash",
+      tokenCommand,
+      `curl --fail --show-error --silent -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"limit":1}' "https://${config.apiHostname}/waitlist.v1.WaitlistService/ListWaitlistEntries"`,
+      "```",
+    ].join("\n");
+  }
+  return [
+    "After deploy, verify protected reads with:",
+    "",
+    "```bash",
+    tokenCommand,
+    `curl --fail --show-error --silent -H "Authorization: Bearer $TOKEN" "https://${config.apiHostname}/v1/admin/waitlist?limit=1"`,
+    "```",
+  ].join("\n");
 }
 
 async function writeLocalEnvFile(targetDir: string, replacements: Record<string, string>) {
