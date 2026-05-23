@@ -53,6 +53,16 @@ test("plans the public commands for the bun hono tracer bullet", () => {
       "Google Cloud Logging, Monitoring, and Trace APIs",
     ],
   });
+  expect(plan[0]?.generatedChecks).toContainEqual({
+    name: "observability CLI contract",
+    file: "service.jsonc",
+    includes: [
+      '"observability"',
+      "logging.googleapis.com",
+      "monitoring.googleapis.com",
+      "cloudtrace.googleapis.com",
+    ],
+  });
   expect(plan[0]?.smokeChecks).toEqual([{ name: "health endpoint", path: "/healthz" }]);
 });
 
@@ -118,6 +128,12 @@ test("plans the workers preset with wrangler package checks", () => {
   expect(plan[0]?.framework).toBe("hono");
   expect(plan[0]?.commandSteps).toEqual([
     { name: "install dependencies", command: ["bun", "install"] },
+    {
+      name: "verify authctl resource-server command",
+      command: ["bun", "run", "authctl", "resource-servers", "upsert", "--help"],
+      failureHint:
+        'Missing authctl command "resource-servers upsert". Generated services must install @anmho/authctl >=0.1.1 so auth registration can upsert resource servers.',
+    },
     { name: "run tests", command: ["bun", "run", "test"] },
     { name: "run lint", command: ["bun", "run", "lint"] },
   ]);
