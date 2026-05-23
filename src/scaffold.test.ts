@@ -258,7 +258,7 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
       expect(readme).toContain("AUTH_ENABLED=true");
       expect(readme).toContain("verifies JWT bearer tokens");
       expect(readme).toContain("prod/apps/auth/authctl/cloudflare-access");
-      expect(readme).toContain(variant.runtime === "bun" ? "bun run auth -- resource-server" : 'make auth ARGS="resource-server"');
+      expect(readme).toContain("service auth resource-server");
     }
 
     const deployWorkflow = await Bun.file(join(generatedRoot, ".github", "workflows", "deploy.yml")).text();
@@ -285,8 +285,8 @@ test("scaffolds a backend package cleanly into a nested monorepo-style directory
   expect(readme).toContain("local Postgres service in `docker-compose.yml`");
   expect(readme).toContain("gcloud auth login");
   expect(readme).toContain("known-good CLIs");
-  expect(readme).toContain("bun run create");
-  expect(readme).toContain("bun run deploy");
+  expect(readme).toContain("service create");
+  expect(readme).toContain("service deploy");
   expect(readme).toContain("one-command production create");
   expect(readme).toContain("waitlist/launch service");
   expect(readme).toContain("Terraform is optional");

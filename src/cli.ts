@@ -76,7 +76,7 @@ export async function run(argv: string[]) {
 
     await maybeCheckForUpdate(args);
 
-    intro(`${pc.bold("create-service")} ${pc.dim("microservice bootstrap")}`);
+    intro(`${pc.bold("service")} ${pc.dim("microservice bootstrap")}`);
 
     const config = await resolveConfig(args);
     const targetDir = resolve(process.cwd(), config.directory);
@@ -137,13 +137,11 @@ export async function run(argv: string[]) {
         `Local DB: ${pc.cyan("started by local dev command")}`,
         `Migrate: ${pc.cyan(isBun ? "bun run migrate" : "make migrate")}`,
         `Local dev: ${pc.cyan(isBun ? "bun run dev" : "make dev")}`,
-        `Create: ${pc.cyan(isBun ? "bun run service -- create" : "make create")}`,
-        `Deploy: ${pc.cyan(isBun ? "bun run service -- deploy" : "make deploy")}`,
+        `Create: ${pc.cyan("service create")}`,
+        `Deploy: ${pc.cyan("service deploy")}`,
         config.git.enabled ? `Repository: ${pc.cyan(`https://github.com/anmho/${config.git.repository}`)}` : undefined,
         `Personal env: ${pc.cyan(
-          isBun
-            ? `bun run deploy -- --environment personal --name ${config.serviceName}`
-            : `make deploy ARGS="--environment personal --name ${config.serviceName}"`
+          `service deploy --environment personal --name ${config.serviceName}`
         )}`,
         `Production API: ${pc.cyan(`https://${config.apiHostname}`)}`,
       ].filter(Boolean).join("\n")
@@ -827,7 +825,7 @@ export function validateServiceNameInput(rawValue: string, directoryOverride?: s
 function printHelp() {
   log.message(`
 Usage:
-  create-service [service_id] [options]
+  service create [service_id] [options]
 
 Options:
   --target <cloudrun|workers>     Deploy target for the generated service

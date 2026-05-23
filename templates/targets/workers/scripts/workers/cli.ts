@@ -17,6 +17,11 @@ type DoctorStatus = "pass" | "warn" | "fail";
 async function main(argv = Bun.argv.slice(2)) {
   const [command, ...rest] = argv;
 
+  if (!command || command === "--help" || command === "-h" || command === "help") {
+    console.log("Usage: service <create|deploy|migrate|seed|dashboards|dns|doctor|destroy|auth|sdk> [args]");
+    return;
+  }
+
   if (command === "create") {
     return runMain("Create", async () => {
       ensureAuthResourceServer();
