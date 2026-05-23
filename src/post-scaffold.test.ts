@@ -28,8 +28,8 @@ describe("buildPostScaffoldCommands", () => {
 describe("buildDeploymentVerificationCommands", () => {
   test("uses curl health checks for HTTP services", () => {
     expect(buildDeploymentVerificationCommands({ apiHostname: "api.launch.anmho.com", framework: "hono", runtime: "bun" })).toEqual([
-      { command: "curl", args: ["--fail", "--show-error", "--silent", "https://api.launch.anmho.com/healthz"] },
-      { command: "curl", args: ["--fail", "--show-error", "--silent", "https://api.launch.anmho.com/readyz"] },
+      { command: "sh", args: ["-c", 'curl --fail --show-error --silent "https://api.launch.anmho.com/healthz"'] },
+      { command: "sh", args: ["-c", 'curl --fail --show-error --silent "https://api.launch.anmho.com/readyz"'] },
       {
         command: "sh",
         args: [
@@ -40,12 +40,31 @@ describe("buildDeploymentVerificationCommands", () => {
     ]);
   });
 
+  test("uses the immediate Cloud Run service URL when project details are available", () => {
+    expect(
+      buildDeploymentVerificationCommands({
+        apiHostname: "api.launch.anmho.com",
+        framework: "hono",
+        runtime: "bun",
+        serviceName: "launch-api",
+        gcpProject: "anmho-infra-prod",
+        region: "us-west1",
+      })
+    ).toContainEqual({
+      command: "sh",
+      args: [
+        "-c",
+        'curl --fail --show-error --silent "$(gcloud run services describe launch-api --project anmho-infra-prod --region us-west1 --format=value(status.url))/healthz"',
+      ],
+    });
+  });
+
   test("uses auth token and grpcurl for Go ConnectRPC services", () => {
     expect(buildDeploymentVerificationCommands({ apiHostname: "api.launch.anmho.com", framework: "connectrpc", runtime: "go" })).toContainEqual({
       command: "sh",
       args: [
         "-c",
-        'TOKEN="$(bun ./scripts/cloudrun/cli.ts auth token)" && grpcurl -H "Authorization: Bearer $TOKEN" -d \'{"limit":1}\' -proto protos/waitlist/v1/waitlist.proto api.launch.anmho.com:443 waitlist.v1.WaitlistService/ListWaitlistEntries',
+        'TOKEN="$(bun ./scripts/cloudrun/cli.ts auth token)" && grpcurl -H "Authorization: Bearer $TOKEN" -d \'{"limit":1}\' -proto protos/waitlist/v1/waitlist.proto "api.launch.anmho.com:443" waitlist.v1.WaitlistService/ListWaitlistEntries',
       ],
     });
   });
