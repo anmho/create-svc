@@ -45,12 +45,12 @@ export async function runPostScaffoldFlow(config: ScaffoldConfig, cwd: string) {
 
 function startLocalDevelopment(config: Pick<ScaffoldConfig, "target">, cwd: string) {
   if (config.target === "workers") {
-    run("sh", ["-c", "mkdir -p .service && bun run dev > .service/local-dev.log 2>&1 & echo $! > .service/local-dev.pid"], { cwd });
+    run("sh", ["-c", "mkdir -p .service && nohup bun run dev > .service/local-dev.log 2>&1 < /dev/null & echo $! > .service/local-dev.pid"], { cwd });
     return;
   }
 
   run("bun", ["run", "migrate"], { cwd });
-  run("sh", ["-c", "mkdir -p .service && bun run dev > .service/local-dev.log 2>&1 & echo $! > .service/local-dev.pid"], { cwd });
+  run("sh", ["-c", "mkdir -p .service && nohup bun run dev > .service/local-dev.log 2>&1 < /dev/null & echo $! > .service/local-dev.pid"], { cwd });
 }
 
 function runWithRetries(command: PostScaffoldCommand, options: CommandOptions, attempts: number, delayMs: number) {
