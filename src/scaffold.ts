@@ -293,6 +293,8 @@ async function writeLocalEnvFile(targetDir: string, replacements: Record<string,
       "VAULT_AUTHCTL_ACCESS_CLIENT_SECRET_FIELD=CLOUDFLARE_ACCESS_SERVICE_TOKEN_CLIENT_SECRET",
       "VAULT_NEON_API_KEY_PATH=prod/providers/neon",
       "VAULT_NEON_API_KEY_FIELD=api_key",
+      "VAULT_CLOUDFLARE_API_TOKEN_PATH=prod/providers/cloudflare",
+      "VAULT_CLOUDFLARE_API_TOKEN_FIELD=api_token",
       "",
     ].join("\n"),
     replacements

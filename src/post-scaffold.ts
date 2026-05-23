@@ -20,6 +20,8 @@ type PostScaffoldCommand = {
 
 const decoder = new TextDecoder();
 const encoder = new TextEncoder();
+const DEPLOYMENT_VERIFY_ATTEMPTS = 36;
+const DEPLOYMENT_VERIFY_DELAY_MS = 10_000;
 
 export async function runPostScaffoldFlow(config: ScaffoldConfig, cwd: string) {
   if (config.autoDeploy) {
@@ -28,12 +30,28 @@ export async function runPostScaffoldFlow(config: ScaffoldConfig, cwd: string) {
       run(command.command, command.args, { cwd });
     }
     for (const command of buildDeploymentVerificationCommands(config)) {
-      run(command.command, command.args, { cwd, quiet: true });
+      runWithRetries(command, { cwd, quiet: true }, DEPLOYMENT_VERIFY_ATTEMPTS, DEPLOYMENT_VERIFY_DELAY_MS);
     }
     return { message: "Dependencies installed, service created, service deployed, and production health verified" };
   }
 
   return { message: "Backend package generated" };
+}
+
+function runWithRetries(command: PostScaffoldCommand, options: CommandOptions, attempts: number, delayMs: number) {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return run(command.command, command.args, options);
+    } catch (error) {
+      lastError = error;
+      if (attempt === attempts) {
+        break;
+      }
+      Bun.sleepSync(delayMs);
+    }
+  }
+  throw lastError;
 }
 
 export function buildDeploymentVerificationCommands(

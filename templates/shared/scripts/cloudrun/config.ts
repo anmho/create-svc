@@ -22,6 +22,9 @@ export const config = {
   domain: {
     hostname: "{{API_HOSTNAME}}",
     baseDomain: "{{API_BASE_DOMAIN}}",
+    cloudflareApiBaseUrl: "https://api.cloudflare.com/client/v4",
+    cloudflareVaultPath: "prod/providers/cloudflare",
+    cloudflareVaultField: "api_token",
   },
   auth: {
     issuer: "https://auth.anmho.com/api/auth",
