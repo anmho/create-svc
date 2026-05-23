@@ -115,6 +115,22 @@ export function gcloud(args: string[], options: CommandOptions = {}) {
   return run("gcloud", normalized, options);
 }
 
+export function gcloudWithRetry(args: string[], options: CommandOptions = {}) {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= 12; attempt += 1) {
+    try {
+      return gcloud(args, options);
+    } catch (error) {
+      lastError = error;
+      if (attempt === 12 || !isRetryableGcloudError(error)) {
+        break;
+      }
+      Bun.sleepSync(5_000);
+    }
+  }
+  throw lastError;
+}
+
 export async function runStep<T>(label: string, task: () => Promise<T> | T) {
   const indicator = spinner();
   indicator.start(label);
@@ -176,6 +192,7 @@ export function ensureServiceAccount(email: string) {
 
   const accountId = email.split("@")[0] ?? email;
   gcloud(["iam", "service-accounts", "create", accountId, "--project", config.project.id, "--display-name", accountId]);
+  waitForServiceAccount(email);
 }
 
 export function deleteServiceAccount(email: string) {
@@ -183,11 +200,11 @@ export function deleteServiceAccount(email: string) {
 }
 
 export function ensureProjectRole(member: string, role: string) {
-  gcloud(["projects", "add-iam-policy-binding", config.project.id, "--member", member, "--role", role]);
+  gcloudWithRetry(["projects", "add-iam-policy-binding", config.project.id, "--member", member, "--role", role]);
 }
 
 export function ensureServiceAccountRole(serviceAccount: string, member: string, role: string) {
-  gcloud([
+  gcloudWithRetry([
     "iam",
     "service-accounts",
     "add-iam-policy-binding",
@@ -229,7 +246,17 @@ export function accessSecretVersion(secretName: string) {
 }
 
 export function ensureSecretAccessor(secretName: string, member: string) {
-  gcloud(["secrets", "add-iam-policy-binding", secretName, "--project", config.project.id, "--member", member, "--role", "roles/secretmanager.secretAccessor"]);
+  gcloudWithRetry([
+    "secrets",
+    "add-iam-policy-binding",
+    secretName,
+    "--project",
+    config.project.id,
+    "--member",
+    member,
+    "--role",
+    "roles/secretmanager.secretAccessor",
+  ]);
 }
 
 export function listSecrets() {
@@ -735,6 +762,31 @@ function fetchJsonSync(url: string, init: { method: string; headers: Record<stri
     throw new Error(`Cloudflare request process failed\n${stderr}`);
   }
   return JSON.parse(decoder.decode(result.stdout).trim()) as { status: number; body: string };
+}
+
+function waitForServiceAccount(email: string) {
+  for (let attempt = 1; attempt <= 12; attempt += 1) {
+    if (gcloud(["iam", "service-accounts", "describe", email, "--project", config.project.id], { allowFailure: true }).success) {
+      return;
+    }
+    Bun.sleepSync(5_000);
+  }
+  throw new Error(`service account ${email} was created but is not yet readable`);
+}
+
+function isRetryableGcloudError(error: unknown) {
+  if (!(error instanceof CommandError)) {
+    return false;
+  }
+  const output = `${error.stdout}\n${error.stderr}`.toLowerCase();
+  return (
+    output.includes("does not exist") ||
+    output.includes("not found") ||
+    output.includes("permission denied") ||
+    output.includes("failed_precondition") ||
+    output.includes("try again") ||
+    output.includes("retry")
+  );
 }
 
 export function describeCloudRunService(serviceName: string): GcpResourceWithLabels | undefined {

@@ -90,6 +90,7 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
     expect(deployScript).toContain("serviceDomain");
     expect(deployScript).toContain("ensureProductionDomainMapping");
     expect(deployScript).toContain("ensureCloudflareDnsRecord");
+    expect(deployScript).toContain("gcloudWithRetry");
     expect(deployScript).toContain("CLOUDFLARE_API_TOKEN");
     expect(deployScript).toContain('"domain-mappings",');
     expect(deployScript).toContain('"--region",');

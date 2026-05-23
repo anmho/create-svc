@@ -8,6 +8,7 @@ import {
   ensureProductionDomainMapping,
   ensureSecretAccessor,
   gcloud,
+  gcloudWithRetry,
   imageUrl,
   parseDeployArgs,
   requireCommand,
@@ -74,7 +75,7 @@ export async function deploy(args = Bun.argv.slice(2)) {
   );
 
   await runStep("Granting public invoker access", () =>
-    gcloud([
+    gcloudWithRetry([
       "run",
       "services",
       "add-iam-policy-binding",
