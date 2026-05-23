@@ -161,7 +161,8 @@ export function ensureProject() {
 }
 
 export function attachBilling() {
-  if (config.project.mode === "use_existing") {
+  const projectMode = config.project.mode as "create_new" | "use_existing";
+  if (projectMode === "use_existing") {
     return "Using existing project billing";
   }
   gcloud(["beta", "billing", "projects", "link", config.project.id, "--billing-account", config.project.billingAccount]);

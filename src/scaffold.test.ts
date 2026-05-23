@@ -84,7 +84,7 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
 
     const deployScript = await Bun.file(join(generatedRoot, "scripts", "cloudrun", "lib.ts")).text();
     expect(deployScript).toContain('--billing-project", config.project.quotaProjectId');
-    expect(deployScript).toContain('config.project.mode === "use_existing"');
+    expect(deployScript).toContain('projectMode === "use_existing"');
     expect(deployScript).toContain("serviceDomain");
     expect(deployScript).toContain("ensureProductionDomainMapping");
     expect(deployScript).toContain('"domain-mappings",');
@@ -96,7 +96,10 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
     expect(await Bun.file(join(generatedRoot, "scripts", "cloudrun", "integrations.ts")).exists()).toBeFalse();
     const destroyScript = await Bun.file(join(generatedRoot, "scripts", "cloudrun", "cleanup.ts")).text();
     expect(destroyScript).toContain("assertOwnedResource");
-    expect(destroyScript).toContain("assertProductionDomainMappingOwned");
+    expect(destroyScript).toContain("Planning resources to destroy");
+    expect(destroyScript).toContain("Resources selected for destroy");
+    expect(destroyScript).toContain("Destroy cannot continue until resource discovery succeeds");
+    expect(destroyScript).toContain("deleteAuthResourceServer");
     expect(destroyScript).toContain("deleteGrafanaResources");
     expect(destroyScript).toContain('gcx", ["resources", "delete"');
     expect(destroyScript).toContain("config.temporal.apiKeySecretName");
@@ -135,6 +138,7 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
     expect(envExample).toContain("AUTH_ENABLED=false");
     expect(envExample).toContain("AUTH_AUDIENCE=api://dns-api");
     expect(envExample).toContain("CLOUDFLARE_ACCESS_SERVICE_TOKEN_CLIENT_ID=");
+    expect(envExample).toContain("VAULT_AUTHCTL_ACCESS_PATH=prod/apps/auth/authctl/cloudflare-access");
     expect(envExample).toContain("TEMPORAL_API_KEY=");
     expect(envExample).toContain("The base waitlist service does not require");
     expect(envExample).not.toContain("ATTACHMENT_BUCKET=");
@@ -146,6 +150,8 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
 
     const localEnv = await Bun.file(join(generatedRoot, ".env.local")).text();
     expect(localEnv).toContain(`DATABASE_URL=postgres://postgres:postgres@127.0.0.1:${localPort}/dns_api?sslmode=disable`);
+    expect(localEnv).toContain("VAULT_AUTHCTL_ACCESS_PATH=prod/apps/auth/authctl/cloudflare-access");
+    expect(localEnv).toContain("VAULT_NEON_API_KEY_PATH=prod/providers/neon");
     expect(localEnv).not.toContain("ATTACHMENT_PUBLIC_BASE_URL=");
 
     const ciWorkflow = await Bun.file(join(generatedRoot, ".github", "workflows", "ci.yml")).text();
@@ -223,6 +229,9 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
       expect(authctlScript).toContain("resource-servers");
       expect(authctlScript).toContain("clients");
       expect(authctlScript).toContain("defaultClientTargetArgs");
+      expect(authctlScript).toContain("deleteAuthResourceServer");
+      expect(authctlScript).toContain("readAuthctlAccessVaultField");
+      expect(authctlScript).toContain("prod/apps/auth/authctl/cloudflare-access");
       expect(authctlScript).toContain('existsSync("./node_modules/.bin/authctl") ? "./node_modules/.bin/authctl" : Bun.which("authctl")');
       expect(authctlScript).not.toContain('defaultAuthResourceServerArgs(), "--yes", "--json"');
       const authScript = await Bun.file(join(generatedRoot, "src", "auth.ts")).text();
