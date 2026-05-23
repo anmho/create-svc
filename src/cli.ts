@@ -16,7 +16,7 @@ import { readdirSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runPostScaffoldFlow } from "./post-scaffold";
-import { bootstrapGitHubRepository, buildGitBootstrapConfig } from "./git-bootstrap";
+import { bootstrapGitHubRepository, buildGitBootstrapConfig, commitAndPushGeneratedArtifacts } from "./git-bootstrap";
 import { listOpenBillingAccounts, listAccessibleProjects, type BillingAccount, type GcpProject } from "./gcp";
 import {
   BILLING_ACCOUNT_DEFAULT,
@@ -118,8 +118,15 @@ export async function run(argv: string[]) {
         const result = await runPostScaffoldFlow(config, targetDir);
         automationSpinner.stop(result.message);
       } catch (error) {
-        automationSpinner.stop("Post-scaffold automation skipped");
-        log.warn(error instanceof Error ? error.message : String(error));
+        automationSpinner.stop("Post-scaffold automation failed");
+        throw error;
+      }
+
+      if (gitResult.status === "created") {
+        const publishSpinner = spinner();
+        publishSpinner.start("Publishing generated artifacts");
+        const result = commitAndPushGeneratedArtifacts(targetDir, "Record generated deployment artifacts");
+        publishSpinner.stop(result.committed ? "Generated artifacts committed and pushed" : "Generated artifacts already committed");
       }
     }
 
@@ -320,7 +327,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
 }
 
 const CURRENT_VERSION = "0.1.9";
-const PACKAGE_NAME = "create-service";
+const PACKAGE_NAME = "create-svc";
 
 async function maybeCheckForUpdate(args: ParsedArgs) {
   if (args.noUpdateCheck || shouldSkipUpdateCheck()) {
@@ -833,10 +840,10 @@ Options:
   --billing-account <name>        Billing account resource name
   --quota-project <id>            Billing quota project for gcloud calls
   --region <region>               Cloud Run region
-  --auto-deploy                   Run service create after scaffold
+  --auto-deploy                   Run service create and service deploy after scaffold
   --no-auto-deploy                Scaffold only
   --no-git                        Skip git init, initial commit, GitHub repo creation, and push
-  --auto-update                   Re-run through create-service@latest when a newer version exists
+  --auto-update                   Re-run through create-svc@latest when a newer version exists
   --no-update-check               Skip the best-effort npm update check
   --yes, -y                       Accept defaults without prompts
   --help, -h                      Show this message

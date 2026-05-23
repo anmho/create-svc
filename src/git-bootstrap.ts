@@ -50,6 +50,16 @@ export async function bootstrapGitHubRepository(targetDir: string, config: GitBo
   };
 }
 
+export function commitAndPushGeneratedArtifacts(targetDir: string, message: string) {
+  run(["git", "add", "."], targetDir);
+  if (!hasStagedChanges(targetDir)) {
+    return { committed: false };
+  }
+  run(["git", "commit", "-m", message], targetDir);
+  run(["git", "push"], targetDir);
+  return { committed: true };
+}
+
 export function findExistingGitWorktree(targetDir: string) {
   const cwd = existingPath(targetDir);
   const result = Bun.spawnSync(["git", "-C", cwd, "rev-parse", "--show-toplevel"], {

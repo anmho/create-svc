@@ -15,12 +15,12 @@
 
 Local provisioning intentionally prefers known-good CLIs over SDK-heavy orchestration where that keeps the generated service easier to inspect and repair.
 
-npm: <https://www.npmjs.com/package/create-service>
+npm: <https://www.npmjs.com/package/create-svc>
 
 ## Usage
 
 ```bash
-bun create service my-service
+bun create svc my-service
 ```
 
 Compatibility alias:
@@ -32,13 +32,13 @@ bun create svc my-service
 or:
 
 ```bash
-bunx create-service my-service
+bunx create-svc my-service
 ```
 
 For the strict one-command production path:
 
 ```bash
-bun create service my-service --yes
+bun create svc my-service --yes
 ```
 
 `--profile microservice` is accepted as a compatibility no-op. App workspaces live outside this package in private app template repositories.
@@ -57,7 +57,7 @@ Without publishing to npm:
 ```bash
 bun install
 npm pack
-bunx ./create-service-*.tgz my-service
+bunx ./create-svc-*.tgz my-service
 ```
 
 For faster iteration against your working tree:
