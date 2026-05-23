@@ -1,4 +1,4 @@
-.PHONY: dev migrate gen lint test create deploy dashboards auth destroy
+.PHONY: dev migrate gen lint test create deploy dashboards observability-bootstrap auth destroy
 
 SERVICE := service
 
@@ -25,6 +25,9 @@ deploy:
 
 dashboards:
 	$(SERVICE) dashboards
+
+observability-bootstrap:
+	$(SERVICE) observability-bootstrap
 
 auth:
 	$(SERVICE) auth $(ARGS)

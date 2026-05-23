@@ -219,6 +219,8 @@ function buildReplacements(config: ScaffoldConfig) {
     COMMAND_DEV_DOWN: "service dev down",
     COMMAND_BOOTSTRAP: "service create",
     COMMAND_DEPLOY: "service deploy",
+    COMMAND_OBSERVABILITY_BOOTSTRAP:
+      config.runtime === "bun" ? "bun run observability-bootstrap" : "make observability-bootstrap",
     COMMAND_AUTH_RESOURCE: "service auth resource-server",
     COMMAND_AUTH_CLIENT: "service auth client create",
     COMMAND_AUTH_TOKEN: "service auth token",

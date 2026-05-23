@@ -198,6 +198,7 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
       expect(packageJson).toContain('"create": "service create"');
       expect(packageJson).toContain('"deploy": "service deploy"');
       expect(packageJson).toContain('"dashboards": "service dashboards"');
+      expect(packageJson).toContain('"observability-bootstrap": "service observability-bootstrap"');
       expect(packageJson).toContain('"auth": "service auth"');
       expect(packageJson).toContain('"destroy": "service destroy"');
       expect(await Bun.file(join(generatedRoot, "scripts", "cloudrun", "cli.ts")).exists()).toBeFalse();
@@ -206,12 +207,15 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
       expect(serviceConfig).toContain('"service_id": "dns-api"');
       expect(serviceConfig).toContain('"project_id": "anmho-dns-api"');
       expect(serviceConfig).toContain('"database_name": "dns_api"');
+      expect(serviceConfig).toContain('"observability"');
+      expect(serviceConfig).toContain("logging.googleapis.com");
       const authScript = await Bun.file(join(generatedRoot, "src", "auth.ts")).text();
       expect(authScript).toContain('"Ed25519"');
 
       const makefile = await Bun.file(join(generatedRoot, "Makefile")).text();
       expect(makefile).toContain("SERVICE := service");
       expect(makefile).toContain("dashboards:");
+      expect(makefile).toContain("observability-bootstrap:");
       expect(makefile).toContain("auth:");
       expect(makefile).toContain("bun run dev");
       const devScript = await Bun.file(join(generatedRoot, "scripts", "dev.ts")).text();
@@ -275,6 +279,8 @@ test("scaffolds a backend package cleanly into a nested monorepo-style directory
   expect(readme).toContain("known-good CLIs");
   expect(readme).toContain("service create");
   expect(readme).toContain("service deploy");
+  expect(readme).toContain("Google observability bootstrap");
+  expect(readme).toContain("Google Cloud Logging, Monitoring, and Trace APIs");
   expect(readme).toContain("one-command production create");
   expect(readme).toContain("waitlist/launch service");
   expect(readme).toContain("Terraform is optional");

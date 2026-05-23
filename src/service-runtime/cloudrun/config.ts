@@ -55,6 +55,9 @@ export const config = {
     repository: serviceConfig.git?.repository || serviceConfig.service_id,
     deleteOnDestroy: Boolean(serviceConfig.git?.delete_on_destroy),
   },
+  observability: {
+    requiredApis: serviceConfig.observability?.required_apis ?? ["logging.googleapis.com", "monitoring.googleapis.com", "cloudtrace.googleapis.com"],
+  },
   requiredApis: cloudrun.required_apis,
 } as const;
 

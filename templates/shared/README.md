@@ -9,6 +9,7 @@ This `{{PROFILE}}` profile targets `{{RUNTIME}} + {{FRAMEWORK}}` on Cloud Run wi
 - local Docker Compose Postgres for first-run development
 - the `service` CLI for create, deploy, doctor, dashboards, and destroy
 - shared GCP project deployment with quota-project-aware `gcloud` calls
+- Google Cloud Observability API bootstrap through `service observability-bootstrap`
 - Neon-backed remote database provisioning during create and deploy
 - Better Auth client-credentials resource-server registration through `authctl`
 - stage-aware waitlist data and trigger ingestion
@@ -76,6 +77,20 @@ Cloud Run deploys build and push the container image locally by default. Use
 Build to build the image remotely.
 Local Docker builds target `linux/amd64` so images built on Apple Silicon run on
 Cloud Run.
+
+## Google observability bootstrap
+
+Run this after the first production create when you want the project ready for
+Google Cloud Observability follow-up work:
+
+```bash
+{{COMMAND_OBSERVABILITY_BOOTSTRAP}}
+```
+
+The command authenticates through `gcloud`, targets the generated GCP project,
+and enables the Google Cloud Logging, Monitoring, and Trace APIs. It does not
+create dashboards, alerts, log-based metrics, or SLOs; those remain explicit
+follow-up work.
 
 Authenticate `gcloud` on the machine before running provisioning commands:
 

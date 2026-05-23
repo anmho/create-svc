@@ -23,6 +23,7 @@ type VariantDefinition = {
   runtime: Runtime;
   framework: Framework;
   commandSteps: ValidationCommandStep[];
+  generatedChecks: GeneratedCheck[];
   smokeChecks: SmokeCheck[];
 };
 
@@ -30,6 +31,12 @@ export type ValidationCommandStep = {
   name: string;
   command: string[];
   failureHint?: string;
+};
+
+export type GeneratedCheck = {
+  name: string;
+  file: string;
+  includes: string[];
 };
 
 export type SmokeCheck = {
@@ -50,6 +57,7 @@ export type ValidationPlanItem = {
   directoryName: string;
   composeProjectName: string;
   commandSteps: ValidationCommandStep[];
+  generatedChecks: GeneratedCheck[];
   smokeChecks: SmokeCheck[];
 };
 
@@ -81,6 +89,7 @@ const VARIANT_DEFINITIONS: Record<GeneratedVariant, VariantDefinition> = {
       { name: "run tests", command: ["bun", "run", "test"] },
       { name: "run lint", command: ["bun", "run", "lint"] },
     ],
+    generatedChecks: generatedChecksFor("bun"),
     smokeChecks: [{ name: "health endpoint", path: "/healthz" }],
   },
   "bun-connectrpc": {
@@ -96,6 +105,7 @@ const VARIANT_DEFINITIONS: Record<GeneratedVariant, VariantDefinition> = {
       { name: "run tests", command: ["bun", "run", "test"] },
       { name: "run lint", command: ["bun", "run", "lint"] },
     ],
+    generatedChecks: generatedChecksFor("bun"),
     smokeChecks: [
       { name: "health endpoint", path: "/healthz" },
       { name: "connect json endpoint", kind: "connect-http" },
@@ -113,6 +123,7 @@ const VARIANT_DEFINITIONS: Record<GeneratedVariant, VariantDefinition> = {
       { name: "run migrations", command: ["make", "migrate"] },
       { name: "run tests", command: ["make", "test"] },
     ],
+    generatedChecks: generatedChecksFor("go"),
     smokeChecks: [{ name: "health endpoint", path: "/healthz" }],
   },
   "go-connectrpc": {
@@ -127,6 +138,7 @@ const VARIANT_DEFINITIONS: Record<GeneratedVariant, VariantDefinition> = {
       { name: "run migrations", command: ["make", "migrate"] },
       { name: "run tests", command: ["make", "test"] },
     ],
+    generatedChecks: generatedChecksFor("go"),
     smokeChecks: [
       { name: "health endpoint", path: "/healthz" },
       { name: "typed grpc client", kind: "connect-client" },
@@ -142,6 +154,7 @@ const VARIANT_DEFINITIONS: Record<GeneratedVariant, VariantDefinition> = {
       { name: "run tests", command: ["bun", "run", "test"] },
       { name: "run lint", command: ["bun", "run", "lint"] },
     ],
+    generatedChecks: [],
     smokeChecks: [],
   },
 };
@@ -225,6 +238,7 @@ export function planValidation(args: string[] | ValidationOptions): ValidationPl
       directoryName: name,
       composeProjectName: `create_svc_${composeRunId}_${name}`.replace(/[^a-zA-Z0-9_-]/g, "_"),
       commandSteps: withAuthctlCommandSurfaceCheck(definition.commandSteps),
+      generatedChecks: definition.generatedChecks,
       smokeChecks: definition.smokeChecks,
     };
   });
@@ -259,6 +273,11 @@ export async function validateGeneratedApps(args: string[] = Bun.argv.slice(2)) 
       try {
         console.log(`→ ${item.name}: scaffold`);
         await scaffoldProject(createScaffoldConfig(item, generatedRoot, generatorRoot));
+
+        for (const check of item.generatedChecks) {
+          console.log(`→ ${item.name}: check ${check.name}`);
+          await runGeneratedCheck(generatedRoot, check);
+        }
 
         for (const step of item.commandSteps) {
           console.log(`→ ${item.name}: ${step.name}`);
@@ -321,6 +340,55 @@ function parseGeneratedProfile(value: string): Profile {
     throw new Error("The app profile has moved out of create-service");
   }
   throw new Error(`Unknown generated profile: ${value}`);
+}
+
+function generatedChecksFor(runtime: Runtime): GeneratedCheck[] {
+  const publicCommand = runtime === "bun" ? "bun run observability-bootstrap" : "make observability-bootstrap";
+  const commandFile =
+    runtime === "bun"
+      ? {
+          name: "observability package script",
+          file: "package.json",
+          includes: ['"observability-bootstrap": "service observability-bootstrap"'],
+        }
+      : {
+          name: "observability make target",
+          file: "Makefile",
+          includes: ["observability-bootstrap", "$(SERVICE) observability-bootstrap"],
+        };
+
+  return [
+    commandFile,
+    {
+      name: "observability README contract",
+      file: "README.md",
+      includes: [
+        publicCommand,
+        "Google observability bootstrap",
+        "Google Cloud Logging, Monitoring, and Trace APIs",
+      ],
+    },
+    {
+      name: "observability CLI contract",
+      file: "service.jsonc",
+      includes: ['"observability"', "logging.googleapis.com", "monitoring.googleapis.com", "cloudtrace.googleapis.com"],
+    },
+  ];
+}
+
+async function runGeneratedCheck(generatedRoot: string, check: GeneratedCheck) {
+  const content = await Bun.file(join(generatedRoot, check.file)).text();
+  const missing = check.includes.filter((expected) => !content.includes(expected));
+
+  if (missing.length > 0) {
+    throw new Error(
+      [
+        `generated check failed: ${check.name}`,
+        `file: ${check.file}`,
+        ...missing.map((expected) => `missing: ${expected}`),
+      ].join("\n")
+    );
+  }
 }
 
 function createScaffoldConfig(

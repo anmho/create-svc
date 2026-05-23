@@ -39,6 +39,20 @@ test("plans the public commands for the bun hono tracer bullet", () => {
     { name: "run tests", command: ["bun", "run", "test"] },
     { name: "run lint", command: ["bun", "run", "lint"] },
   ]);
+  expect(plan[0]?.generatedChecks).toContainEqual({
+    name: "observability package script",
+    file: "package.json",
+    includes: ['"observability-bootstrap": "service observability-bootstrap"'],
+  });
+  expect(plan[0]?.generatedChecks).toContainEqual({
+    name: "observability README contract",
+    file: "README.md",
+    includes: [
+      "bun run observability-bootstrap",
+      "Google observability bootstrap",
+      "Google Cloud Logging, Monitoring, and Trace APIs",
+    ],
+  });
   expect(plan[0]?.smokeChecks).toEqual([{ name: "health endpoint", path: "/healthz" }]);
 });
 
@@ -88,6 +102,11 @@ test("plans a typed gRPC client smoke for the go connectrpc variant", () => {
   expect(plan[0]?.smokeChecks).toContainEqual({
     name: "typed grpc client",
     kind: "connect-client",
+  });
+  expect(plan[0]?.generatedChecks).toContainEqual({
+    name: "observability make target",
+    file: "Makefile",
+    includes: ["observability-bootstrap", "$(SERVICE) observability-bootstrap"],
   });
 });
 
