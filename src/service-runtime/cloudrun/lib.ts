@@ -1,5 +1,7 @@
 import { intro, log, outro, spinner } from "@clack/prompts";
+import { join } from "node:path";
 import { config } from "./config";
+import { serviceRoot } from "../runtime";
 
 type CommandOptions = {
   allowFailure?: boolean;
@@ -422,7 +424,7 @@ export function resolveDeploymentTarget(environment: DeployArgs["environment"], 
 }
 
 export async function renderManifest(image: string, target: DeploymentTarget) {
-  const template = await Bun.file(new URL("../../service.yaml", import.meta.url)).text();
+  const template = await Bun.file(join(serviceRoot, "service.yaml")).text();
   const temporal = resolveTemporalRuntimeConfig();
   const values = {
     SERVICE_NAME: target.serviceName,

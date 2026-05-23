@@ -7,7 +7,7 @@
 - Go or Bun runtime choices where the target supports them
 - HTTP frameworks (`chi` or `hono`) and ConnectRPC variants
 - standalone package output that does not assume repo bootstrap
-- a generated `service.config.ts` manifest
+- a generated `service.jsonc` manifest
 - one `service` CLI for scaffold, create, deploy, migrate, seed, dashboards, doctor, and destroy
 - local Docker Compose Postgres for first-run development
 - Neon-backed remote environments

@@ -59,7 +59,7 @@ No cloud credentials are required for local HTTP development after Docker and Po
 
 ## Remote provisioning
 
-The generated service config lives in [service.config.ts](service.config.ts).
+The generated service config lives in [service.jsonc](service.jsonc).
 
 Create, deploy, and destroy use:
 

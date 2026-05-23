@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { run as runScaffoldCli } from "./cli";
+import { parseJsonc } from "./jsonc";
 
 const SCAFFOLD_COMMANDS = new Set(["create", "new", "init"]);
 
@@ -41,7 +42,7 @@ export function findGeneratedServiceRoot(start: string): string | undefined {
 }
 
 function isGeneratedServiceRoot(path: string) {
-  return existsSync(join(path, "service.config.ts"));
+  return existsSync(join(path, "service.jsonc"));
 }
 
 async function delegateToGeneratedService(serviceRoot: string, argv: string[]) {
@@ -49,7 +50,7 @@ async function delegateToGeneratedService(serviceRoot: string, argv: string[]) {
   process.chdir(serviceRoot);
   process.env.CREATE_SVC_SERVICE_ROOT = serviceRoot;
 
-  const serviceConfig = (await import(`${serviceRoot}/service.config.ts`)).default;
+  const serviceConfig = parseJsonc(await Bun.file(join(serviceRoot, "service.jsonc")).text()) as { target?: string };
   if (serviceConfig.target === "workers") {
     const { main } = await import("./service-runtime/workers/cli");
     await main(argv);

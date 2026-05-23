@@ -1,0 +1,106 @@
+{
+  // The installed `service` CLI reads this file to choose Cloud Run vs Workers
+  // operations for this generated repo.
+  "service_id": "{{SERVICE_ID}}",
+  "target": "{{TARGET}}",
+  "runtime": "{{RUNTIME}}",
+  "framework": "{{FRAMEWORK}}",
+  "profile": "{{PROFILE}}",
+  "stage_default": "prod",
+
+  "example": {
+    "kind": "{{EXAMPLE_KIND}}",
+    "domain": "{{EXAMPLE_DOMAIN}}",
+    "label": "{{EXAMPLE_LABEL}}"
+  },
+
+  "dns": {
+    "hostname": "{{API_HOSTNAME}}",
+    "base_domain": "{{API_BASE_DOMAIN}}",
+    "cloudflare_api_base_url": "https://api.cloudflare.com/client/v4",
+    "cloudflare_vault_path": "prod/providers/cloudflare",
+    "cloudflare_vault_field": "api_token"
+  },
+
+  "ownership": {
+    "managed_by": "create-service",
+    "service_id": "{{SERVICE_ID}}"
+  },
+
+  "auth": {
+    "issuer": "{{AUTH_ISSUER}}",
+    "token_endpoint": "https://auth.anmho.com/api/auth/oauth2/token",
+    "jwks_url": "https://auth.anmho.com/api/auth/jwks",
+    "resource_server": {
+      "id": "{{SERVICE_ID}}",
+      "audience": "api://{{SERVICE_ID}}",
+      "default_scopes": ["{{SERVICE_ID}}:read", "{{SERVICE_ID}}:write"]
+    },
+    "client": {
+      "app_id": "{{SERVICE_ID}}",
+      "identity": "server",
+      "vault_path_prefix": "prod/apps/{{SERVICE_ID}}/server/oauth-clients"
+    }
+  },
+
+  "temporal": {
+    "enabled": false,
+    "address": "localhost:7233",
+    "namespace": "default",
+    "task_queue": "{{SERVICE_ID}}",
+    "api_key_secret_name": "{{SERVICE_ID}}-temporal-api-key"
+  },
+
+  "providers": {
+    "vault": {
+      "mount": "secret",
+      "neon_path": "prod/providers/neon",
+      "cloudflare_path": "prod/providers/cloudflare",
+      "grafana_path": "prod/providers/grafana",
+      "clerk_m2m_path": "prod/providers/clerk-m2m",
+      "temporal_path": "prod/providers/temporal"
+    }
+  },
+
+  "neon": {
+    "project_id": "{{NEON_PROJECT_ID}}",
+    "base_branch_id": "{{NEON_BASE_BRANCH_ID}}",
+    "base_branch_name": "{{NEON_BASE_BRANCH_NAME}}",
+    "database_name": "{{NEON_DATABASE_NAME}}",
+    "role_name": "{{NEON_ROLE_NAME}}",
+    "preview_branch_prefix": "{{NEON_PREVIEW_BRANCH_PREFIX}}",
+    "personal_branch_prefix": "{{NEON_PERSONAL_BRANCH_PREFIX}}"
+  },
+
+  "buf": {
+    "module": "buf.build/anmho/{{SERVICE_ID}}"
+  },
+
+  "cloudrun": {
+    "project_id": "{{PROJECT_ID}}",
+    "project_name": "{{PROJECT_NAME}}",
+    "project_mode": "{{GCP_PROJECT_MODE}}",
+    "create_if_missing": {{PROJECT_CREATE_IF_MISSING}},
+    "billing_account": "{{BILLING_ACCOUNT}}",
+    "quota_project_id": "{{QUOTA_PROJECT_ID}}",
+    "region": "{{REGION}}",
+    "artifact_repository": "cloud-run",
+    "service_account": "{{RUNTIME_SERVICE_ACCOUNT}}",
+    "required_apis": [
+      "run.googleapis.com",
+      "cloudbuild.googleapis.com",
+      "artifactregistry.googleapis.com",
+      "iam.googleapis.com",
+      "iamcredentials.googleapis.com",
+      "secretmanager.googleapis.com",
+      "serviceusage.googleapis.com",
+      "sts.googleapis.com"
+    ]
+  },
+
+  "workers": {
+    "script_name": "{{SERVICE_ID}}",
+    "hyperdrive_binding": "HYPERDRIVE",
+    "cron": "*/15 * * * *"
+  }
+}

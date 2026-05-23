@@ -21,7 +21,7 @@ test("findGeneratedServiceRoot detects generated service context from nested dir
   const serviceRoot = join(root, "generated-api");
   const nested = join(serviceRoot, "src", "waitlist");
   await mkdir(nested, { recursive: true });
-  await writeFile(join(serviceRoot, "service.config.ts"), "export default {}");
+  await writeFile(join(serviceRoot, "service.jsonc"), "{}");
 
   expect(findGeneratedServiceRoot(nested)).toBe(serviceRoot);
   expect(findGeneratedServiceRoot(root)).toBeUndefined();
