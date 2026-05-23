@@ -97,7 +97,7 @@ export function runAuthCommand(args: string[]) {
 
 export function ensureAuthResourceServer() {
   const command = ensureResourceServerCommandAvailable();
-  authctl([command.subject, command.mutationAction, ...defaultAuthResourceServerArgs(), "--json"]);
+  authctl([command.subject, command.mutationAction, ...defaultAuthResourceServerArgs(), "--json"], { quiet: true });
   return `Auth resource server ready: ${serviceConfig.auth.resource_server.audience}`;
 }
 
@@ -107,16 +107,19 @@ export function deleteAuthResourceServer() {
     return "authctl does not expose resource-server delete; auth resource server was not deleted";
   }
 
-  authctl([
-    command.subject,
-    "delete",
-    "--resource-server",
-    serviceConfig.auth.resource_server.id,
-    "--stage",
-    serviceConfig.stage_default,
-    "--force",
-    "--json",
-  ]);
+  authctl(
+    [
+      command.subject,
+      "delete",
+      "--resource-server",
+      serviceConfig.auth.resource_server.id,
+      "--stage",
+      serviceConfig.stage_default,
+      "--force",
+      "--json",
+    ],
+    { quiet: true }
+  );
   return `Auth resource server deleted: ${serviceConfig.auth.resource_server.id}`;
 }
 

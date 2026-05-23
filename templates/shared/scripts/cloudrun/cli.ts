@@ -2,7 +2,7 @@
 
 import { mkdir } from "node:fs/promises";
 import { ensureAuthResourceServer, runAuthCommand, runAuthDoctor } from "../authctl";
-import { bootstrap } from "./bootstrap";
+import { bootstrap, prepareGcpProject } from "./bootstrap";
 import { cleanup } from "./cleanup";
 import { deploy } from "./deploy";
 import { config } from "./config";
@@ -35,8 +35,9 @@ async function main(argv = Bun.argv.slice(2)) {
     await runMain("Create", async () => {
       assertServiceNameAvailable(config.serviceName);
       assertProductionDomainAvailable(config.serviceName);
+      await prepareGcpProject();
       await runStep("Registering auth resource server", () => ensureAuthResourceServer());
-      await bootstrap();
+      await bootstrap({ skipProjectSetup: true });
       const target = resolveDeploymentTarget("main");
       const databaseUrl = await runStep("Reading production database URL", () => accessSecretVersion(target.databaseSecretName));
       await runStep("Applying production migrations", () => runLanguageTask("migrate", { DATABASE_URL: databaseUrl }));
