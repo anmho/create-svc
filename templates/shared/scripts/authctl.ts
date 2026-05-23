@@ -58,9 +58,23 @@ export function runAuthCommand(args: string[]) {
         "authctl is installed but does not expose resource-server commands; install @anmho/authctl@0.1.1 or newer before managing auth resource servers"
       );
     }
-    if (action === "get" || action === "list") {
+    if (action === "get" || action === "list" || action === "delete") {
       if (!command.actions.includes(action)) {
         throw new Error(`authctl ${command.subject} does not expose ${action}`);
+      }
+      if (action === "delete") {
+        authctl([
+          command.subject,
+          action,
+          "--resource-server",
+          serviceConfig.auth.resource_server.id,
+          "--stage",
+          serviceConfig.stage_default,
+          "--force",
+          "--json",
+          ...rest,
+        ]);
+        return `Auth resource server deleted: ${serviceConfig.auth.resource_server.id}`;
       }
       authctl([command.subject, action, ...rest]);
       return `Auth resource server ${action} finished`;
@@ -85,6 +99,25 @@ export function ensureAuthResourceServer() {
   const command = ensureResourceServerCommandAvailable();
   authctl([command.subject, command.mutationAction, ...defaultAuthResourceServerArgs(), "--json"]);
   return `Auth resource server ready: ${serviceConfig.auth.resource_server.audience}`;
+}
+
+export function deleteAuthResourceServer() {
+  const command = resolveResourceServerCommand();
+  if (!command?.actions.includes("delete")) {
+    return "authctl does not expose resource-server delete; auth resource server was not deleted";
+  }
+
+  authctl([
+    command.subject,
+    "delete",
+    "--resource-server",
+    serviceConfig.auth.resource_server.id,
+    "--stage",
+    serviceConfig.stage_default,
+    "--force",
+    "--json",
+  ]);
+  return `Auth resource server deleted: ${serviceConfig.auth.resource_server.id}`;
 }
 
 export function runAuthDoctor(): AuthDoctorResult {
@@ -185,7 +218,7 @@ function resolveResourceServerCommand(): ResourceServerCommand | undefined {
     if (!help.success || !output.includes(subject)) {
       continue;
     }
-    const actions = ["upsert", "create", "get", "list"].filter((candidate) => output.includes(candidate));
+    const actions = ["upsert", "create", "get", "list", "delete"].filter((candidate) => output.includes(candidate));
     const mutationAction = actions.includes("upsert") ? "upsert" : actions.includes("create") ? "create" : undefined;
     if (actions.length > 0) {
       return { subject, mutationAction, actions };
@@ -202,7 +235,7 @@ function authctl(args: string[], options: { allowFailure?: boolean; quiet?: bool
 
   const result = Bun.spawnSync([command, ...args], {
     cwd: process.cwd(),
-    env: process.env,
+    env: authctlEnvironment(),
     stdin: "inherit",
     stdout: "pipe",
     stderr: "pipe",
@@ -232,10 +265,9 @@ function formatAuthctlFailure(args: string[], output: CommandResult) {
     return [
       `authctl ${args.join(" ")} failed with exit code ${output.exitCode}`,
       "authctl reached the auth internal API, but Cloudflare Access rejected the request.",
-      "Export the authctl Cloudflare Access service token before running service create:",
-      '  export AUTH_INTERNAL_BASE_URL="$(vault kv get -mount=secret -field=AUTH_INTERNAL_BASE_URL prod/apps/auth/authctl/cloudflare-access)"',
-      '  export CLOUDFLARE_ACCESS_SERVICE_TOKEN_CLIENT_ID="$(vault kv get -mount=secret -field=CLOUDFLARE_ACCESS_SERVICE_TOKEN_CLIENT_ID prod/apps/auth/authctl/cloudflare-access)"',
-      '  export CLOUDFLARE_ACCESS_SERVICE_TOKEN_CLIENT_SECRET="$(vault kv get -mount=secret -field=CLOUDFLARE_ACCESS_SERVICE_TOKEN_CLIENT_SECRET prod/apps/auth/authctl/cloudflare-access)"',
+      "The service CLI tried to load the authctl Access token from Vault.",
+      "Verify `vault login` works and that this path is readable:",
+      "  secret/prod/apps/auth/authctl/cloudflare-access",
     ].join("\n");
   }
 
@@ -244,4 +276,59 @@ function formatAuthctlFailure(args: string[], output: CommandResult) {
 
 function authctlPath() {
   return existsSync("./node_modules/.bin/authctl") ? "./node_modules/.bin/authctl" : Bun.which("authctl");
+}
+
+function authctlEnvironment() {
+  const env = { ...process.env };
+  const fields = [
+    {
+      envName: "AUTH_INTERNAL_BASE_URL",
+      fieldEnvName: "VAULT_AUTHCTL_ACCESS_BASE_URL_FIELD",
+      defaultField: "AUTH_INTERNAL_BASE_URL",
+    },
+    {
+      envName: "CLOUDFLARE_ACCESS_SERVICE_TOKEN_CLIENT_ID",
+      fieldEnvName: "VAULT_AUTHCTL_ACCESS_CLIENT_ID_FIELD",
+      defaultField: "CLOUDFLARE_ACCESS_SERVICE_TOKEN_CLIENT_ID",
+    },
+    {
+      envName: "CLOUDFLARE_ACCESS_SERVICE_TOKEN_CLIENT_SECRET",
+      fieldEnvName: "VAULT_AUTHCTL_ACCESS_CLIENT_SECRET_FIELD",
+      defaultField: "CLOUDFLARE_ACCESS_SERVICE_TOKEN_CLIENT_SECRET",
+    },
+  ];
+
+  for (const field of fields) {
+    if (env[field.envName]?.trim()) {
+      continue;
+    }
+    const value = readAuthctlAccessVaultField(env, env[field.fieldEnvName]?.trim() || field.defaultField);
+    if (value) {
+      env[field.envName] = value;
+    }
+  }
+
+  return env;
+}
+
+function readAuthctlAccessVaultField(env: Record<string, string | undefined>, field: string) {
+  const vault = Bun.which("vault");
+  if (!vault) {
+    return "";
+  }
+
+  const mount = env.VAULT_AUTHCTL_ACCESS_MOUNT?.trim() || env.VAULT_SECRET_MOUNT?.trim() || "secret";
+  const path = env.VAULT_AUTHCTL_ACCESS_PATH?.trim() || "prod/apps/auth/authctl/cloudflare-access";
+  const result = Bun.spawnSync([vault, "kv", "get", `-mount=${mount}`, `-field=${field}`, path], {
+    cwd: process.cwd(),
+    env,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+
+  if (!result.success || !result.stdout) {
+    return "";
+  }
+
+  return decoder.decode(result.stdout).trim();
 }

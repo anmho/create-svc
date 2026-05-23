@@ -104,14 +104,17 @@ The scaffold will use, in order:
 
 That keeps stable settings in the repo and keeps the token out of `~/.zshrc`.
 
-For production auth registration, `authctl` also needs the auth service's
-Cloudflare Access service token:
+For production auth registration, `authctl` loads the auth service's Cloudflare
+Access service token from Vault by default:
 
-```bash
-export AUTH_INTERNAL_BASE_URL="$(vault kv get -mount=secret -field=AUTH_INTERNAL_BASE_URL prod/apps/auth/authctl/cloudflare-access)"
-export CLOUDFLARE_ACCESS_SERVICE_TOKEN_CLIENT_ID="$(vault kv get -mount=secret -field=CLOUDFLARE_ACCESS_SERVICE_TOKEN_CLIENT_ID prod/apps/auth/authctl/cloudflare-access)"
-export CLOUDFLARE_ACCESS_SERVICE_TOKEN_CLIENT_SECRET="$(vault kv get -mount=secret -field=CLOUDFLARE_ACCESS_SERVICE_TOKEN_CLIENT_SECRET prod/apps/auth/authctl/cloudflare-access)"
-```
+- `VAULT_AUTHCTL_ACCESS_PATH` default `prod/apps/auth/authctl/cloudflare-access`
+- `VAULT_AUTHCTL_ACCESS_BASE_URL_FIELD` default `AUTH_INTERNAL_BASE_URL`
+- `VAULT_AUTHCTL_ACCESS_CLIENT_ID_FIELD` default `CLOUDFLARE_ACCESS_SERVICE_TOKEN_CLIENT_ID`
+- `VAULT_AUTHCTL_ACCESS_CLIENT_SECRET_FIELD` default `CLOUDFLARE_ACCESS_SERVICE_TOKEN_CLIENT_SECRET`
+
+Direct `AUTH_INTERNAL_BASE_URL`, `CLOUDFLARE_ACCESS_SERVICE_TOKEN_CLIENT_ID`,
+and `CLOUDFLARE_ACCESS_SERVICE_TOKEN_CLIENT_SECRET` env values still override
+Vault when set.
 
 Before first production create, verify the installed `authctl` exposes the
 resource-server control-plane command:
@@ -127,6 +130,7 @@ newer before running `{{COMMAND_BOOTSTRAP}}`.
 Optional remote-only Vault overrides for Neon admin key lookup:
 
 - `VAULT_SECRET_MOUNT` default `secret`
+- `VAULT_AUTHCTL_ACCESS_PATH` default `prod/apps/auth/authctl/cloudflare-access`
 - `VAULT_NEON_API_KEY_PATH` default `prod/providers/neon`
 - `VAULT_NEON_API_KEY_FIELD` default `api_key`
 

@@ -1,4 +1,5 @@
 import { confirm, isCancel, log } from "@clack/prompts";
+import { deleteAuthResourceServer } from "../authctl";
 import { config } from "./config";
 import { deleteBranch, deleteDatabase, listBranches, resolveNeonConfig } from "./neon";
 import {
@@ -11,6 +12,7 @@ import {
   describeCloudRunService,
   describeProductionDomainMapping,
   describeSecret,
+  formatError,
   listCloudRunServices,
   listSecrets,
   parseCleanupArgs,
@@ -34,18 +36,46 @@ function matchesSecretResource(name: string) {
   );
 }
 
+type PlannedResource = {
+  label: string;
+  detail?: string;
+};
+
+type DestroyPlan = {
+  resources: PlannedResource[];
+  skipped: PlannedResource[];
+  blockers: string[];
+  hasProductionDomainMapping: boolean;
+  serviceNames: string[];
+  secretNames: string[];
+  neon?: {
+    projectId: string;
+    baseBranchId: string;
+    databaseName: string;
+    branches: Array<{ id: string; name: string }>;
+  };
+};
+
 export async function cleanup(args = Bun.argv.slice(2)) {
   requireCommand("gcloud");
   requireGcloudAuth();
 
   const options = parseCleanupArgs(args);
+  const plan = await runStep("Planning resources to destroy", () => buildDestroyPlan(options.destroyProject));
+  printDestroyPlan(plan);
+  if (plan.blockers.length > 0) {
+    throw new Error(["Destroy cannot continue until resource discovery succeeds:", ...plan.blockers.map((blocker) => `- ${blocker}`)].join("\n"));
+  }
+
   await requireDestroyConfirmation(options.force);
 
-  await runStep(`Verifying production domain mapping ${config.domain.hostname}`, () => assertProductionDomainMappingOwned());
-  await runStep(`Deleting production domain mapping ${config.domain.hostname}`, () => deleteProductionDomainMapping());
+  await runStep(`Deleting auth resource server ${config.serviceName}`, () => deleteAuthResourceServer());
 
-  const services = await runStep("Finding Cloud Run services", () => listCloudRunServices());
-  const serviceNames = services.filter(matchesServiceResource);
+  if (plan.hasProductionDomainMapping) {
+    await runStep(`Deleting production domain mapping ${config.domain.hostname}`, () => deleteProductionDomainMapping());
+  }
+
+  const serviceNames = plan.serviceNames;
   await runStep("Deleting Cloud Run services", () => {
     for (const serviceName of serviceNames) {
       assertOwnedResource(`Cloud Run service ${serviceName}`, describeCloudRunService(serviceName));
@@ -53,8 +83,7 @@ export async function cleanup(args = Bun.argv.slice(2)) {
     }
   });
 
-  const secrets = await runStep("Finding service secrets", () => listSecrets());
-  const secretNames = secrets.filter(matchesSecretResource);
+  const secretNames = plan.secretNames;
   await runStep("Deleting service secrets", () => {
     for (const secretName of secretNames) {
       assertOwnedResource(`Secret ${secretName}`, describeSecret(secretName));
@@ -62,24 +91,15 @@ export async function cleanup(args = Bun.argv.slice(2)) {
     }
   });
 
-  try {
-    const neon = await runStep("Resolving Neon defaults", () => resolveNeonConfig());
-    const branches = await runStep("Finding Neon branches", () => listBranches(neon.projectId));
-    const disposableBranches = branches.filter(
-      (branch: { name: string }) =>
-        branch.name.startsWith(`${neon.previewBranchPrefix}-`) || branch.name.startsWith(`${neon.personalBranchPrefix}-`)
-    );
-
+  const neonPlan = plan.neon;
+  if (neonPlan) {
     await runStep("Deleting Neon preview and personal branches", async () => {
-      for (const branch of disposableBranches) {
-        await deleteBranch(neon.projectId, branch.id);
+      for (const branch of neonPlan.branches) {
+        await deleteBranch(neonPlan.projectId, branch.id);
       }
     });
 
-    await runStep("Deleting Neon service database", () => deleteDatabase(neon.projectId, neon.baseBranchId, neon.databaseName));
-  } catch (error) {
-    log.step("Skipping Neon cleanup because Neon is not configured");
-    log.step(error instanceof Error ? error.message : String(error));
+    await runStep("Deleting Neon service database", () => deleteDatabase(neonPlan.projectId, neonPlan.baseBranchId, neonPlan.databaseName));
   }
 
   await runStep("Deleting Grafana resources", async () => deleteGrafanaResources());
@@ -97,6 +117,134 @@ export async function cleanup(args = Bun.argv.slice(2)) {
   return `Destroy finished for ${config.serviceName}`;
 }
 
+async function buildDestroyPlan(destroyProject: boolean): Promise<DestroyPlan> {
+  const plan: DestroyPlan = {
+    resources: [
+      { label: `Auth resource server ${config.serviceName}`, detail: "stage prod" },
+      { label: `Runtime service account ${config.runtimeServiceAccount}`, detail: "if it exists" },
+    ],
+    skipped: [],
+    blockers: [],
+    hasProductionDomainMapping: false,
+    serviceNames: [],
+    secretNames: [],
+  };
+
+  planProductionDomainMapping(plan);
+  planCloudRunServices(plan);
+  planSecrets(plan);
+  await planNeon(plan);
+  await planGrafana(plan);
+
+  if (destroyProject) {
+    plan.resources.push({ label: `GCP project ${config.project.id}`, detail: "requested with --project" });
+  }
+
+  return plan;
+}
+
+function planProductionDomainMapping(plan: DestroyPlan) {
+  try {
+    const mapping = describeProductionDomainMapping();
+    if (!mapping) {
+      plan.skipped.push({ label: `Production domain mapping ${config.domain.hostname}`, detail: "not found" });
+      return;
+    }
+
+    const routeName = mapping.spec?.routeName;
+    if (routeName !== config.serviceName) {
+      plan.blockers.push(`${config.domain.hostname} maps to ${routeName || "an unknown service"}; refusing to delete ambiguous DNS mapping`);
+      return;
+    }
+
+    assertOwnedResource(`Cloud Run service ${routeName}`, describeCloudRunService(routeName));
+    plan.hasProductionDomainMapping = true;
+    plan.resources.push({ label: `Production domain mapping ${config.domain.hostname}`, detail: `routes to ${routeName}` });
+  } catch (error) {
+    plan.blockers.push(`Production domain mapping ${config.domain.hostname}: ${formatError(error)}`);
+  }
+}
+
+function planCloudRunServices(plan: DestroyPlan) {
+  try {
+    plan.serviceNames = listCloudRunServices().filter(matchesServiceResource);
+    if (plan.serviceNames.length === 0) {
+      plan.skipped.push({ label: `Cloud Run services in ${config.project.id}/${config.region}`, detail: "none matched" });
+      return;
+    }
+    for (const serviceName of plan.serviceNames) {
+      plan.resources.push({ label: `Cloud Run service ${serviceName}`, detail: `${config.project.id}/${config.region}` });
+    }
+  } catch (error) {
+    plan.blockers.push(`Cloud Run services in ${config.project.id}/${config.region}: ${formatError(error)}`);
+  }
+}
+
+function planSecrets(plan: DestroyPlan) {
+  try {
+    plan.secretNames = listSecrets().filter(matchesSecretResource);
+    if (plan.secretNames.length === 0) {
+      plan.skipped.push({ label: `Secret Manager secrets in ${config.project.id}`, detail: "none matched" });
+      return;
+    }
+    for (const secretName of plan.secretNames) {
+      plan.resources.push({ label: `Secret Manager secret ${secretName}`, detail: config.project.id });
+    }
+  } catch (error) {
+    plan.blockers.push(`Secret Manager secrets in ${config.project.id}: ${formatError(error)}`);
+  }
+}
+
+async function planNeon(plan: DestroyPlan) {
+  try {
+    const neon = await resolveNeonConfig();
+    const branches = await listBranches(neon.projectId);
+    const disposableBranches = branches.filter(
+      (branch: { name: string }) =>
+        branch.name.startsWith(`${neon.previewBranchPrefix}-`) || branch.name.startsWith(`${neon.personalBranchPrefix}-`)
+    );
+
+    plan.neon = {
+      projectId: neon.projectId,
+      baseBranchId: neon.baseBranchId,
+      databaseName: neon.databaseName,
+      branches: disposableBranches,
+    };
+    plan.resources.push({ label: `Neon database ${neon.databaseName}`, detail: `${neon.projectId}/${neon.baseBranchName}` });
+    for (const branch of disposableBranches) {
+      plan.resources.push({ label: `Neon branch ${branch.name}`, detail: neon.projectId });
+    }
+  } catch (error) {
+    plan.skipped.push({ label: "Neon resources", detail: formatError(error) });
+  }
+}
+
+async function planGrafana(plan: DestroyPlan) {
+  if (!(await Bun.file("./grafana").exists())) {
+    plan.skipped.push({ label: "Grafana resources", detail: "no ./grafana directory" });
+    return;
+  }
+  if (!Bun.which("gcx")) {
+    plan.skipped.push({ label: "Grafana resources", detail: "gcx is not installed" });
+    return;
+  }
+  plan.resources.push({ label: "Grafana resources", detail: "./grafana manifests" });
+}
+
+function printDestroyPlan(plan: DestroyPlan) {
+  const lines = [
+    "Resources selected for destroy:",
+    ...plan.resources.map((resource) => `- ${resource.label}${resource.detail ? ` (${resource.detail})` : ""}`),
+  ];
+  if (plan.skipped.length > 0) {
+    lines.push("", "Skipped or not found:", ...plan.skipped.map((resource) => `- ${resource.label}${resource.detail ? ` (${resource.detail})` : ""}`));
+  }
+  if (plan.blockers.length > 0) {
+    lines.push("", "Discovery blockers:", ...plan.blockers.map((blocker) => `- ${blocker}`));
+  }
+  log.step(lines.join("\n"));
+}
+
 async function deleteGrafanaResources() {
   if (!(await Bun.file("./grafana").exists())) {
     return "No grafana directory configured";
@@ -107,20 +255,6 @@ async function deleteGrafanaResources() {
 
   run("gcx", ["resources", "delete", "--path", "./grafana", "--yes", "--on-error", "ignore"]);
   return "Grafana resources deleted from local manifests";
-}
-
-function assertProductionDomainMappingOwned() {
-  const mapping = describeProductionDomainMapping();
-  if (!mapping) {
-    return;
-  }
-
-  const routeName = mapping.spec?.routeName;
-  if (routeName !== config.serviceName) {
-    throw new Error(`${config.domain.hostname} maps to ${routeName || "an unknown service"}; refusing to delete ambiguous DNS mapping`);
-  }
-
-  assertOwnedResource(`Cloud Run service ${routeName}`, describeCloudRunService(routeName));
 }
 
 async function requireDestroyConfirmation(force: boolean) {
