@@ -4,5 +4,6 @@ env "local" {
 
   migration {
     dir = "file://migrations"
+    revisions_schema = "public"
   }
 }

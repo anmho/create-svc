@@ -176,6 +176,8 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
       expect(makefile).toContain("bun run ./scripts/wait-for-db.ts");
       expect(makefile).toContain("bun run ./scripts/dev.ts go run ./cmd/server");
       expect(await Bun.file(join(generatedRoot, "atlas.hcl")).exists()).toBeTrue();
+      const atlasConfig = await Bun.file(join(generatedRoot, "atlas.hcl")).text();
+      expect(atlasConfig).toContain('revisions_schema = "public"');
       expect(await Bun.file(join(generatedRoot, "migrations", "atlas.sum")).exists()).toBeTrue();
       expect(await Bun.file(join(generatedRoot, "cmd", "migrate", "main.go")).exists()).toBeFalse();
       expect(await Bun.file(join(generatedRoot, "internal", "temporal", "worker.go")).exists()).toBeTrue();
