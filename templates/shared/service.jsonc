@@ -85,6 +85,14 @@
     "module": "buf.build/anmho/{{SERVICE_ID}}"
   },
 
+  "observability": {
+    "required_apis": [
+      "logging.googleapis.com",
+      "monitoring.googleapis.com",
+      "cloudtrace.googleapis.com"
+    ]
+  },
+
   "cloudrun": {
     "project_id": "{{PROJECT_ID}}",
     "project_name": "{{PROJECT_NAME}}",

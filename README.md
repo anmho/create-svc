@@ -115,6 +115,7 @@ bun run lint
 bun run test
 service create
 service deploy
+service observability-bootstrap
 service dev down
 service destroy
 ```
@@ -129,12 +130,17 @@ make lint
 make test
 service create
 service deploy
+service observability-bootstrap
 service dev down
 service destroy
 ```
 
 Language-specific tasks such as local running, linting, formatting, testing, and building stay in package scripts or Make targets. Service lifecycle operations are exposed through the generated `service` CLI.
 `service destroy --force` also stops local dev and runs Docker Compose cleanup for generated Cloud Run services.
+
+`service observability-bootstrap` enables the Google Cloud Logging, Monitoring,
+and Trace APIs for the generated GCP project. It does not create dashboards,
+alerts, log-based metrics, or SLOs; those stay explicit follow-up work.
 
 After `service create` has provisioned auth, the generated repo can mint a
 client-credentials bearer token for smoke checks:

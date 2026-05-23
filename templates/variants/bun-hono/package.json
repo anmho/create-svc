@@ -12,6 +12,7 @@
     "create": "service create",
     "deploy": "service deploy",
     "dashboards": "service dashboards",
+    "observability-bootstrap": "service observability-bootstrap",
     "auth": "service auth",
     "destroy": "service destroy"
   },

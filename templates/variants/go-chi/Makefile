@@ -1,4 +1,4 @@
-.PHONY: dev migrate migrate-lint gen lint test create deploy dashboards auth destroy
+.PHONY: dev migrate migrate-lint gen lint test create deploy dashboards observability-bootstrap auth destroy
 
 SERVICE := service
 WITH_ENV := set -a; [ ! -f .env.local ] || . ./.env.local; set +a;
@@ -37,6 +37,9 @@ deploy:
 
 dashboards:
 	$(SERVICE) dashboards
+
+observability-bootstrap:
+	$(SERVICE) observability-bootstrap
 
 auth:
 	$(SERVICE) auth $(ARGS)

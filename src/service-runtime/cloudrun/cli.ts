@@ -6,6 +6,7 @@ import { stopLocalDev } from "../local-dev";
 import { bootstrap, prepareGcpProject } from "./bootstrap";
 import { cleanup } from "./cleanup";
 import { deploy } from "./deploy";
+import { observabilityBootstrap } from "./observability";
 import { config } from "./config";
 import {
   accessSecretVersion,
@@ -69,6 +70,14 @@ export async function main(argv = Bun.argv.slice(2)) {
     return;
   }
 
+  if (command === "observability-bootstrap") {
+    await runMain("Google observability bootstrap", async () => {
+      await observabilityBootstrap();
+      return `Google observability bootstrap finished for ${config.serviceName}`;
+    });
+    return;
+  }
+
   if (command === "dev") {
     if (rest[0] !== "down") {
       throw new Error(`Unknown dev command: ${rest[0] || ""}\n\n${formatHelp()}`);
@@ -125,6 +134,7 @@ function formatHelp() {
     "  sdk         Build or publish generated SDK artifacts",
     "  dns         Repair or inspect DNS mappings",
     "  dev down    Stop local dev and Docker Compose containers",
+    "  observability-bootstrap  Enable Google observability APIs",
     "  dashboards  Publish Grafana resources",
     "  destroy     Remove service-managed cloud resources",
   ].join("\n");
