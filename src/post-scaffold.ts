@@ -55,23 +55,26 @@ function runWithRetries(command: PostScaffoldCommand, options: CommandOptions, a
 }
 
 export function buildDeploymentVerificationCommands(
-  config: Pick<ScaffoldConfig, "apiHostname" | "framework" | "runtime"> & Partial<Pick<ScaffoldConfig, "target">>
+  config: Pick<ScaffoldConfig, "apiHostname" | "framework" | "runtime"> &
+    Partial<Pick<ScaffoldConfig, "target" | "serviceName" | "gcpProject" | "region">>
 ): PostScaffoldCommand[] {
-  const origin = `https://${config.apiHostname}`;
+  const origin = verificationOrigin(config);
   const tokenCommand = `TOKEN="$(bun ${serviceCliPath(config)} auth token)"`;
   return [
-    { command: "curl", args: ["--fail", "--show-error", "--silent", `${origin}/healthz`] },
-    { command: "curl", args: ["--fail", "--show-error", "--silent", `${origin}/readyz`] },
+    shellVerificationCommand(`curl --fail --show-error --silent "${origin}/healthz"`),
+    shellVerificationCommand(`curl --fail --show-error --silent "${origin}/readyz"`),
     protectedVerificationCommand(config, origin, tokenCommand),
   ];
 }
 
 function protectedVerificationCommand(
-  config: Pick<ScaffoldConfig, "apiHostname" | "framework" | "runtime">,
+  config: Pick<ScaffoldConfig, "apiHostname" | "framework" | "runtime"> &
+    Partial<Pick<ScaffoldConfig, "target" | "serviceName" | "gcpProject" | "region">>,
   origin: string,
   tokenCommand: string
 ): PostScaffoldCommand {
   if (config.framework === "connectrpc" && config.runtime === "go") {
+    const host = verificationHost(config);
     return {
       command: "sh",
       args: [
@@ -82,7 +85,7 @@ function protectedVerificationCommand(
           '-H "Authorization: Bearer $TOKEN"',
           "-d '{\"limit\":1}'",
           "-proto protos/waitlist/v1/waitlist.proto",
-          `${config.apiHostname}:443`,
+          `"${host}:443"`,
           "waitlist.v1.WaitlistService/ListWaitlistEntries",
         ].join(" "),
       ],
@@ -118,6 +121,28 @@ function protectedVerificationCommand(
       ].join(" "),
     ],
   };
+}
+
+function shellVerificationCommand(script: string): PostScaffoldCommand {
+  return { command: "sh", args: ["-c", script] };
+}
+
+function verificationOrigin(
+  config: Partial<Pick<ScaffoldConfig, "target" | "serviceName" | "gcpProject" | "region">> & Pick<ScaffoldConfig, "apiHostname">
+) {
+  if (config.target !== "workers" && config.serviceName && config.gcpProject && config.region) {
+    return `$(gcloud run services describe ${config.serviceName} --project ${config.gcpProject} --region ${config.region} --format=value(status.url))`;
+  }
+  return `https://${config.apiHostname}`;
+}
+
+function verificationHost(
+  config: Partial<Pick<ScaffoldConfig, "target" | "serviceName" | "gcpProject" | "region">> & Pick<ScaffoldConfig, "apiHostname">
+) {
+  if (config.target !== "workers" && config.serviceName && config.gcpProject && config.region) {
+    return `$(gcloud run services describe ${config.serviceName} --project ${config.gcpProject} --region ${config.region} --format=value(status.url) | sed 's#^https://##')`;
+  }
+  return config.apiHostname;
 }
 
 export function buildPostScaffoldCommands(
