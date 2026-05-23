@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
 
-import { run } from "./src/cli";
+import { runServiceCommand } from "./src/service";
 
-await run(process.argv.slice(2));
+await runServiceCommand(process.argv.slice(2));

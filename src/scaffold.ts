@@ -214,24 +214,14 @@ function buildReplacements(config: ScaffoldConfig) {
     COMMAND_GEN: config.runtime === "bun" ? "bun run gen" : "make gen",
     COMMAND_LINT: config.runtime === "bun" ? "bun run lint" : "make lint",
     COMMAND_TEST: config.runtime === "bun" ? "bun run test" : "make test",
-    COMMAND_BOOTSTRAP: config.runtime === "bun" ? "bun run create" : "make create",
-    COMMAND_DEPLOY: config.runtime === "bun" ? "bun run deploy" : "make deploy",
-    COMMAND_AUTH_RESOURCE:
-      config.runtime === "bun" ? "bun run auth -- resource-server" : 'make auth ARGS="resource-server"',
-    COMMAND_AUTH_CLIENT:
-      config.runtime === "bun"
-        ? "bun run auth -- client create"
-        : 'make auth ARGS="client create"',
-    COMMAND_DEPLOY_PERSONAL:
-      config.runtime === "bun"
-        ? 'bun run deploy -- --environment personal --name <slug>'
-        : 'make deploy ARGS="--environment personal --name <slug>"',
-    COMMAND_DEPLOY_DESTROY:
-      config.runtime === "bun"
-        ? 'bun run destroy -- --environment personal --name <slug>'
-        : 'make destroy ARGS="--environment personal --name <slug>"',
-    COMMAND_CLEANUP: config.runtime === "bun" ? "bun run destroy" : "make destroy",
-    COMMAND_CLEANUP_PROJECT: config.runtime === "bun" ? "bun run destroy -- --project" : 'make destroy ARGS="--project"',
+    COMMAND_BOOTSTRAP: "service create",
+    COMMAND_DEPLOY: "service deploy",
+    COMMAND_AUTH_RESOURCE: "service auth resource-server",
+    COMMAND_AUTH_CLIENT: "service auth client create",
+    COMMAND_DEPLOY_PERSONAL: "service deploy --environment personal --name <name>",
+    COMMAND_DEPLOY_DESTROY: "service destroy --environment personal --name <name>",
+    COMMAND_CLEANUP: "service destroy",
+    COMMAND_CLEANUP_PROJECT: "service destroy --project",
     GITIGNORE_EXTRA: "",
     LOCAL_INTROSPECTION_NOTE:
       config.framework === "connectrpc"

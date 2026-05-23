@@ -1,17 +1,15 @@
 {
   "name": "create-svc",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "description": "Local microservice bootstrap CLI for Cloud Run and Workers services with Neon-backed data.",
   "module": "index.ts",
   "type": "module",
   "license": "MIT",
   "bin": {
-    "create-service": "bin/create-service.mjs",
-    "create-svc": "bin/create-svc.mjs"
+    "service": "bin/service.mjs"
   },
   "files": [
-    "bin/create-service.mjs",
-    "bin/create-svc.mjs",
+    "bin/service.mjs",
     "index.ts",
     "src",
     "templates",
