@@ -131,7 +131,7 @@ function verificationOrigin(
   config: Partial<Pick<ScaffoldConfig, "target" | "serviceName" | "gcpProject" | "region">> & Pick<ScaffoldConfig, "apiHostname">
 ) {
   if (config.target !== "workers" && config.serviceName && config.gcpProject && config.region) {
-    return `$(gcloud run services describe ${config.serviceName} --project ${config.gcpProject} --region ${config.region} --format=value(status.url))`;
+    return `$(gcloud run services describe ${config.serviceName} --project ${config.gcpProject} --region ${config.region} '--format=value(status.url)')`;
   }
   return `https://${config.apiHostname}`;
 }
@@ -140,7 +140,7 @@ function verificationHost(
   config: Partial<Pick<ScaffoldConfig, "target" | "serviceName" | "gcpProject" | "region">> & Pick<ScaffoldConfig, "apiHostname">
 ) {
   if (config.target !== "workers" && config.serviceName && config.gcpProject && config.region) {
-    return `$(gcloud run services describe ${config.serviceName} --project ${config.gcpProject} --region ${config.region} --format=value(status.url) | sed 's#^https://##')`;
+    return `$(gcloud run services describe ${config.serviceName} --project ${config.gcpProject} --region ${config.region} '--format=value(status.url)' | sed 's#^https://##')`;
   }
   return config.apiHostname;
 }
