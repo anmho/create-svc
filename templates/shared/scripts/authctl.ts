@@ -216,7 +216,7 @@ function authctl(args: string[], options: { allowFailure?: boolean; quiet?: bool
   };
 
   if (!output.success && !options.allowFailure) {
-    throw new Error(`authctl ${args.join(" ")} failed with exit code ${output.exitCode}\n${output.stderr || output.stdout}`);
+    throw new Error(formatAuthctlFailure(args, output));
   }
 
   if (output.stdout && !options.quiet) {
@@ -224,6 +224,22 @@ function authctl(args: string[], options: { allowFailure?: boolean; quiet?: bool
   }
 
   return output;
+}
+
+function formatAuthctlFailure(args: string[], output: CommandResult) {
+  const detail = output.stderr || output.stdout;
+  if (detail.includes("status_code\":401") || detail.includes("Forbidden. You don't have permission")) {
+    return [
+      `authctl ${args.join(" ")} failed with exit code ${output.exitCode}`,
+      "authctl reached the auth internal API, but Cloudflare Access rejected the request.",
+      "Export the authctl Cloudflare Access service token before running service create:",
+      '  export AUTH_INTERNAL_BASE_URL="$(vault kv get -mount=secret -field=AUTH_INTERNAL_BASE_URL prod/apps/auth/authctl/cloudflare-access)"',
+      '  export CLOUDFLARE_ACCESS_SERVICE_TOKEN_CLIENT_ID="$(vault kv get -mount=secret -field=CLOUDFLARE_ACCESS_SERVICE_TOKEN_CLIENT_ID prod/apps/auth/authctl/cloudflare-access)"',
+      '  export CLOUDFLARE_ACCESS_SERVICE_TOKEN_CLIENT_SECRET="$(vault kv get -mount=secret -field=CLOUDFLARE_ACCESS_SERVICE_TOKEN_CLIENT_SECRET prod/apps/auth/authctl/cloudflare-access)"',
+    ].join("\n");
+  }
+
+  return `authctl ${args.join(" ")} failed with exit code ${output.exitCode}\n${detail}`;
 }
 
 function authctlPath() {
