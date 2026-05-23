@@ -9,7 +9,7 @@ function baseConfig(overrides: Partial<ScaffoldConfig> = {}): ScaffoldConfig {
   return {
     directory: "svc",
     serviceName: "dns-api",
-    modulePath: "example.com/dns-api",
+    modulePath: "github.com/anmho/dns-api",
     target: "cloudrun",
     runtime: "bun",
     framework: "hono",
@@ -156,11 +156,17 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
 
     if (variant.runtime === "go") {
       const goMod = await Bun.file(join(generatedRoot, "go.mod")).text();
-      expect(goMod).toContain("module example.com/dns-api");
-      expect(goMod).not.toContain("module github.com/anmho/dns-api");
+      const packageJson = await Bun.file(join(generatedRoot, "package.json")).text();
+      expect(goMod).toContain("module github.com/anmho/dns-api");
+      expect(goMod).not.toContain("module example.com/dns-api");
+      expect(packageJson).toContain('"dev": "make dev"');
+      expect(packageJson).toContain('"migrate": "make migrate"');
+      expect(packageJson).toContain('"create": "bun run ./scripts/cloudrun/cli.ts create"');
+      expect(packageJson).toContain('"deploy": "bun run ./scripts/cloudrun/cli.ts deploy"');
+      expect(packageJson).toContain('"destroy": "bun run ./scripts/cloudrun/cli.ts destroy"');
 
       const mainGo = await Bun.file(join(generatedRoot, "cmd", "server", "main.go")).text();
-      expect(mainGo).toContain("example.com/dns-api");
+      expect(mainGo).toContain("github.com/anmho/dns-api");
       if (variant.framework === "connectrpc") {
         expect(goMod).toContain("connectrpc.com/connect");
         expect(mainGo).toContain("NewWaitlistService");
@@ -202,7 +208,8 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
       expect(packageJson).toContain('"auth": "bun run ./scripts/cloudrun/cli.ts auth"');
       expect(packageJson).toContain('"destroy": "bun run ./scripts/cloudrun/cli.ts destroy"');
       const serviceCli = await Bun.file(join(generatedRoot, "scripts", "cloudrun", "cli.ts")).text();
-      expect(serviceCli).toContain("service <create|deploy|migrate|seed|dashboards|dns|doctor|destroy|auth|sdk>");
+      expect(serviceCli).toContain("service <command> [args]");
+      expect(serviceCli).toContain("Provision auth, database, migrations, and first deploy");
       expect(serviceCli).toContain("assertServiceNameAvailable(config.serviceName)");
       expect(serviceCli).toContain("ensureAuthResourceServer");
       expect(serviceCli).toContain('["resources", "push", "--path", "./grafana"]');

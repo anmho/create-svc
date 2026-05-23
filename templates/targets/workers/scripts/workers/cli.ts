@@ -18,7 +18,7 @@ async function main(argv = Bun.argv.slice(2)) {
   const [command, ...rest] = argv;
 
   if (!command || command === "--help" || command === "-h" || command === "help") {
-    console.log("Usage: service <create|deploy|migrate|seed|dashboards|dns|doctor|destroy|auth|sdk> [args]");
+    console.log(formatHelp());
     return;
   }
 
@@ -87,7 +87,25 @@ async function main(argv = Bun.argv.slice(2)) {
     throw new Error("SDK commands are only available for ConnectRPC services");
   }
 
-  throw new Error("Usage: service <create|deploy|migrate|seed|dashboards|dns|doctor|destroy|auth|sdk> [args]");
+  throw new Error(`Unknown command: ${command}\n\n${formatHelp()}`);
+}
+
+function formatHelp() {
+  return [
+    "Usage:",
+    "  service <command> [args]",
+    "",
+    "Commands:",
+    "  create      Provision auth, database, Hyperdrive, and first deploy",
+    "  deploy      Deploy the Worker",
+    "  migrate     Apply database schema",
+    "  seed        Report seed status",
+    "  doctor      Check local tools and cloud access",
+    "  auth        Manage auth resource server and clients",
+    "  dns         Show Workers custom-domain configuration",
+    "  dashboards  Publish Grafana resources",
+    "  destroy     Remove service-managed Worker resources",
+  ].join("\n");
 }
 
 function run(command: string, args: string[], options: { allowFailure?: boolean; capture?: boolean } = {}) {

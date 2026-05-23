@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { buildPostScaffoldCommands } from "./post-scaffold";
+import { buildDeploymentVerificationCommands, buildPostScaffoldCommands } from "./post-scaffold";
 
 describe("buildPostScaffoldCommands", () => {
   test("runs create and deploy for HTTP services", () => {
@@ -15,5 +15,21 @@ describe("buildPostScaffoldCommands", () => {
       { command: "bun", args: ["run", "service", "--", "create"] },
       { command: "bun", args: ["run", "service", "--", "deploy"] },
     ]);
+  });
+});
+
+describe("buildDeploymentVerificationCommands", () => {
+  test("uses curl health checks for HTTP services", () => {
+    expect(buildDeploymentVerificationCommands({ apiHostname: "api.launch.anmho.com", framework: "hono", runtime: "bun" })).toEqual([
+      { command: "curl", args: ["--fail", "--show-error", "--silent", "https://api.launch.anmho.com/healthz"] },
+      { command: "curl", args: ["--fail", "--show-error", "--silent", "https://api.launch.anmho.com/readyz"] },
+    ]);
+  });
+
+  test("uses grpcurl for Go ConnectRPC services", () => {
+    expect(buildDeploymentVerificationCommands({ apiHostname: "api.launch.anmho.com", framework: "connectrpc", runtime: "go" })).toContainEqual({
+      command: "grpcurl",
+      args: ["api.launch.anmho.com:443", "list"],
+    });
   });
 });
