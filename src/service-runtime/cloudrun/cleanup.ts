@@ -151,7 +151,7 @@ function planProductionDomainMapping(plan: DestroyPlan) {
       return;
     }
 
-    const routeName = mapping.spec?.routeName;
+    const routeName = mapping.spec?.routeName ?? "";
     if (routeName !== config.serviceName) {
       plan.blockers.push(`${config.domain.hostname} maps to ${routeName || "an unknown service"}; refusing to delete ambiguous DNS mapping`);
       return;

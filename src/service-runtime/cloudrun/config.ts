@@ -1,0 +1,55 @@
+import { serviceConfig } from "../runtime";
+
+const cloudrun = serviceConfig.cloudrun;
+const dns = serviceConfig.dns;
+const neon = serviceConfig.neon;
+
+export const config = {
+  serviceName: serviceConfig.service_id,
+  profile: serviceConfig.profile,
+  example: serviceConfig.example,
+  runtime: serviceConfig.runtime,
+  framework: serviceConfig.framework,
+  region: cloudrun.region,
+  artifactRepository: cloudrun.artifact_repository,
+  runtimeServiceAccount: cloudrun.service_account,
+  project: {
+    mode: cloudrun.project_mode,
+    id: cloudrun.project_id,
+    name: cloudrun.project_name,
+    createIfMissing: cloudrun.create_if_missing,
+    billingAccount: cloudrun.billing_account,
+    quotaProjectId: cloudrun.quota_project_id,
+  },
+  domain: {
+    hostname: dns.hostname,
+    baseDomain: dns.base_domain,
+    cloudflareApiBaseUrl: dns.cloudflare_api_base_url,
+    cloudflareVaultPath: dns.cloudflare_vault_path,
+    cloudflareVaultField: dns.cloudflare_vault_field,
+  },
+  auth: {
+    issuer: serviceConfig.auth.issuer,
+    audience: serviceConfig.auth.resource_server.audience,
+    jwksUrl: serviceConfig.auth.jwks_url,
+  },
+  temporal: {
+    enabled: serviceConfig.temporal.enabled,
+    address: serviceConfig.temporal.address,
+    namespace: serviceConfig.temporal.namespace,
+    taskQueue: serviceConfig.temporal.task_queue,
+    apiKeySecretName: serviceConfig.temporal.api_key_secret_name,
+  },
+  neon: {
+    projectId: neon.project_id,
+    baseBranchId: neon.base_branch_id,
+    baseBranchName: neon.base_branch_name,
+    databaseName: neon.database_name,
+    roleName: neon.role_name,
+    previewBranchPrefix: neon.preview_branch_prefix,
+    personalBranchPrefix: neon.personal_branch_prefix,
+  },
+  requiredApis: cloudrun.required_apis,
+} as const;
+
+export type DeployEnvironment = "main" | "preview" | "personal";

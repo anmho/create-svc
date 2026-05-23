@@ -23,7 +23,7 @@ import {
   serviceOrigin,
 } from "./lib";
 
-async function main(argv = Bun.argv.slice(2)) {
+export async function main(argv = Bun.argv.slice(2)) {
   const [command, ...rest] = argv;
 
   if (!command || command === "--help" || command === "-h" || command === "help") {

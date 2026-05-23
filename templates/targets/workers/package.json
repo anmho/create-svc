@@ -2,21 +2,18 @@
   "name": "{{SERVICE_NAME}}",
   "private": true,
   "type": "module",
-  "bin": {
-    "service": "./scripts/workers/cli.ts"
-  },
   "scripts": {
     "dev": "wrangler dev",
-    "service": "bun run ./scripts/workers/cli.ts",
-    "migrate": "bun run ./scripts/workers/cli.ts migrate",
-    "seed": "bun run ./scripts/workers/cli.ts seed",
+    "service": "service",
+    "migrate": "service migrate",
+    "seed": "service seed",
     "lint": "tsc --noEmit",
     "test": "bun test",
-    "create": "bun run ./scripts/workers/cli.ts create",
-    "deploy": "bun run ./scripts/workers/cli.ts deploy",
-    "dashboards": "bun run ./scripts/workers/cli.ts dashboards",
-    "auth": "bun run ./scripts/workers/cli.ts auth",
-    "destroy": "bun run ./scripts/workers/cli.ts destroy"
+    "create": "service create",
+    "deploy": "service deploy",
+    "dashboards": "service dashboards",
+    "auth": "service auth",
+    "destroy": "service destroy"
   },
   "dependencies": {
     "@anmho/authctl": "0.1.1",

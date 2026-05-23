@@ -59,7 +59,7 @@ export function buildDeploymentVerificationCommands(
     Partial<Pick<ScaffoldConfig, "target" | "serviceName" | "gcpProject" | "region">>
 ): PostScaffoldCommand[] {
   const origin = verificationOrigin(config);
-  const tokenCommand = `TOKEN="$(bun ${serviceCliPath(config)} auth token)"`;
+  const tokenCommand = 'TOKEN="$(service auth token)"';
   return [
     shellVerificationCommand(`curl --fail --show-error --silent "${origin}/"`),
     shellVerificationCommand(`curl --fail --show-error --silent "${origin}/readyz"`),
@@ -148,16 +148,11 @@ function verificationHost(
 export function buildPostScaffoldCommands(
   config: Pick<ScaffoldConfig, "framework"> & Partial<Pick<ScaffoldConfig, "target">>
 ): PostScaffoldCommand[] {
-  const serviceCli = serviceCliPath(config);
   return [
-    ...(config.target !== "workers" && config.framework === "connectrpc" ? [{ command: "bun", args: [serviceCli, "sdk", "build"] }] : []),
-    { command: "bun", args: [serviceCli, "create"] },
-    { command: "bun", args: [serviceCli, "deploy"] },
+    ...(config.target !== "workers" && config.framework === "connectrpc" ? [{ command: "service", args: ["sdk", "build"] }] : []),
+    { command: "service", args: ["create"] },
+    { command: "service", args: ["deploy"] },
   ];
-}
-
-function serviceCliPath(config: Partial<Pick<ScaffoldConfig, "target">>) {
-  return config.target === "workers" ? "./scripts/workers/cli.ts" : "./scripts/cloudrun/cli.ts";
 }
 
 function installProjectDependencies(cwd: string) {

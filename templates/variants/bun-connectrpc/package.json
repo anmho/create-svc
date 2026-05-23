@@ -2,21 +2,18 @@
   "name": "{{SERVICE_NAME}}",
   "private": true,
   "type": "module",
-  "bin": {
-    "service": "./scripts/cloudrun/cli.ts"
-  },
   "scripts": {
     "dev": "bun run ./scripts/dev.ts bun run ./src/index.ts",
-    "service": "bun run ./scripts/cloudrun/cli.ts",
-    "migrate": "bun run ./scripts/migrate.ts",
+    "service": "service",
+    "migrate": "service migrate",
     "gen": "bun run ./scripts/codegen.ts",
     "lint": "tsc --noEmit",
     "test": "bun test",
-    "create": "bun run ./scripts/cloudrun/cli.ts create",
-    "deploy": "bun run ./scripts/cloudrun/cli.ts deploy",
-    "dashboards": "bun run ./scripts/cloudrun/cli.ts dashboards",
-    "auth": "bun run ./scripts/cloudrun/cli.ts auth",
-    "destroy": "bun run ./scripts/cloudrun/cli.ts destroy"
+    "create": "service create",
+    "deploy": "service deploy",
+    "dashboards": "service dashboards",
+    "auth": "service auth",
+    "destroy": "service destroy"
   },
   "dependencies": {
     "@anmho/authctl": "0.1.1",

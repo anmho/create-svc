@@ -1,6 +1,6 @@
 .PHONY: dev migrate gen lint test create deploy dashboards auth destroy
 
-SERVICE := npx --no-install service
+SERVICE := service
 
 dev:
 	bun run dev

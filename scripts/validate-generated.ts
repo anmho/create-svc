@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import { createServer } from "node:net";
 import { connect as connectHttp2, constants as http2Constants } from "node:http2";
@@ -228,6 +228,7 @@ export async function validateGeneratedApps(args: string[] = Bun.argv.slice(2)) 
   const validationRoot = join(generatorRoot, "bin", "generated");
   await mkdir(validationRoot, { recursive: true });
   const root = await mkdtemp(join(validationRoot, "run-"));
+  const serviceBinDir = await writeLocalServiceShim(root, generatorRoot);
   const runId = basename(root).replace(/^run-/, "").toLowerCase();
   const plan = planValidation({ ...options, runId });
   const failures: Array<{ name: GeneratedVariant; generatedRoot: string; error: unknown }> = [];
@@ -248,7 +249,7 @@ export async function validateGeneratedApps(args: string[] = Bun.argv.slice(2)) 
           if (isDockerComposeUp(step)) {
             startedCompose.value = true;
           }
-          await runCommand(step.command, { cwd: generatedRoot, env: commandEnv(item, step) });
+          await runCommand(step.command, { cwd: generatedRoot, env: { ...serviceShimEnv(serviceBinDir), ...commandEnv(item, step) } });
         }
 
         for (const smoke of item.smokeChecks) {
@@ -349,6 +350,19 @@ async function runCommand(command: string[], options: RunCommandOptions) {
         .join("\n")
     );
   }
+}
+
+async function writeLocalServiceShim(root: string, generatorRoot: string) {
+  const binDir = join(root, ".bin");
+  const servicePath = join(binDir, "service");
+  await mkdir(binDir, { recursive: true });
+  await Bun.write(servicePath, `#!/usr/bin/env bash\nexec bun ${JSON.stringify(join(generatorRoot, "index.ts"))} "$@"\n`);
+  await chmod(servicePath, 0o755);
+  return binDir;
+}
+
+function serviceShimEnv(binDir: string) {
+  return { PATH: `${binDir}:${process.env.PATH ?? ""}` };
 }
 
 async function runProcess(command: string[], options: RunCommandOptions) {

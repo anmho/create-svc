@@ -1,6 +1,6 @@
 .PHONY: dev migrate migrate-lint gen lint test create deploy dashboards auth destroy
 
-SERVICE := npx --no-install service
+SERVICE := service
 WITH_ENV := set -a; [ ! -f .env.local ] || . ./.env.local; set +a;
 ATLAS ?= atlas
 

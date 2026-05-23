@@ -7,7 +7,7 @@ const SCAFFOLD_COMMANDS = new Set(["create", "new", "init"]);
 export async function runServiceCommand(argv: string[], cwd = process.cwd()) {
   const serviceRoot = findGeneratedServiceRoot(cwd);
   if (serviceRoot) {
-    delegateToGeneratedService(serviceRoot, argv);
+    await delegateToGeneratedService(serviceRoot, argv);
     return;
   }
 
@@ -41,29 +41,23 @@ export function findGeneratedServiceRoot(start: string): string | undefined {
 }
 
 function isGeneratedServiceRoot(path: string) {
-  return (
-    existsSync(join(path, "service.config.ts")) &&
-    (existsSync(join(path, "scripts", "cloudrun", "cli.ts")) || existsSync(join(path, "scripts", "workers", "cli.ts")))
-  );
+  return existsSync(join(path, "service.config.ts"));
 }
 
-function delegateToGeneratedService(serviceRoot: string, argv: string[]) {
+async function delegateToGeneratedService(serviceRoot: string, argv: string[]) {
   ensureGeneratedDependencies(serviceRoot);
+  process.chdir(serviceRoot);
+  process.env.CREATE_SVC_SERVICE_ROOT = serviceRoot;
 
-  const cliPath = existsSync(join(serviceRoot, "scripts", "cloudrun", "cli.ts"))
-    ? "./scripts/cloudrun/cli.ts"
-    : "./scripts/workers/cli.ts";
-  const result = Bun.spawnSync(["bun", "run", cliPath, ...argv], {
-    cwd: serviceRoot,
-    env: process.env,
-    stdin: "inherit",
-    stdout: "inherit",
-    stderr: "inherit",
-  });
-
-  if (!result.success) {
-    process.exit(result.exitCode || 1);
+  const serviceConfig = (await import(`${serviceRoot}/service.config.ts`)).default;
+  if (serviceConfig.target === "workers") {
+    const { main } = await import("./service-runtime/workers/cli");
+    await main(argv);
+    return;
   }
+
+  const { main } = await import("./service-runtime/cloudrun/cli");
+  await main(argv);
 }
 
 export function generatedDependenciesInstalled(serviceRoot: string) {
