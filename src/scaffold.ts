@@ -232,7 +232,7 @@ function buildReplacements(config: ScaffoldConfig) {
         : 'make destroy ARGS="--environment personal --name <slug>"',
     COMMAND_CLEANUP: config.runtime === "bun" ? "bun run destroy" : "make destroy",
     COMMAND_CLEANUP_PROJECT: config.runtime === "bun" ? "bun run destroy -- --project" : 'make destroy ARGS="--project"',
-    GITIGNORE_EXTRA: config.framework === "connectrpc" ? "gen/" : "",
+    GITIGNORE_EXTRA: "",
     LOCAL_INTROSPECTION_NOTE:
       config.framework === "connectrpc"
         ? [

@@ -1,7 +1,7 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { connectNodeAdapter } from "@connectrpc/connect-node";
 import type { ServiceImpl } from "@connectrpc/connect";
-import { createServer } from "node:http2";
+import { createServer } from "node:http";
 import { WaitlistService as WaitlistRpcService } from "../gen/protos/waitlist/v1/waitlist_pb.js";
 import { withServiceAuth } from "./auth";
 import { AppError, createDefaultWaitlistService, type WaitlistService } from "./waitlist/service";

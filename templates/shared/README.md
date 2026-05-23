@@ -185,6 +185,11 @@ credentials under:
 prod/apps/{{SERVICE_ID}}/server/oauth-clients/<resource_server_id>
 ```
 
+When requesting a client-credentials token for a generated service, include the
+target resource server as `resource=api://<resource_server_id>`. The generated
+runtime expects a JWT with that audience; omitting `resource` can return an
+opaque access token that the service will reject.
+
 Webhook signature hooks are provider-specific and optional in v1. Add provider
 secrets only when you add a provider adapter. A generic adapter can honor:
 
@@ -201,8 +206,8 @@ bun create service {{SERVICE_NAME}} --yes
 ```
 
 That command scaffolds this package, runs `service create`, deploys the production
-Cloud Run service, and fails loudly with resumable instructions if a required
-cloud credential is missing. The generated package can also be run
+Cloud Run service through `service deploy`, and fails loudly with resumable
+instructions if a required cloud credential is missing. The generated package can also be run
 manually:
 
 ```bash

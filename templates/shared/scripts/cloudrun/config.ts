@@ -24,7 +24,7 @@ export const config = {
     baseDomain: "{{API_BASE_DOMAIN}}",
   },
   auth: {
-    issuer: "https://auth.anmho.com",
+    issuer: "https://auth.anmho.com/api/auth",
     audience: "api://{{SERVICE_ID}}",
     jwksUrl: "https://auth.anmho.com/api/auth/jwks",
   },

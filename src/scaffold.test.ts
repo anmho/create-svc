@@ -70,6 +70,7 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
     expect(configScript).toContain(`framework: "${variant.framework}"`);
     expect(configScript).toContain('mode: "create_new"');
     expect(configScript).toContain('quotaProjectId: "anmho-infra-prod"');
+    expect(configScript).toContain('issuer: "https://auth.anmho.com/api/auth"');
     expect(configScript).toContain('audience: "api://dns-api"');
     expect(configScript).toContain('jwksUrl: "https://auth.anmho.com/api/auth/jwks"');
     expect(configScript).toContain('apiKeySecretName: "dns-api-temporal-api-key"');
@@ -239,7 +240,7 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
       const readme = await Bun.file(join(generatedRoot, "README.md")).text();
       if (variant.framework === "connectrpc") {
         expect(entrypoint).toContain("WaitlistService");
-        expect(gitignore).toContain("gen/");
+        expect(gitignore).not.toContain("gen/");
         expect(readme).toContain("Local introspection");
       } else {
         expect(entrypoint).toContain("/v1/waitlist");
@@ -252,6 +253,7 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
       expect(readme).toContain("/webhooks/:provider");
       expect(readme).toContain("microservice profile");
       expect(readme).toContain("waitlist/launch service");
+      expect(readme).toContain("resource=api://<resource_server_id>");
       expect(readme).toContain("Terraform is optional");
       expect(readme).toContain("AUTH_ENABLED=true");
       expect(readme).toContain("verifies JWT bearer tokens");

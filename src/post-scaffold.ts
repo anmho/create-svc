@@ -12,18 +12,32 @@ type CommandResult = {
   stderr: string;
 };
 
+type PostScaffoldCommand = {
+  command: string;
+  args: string[];
+};
+
 const decoder = new TextDecoder();
 const encoder = new TextEncoder();
 
 export async function runPostScaffoldFlow(config: ScaffoldConfig, cwd: string) {
   if (config.autoDeploy) {
     installProjectDependencies(cwd);
-    const command = config.runtime === "bun" ? "bun" : "make";
-    run(command, config.runtime === "bun" ? ["run", "create"] : ["create"], { cwd });
-    return { message: "Dependencies installed and service create started" };
+    for (const command of buildPostScaffoldCommands(config)) {
+      run(command.command, command.args, { cwd });
+    }
+    return { message: "Dependencies installed, service created, and service deployed" };
   }
 
   return { message: "Backend package generated" };
+}
+
+export function buildPostScaffoldCommands(config: Pick<ScaffoldConfig, "framework">): PostScaffoldCommand[] {
+  return [
+    ...(config.framework === "connectrpc" ? [{ command: "bun", args: ["run", "service", "--", "sdk", "build"] }] : []),
+    { command: "bun", args: ["run", "service", "--", "create"] },
+    { command: "bun", args: ["run", "service", "--", "deploy"] },
+  ];
 }
 
 function installProjectDependencies(cwd: string) {
