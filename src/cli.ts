@@ -1,16 +1,4 @@
-import {
-  autocomplete,
-  cancel,
-  confirm,
-  intro,
-  isCancel,
-  log,
-  note,
-  outro,
-  select,
-  spinner,
-  text,
-} from "@clack/prompts";
+import { autocomplete, cancel, intro, isCancel, log, note, outro, select, spinner, text } from "@clack/prompts";
 import pc from "picocolors";
 import { readdirSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
@@ -68,7 +56,25 @@ type DiscoveryState = {
   warnings: string[];
 };
 
+type GcpSelection = {
+  mode: GcpProjectMode;
+  projectId: string;
+  projectName: string;
+};
+
+type InteractiveStep = "serviceName" | "target" | "runtime" | "framework" | "modulePath" | "gcp" | "confirm";
+
+type InteractiveState = {
+  serviceName?: string;
+  target?: DeployTarget;
+  runtime?: Runtime;
+  framework?: Framework;
+  modulePath?: string;
+  gcpSelection?: GcpSelection;
+};
+
 const DEFAULT_REGION = "us-west1";
+const BACK = "__back__" as const;
 
 export async function run(argv: string[]) {
   try {
@@ -376,9 +382,11 @@ export function parseArgs(argv: string[]): ParsedArgs {
 
 export async function resolveConfig(args: ParsedArgs): Promise<ScaffoldConfig> {
   const inferredName = slugify(args.serviceName ?? basename(args.directory ?? "my-service"));
-  const serviceName = args.yes
-    ? inferredName
-    : await promptText("Service name", inferredName, (value) => validateServiceNameInput(value, args.directory));
+  if (!args.yes) {
+    return resolveInteractiveConfig(args, inferredName);
+  }
+
+  const serviceName = inferredName;
   const directory = args.directory ?? serviceName;
   const targetDir = resolve(process.cwd(), directory);
   await assertTargetDirectoryIsEmpty(targetDir);
@@ -392,21 +400,13 @@ export async function resolveConfig(args: ParsedArgs): Promise<ScaffoldConfig> {
   const modulePath = await resolveModulePath(args, runtime, defaults.modulePath);
   const discovery = await waitForDiscovery(discoveryPromise);
   const gcpSelection = await resolveGcpSelection(args, defaults, discovery);
+  if (gcpSelection === BACK) {
+    throw new Error("Unexpected back navigation in non-interactive config");
+  }
   const region = args.region ?? DEFAULT_REGION;
   const billingAccount = chooseBillingAccount(args.billingAccount, discovery.billingAccounts);
   const autoDeploy = resolveAutoDeploy(args.autoDeploy);
   const git = buildGitBootstrapConfig(serviceName, args.noGit);
-
-  if (!args.yes) {
-    const okay = await confirm({
-      message: "Create the scaffold with these defaults?",
-      initialValue: true,
-    });
-    if (isCancel(okay) || !okay) {
-      cancel("Aborted");
-      process.exit(1);
-    }
-  }
 
   for (const warning of discovery.warnings) {
     log.warn(warning);
@@ -432,6 +432,226 @@ export async function resolveConfig(args: ParsedArgs): Promise<ScaffoldConfig> {
     apiHostname: defaults.apiHostname,
     generatorRoot: resolve(dirname(fileURLToPath(import.meta.url)), ".."),
   };
+}
+
+async function resolveInteractiveConfig(args: ParsedArgs, initialServiceName: string): Promise<ScaffoldConfig> {
+  const state: InteractiveState = {
+    serviceName: args.serviceName ? slugify(args.serviceName) : undefined,
+    target: args.target,
+    runtime: args.runtime,
+    framework: args.framework,
+    modulePath: args.modulePath,
+  };
+  let serviceNameDraft = state.serviceName ?? initialServiceName;
+  let discovery: DiscoveryState | undefined;
+  const discoveryPromise = discoverCloudInputs();
+  let step: InteractiveStep = state.serviceName ? "target" : "serviceName";
+
+  while (true) {
+    if (step === "serviceName") {
+      const value = await promptText("Service name", serviceNameDraft, (input) => validateServiceNameInput(input, args.directory));
+      serviceNameDraft = value;
+      state.serviceName = value;
+      step = "target";
+      continue;
+    }
+
+    if (!state.serviceName) {
+      step = "serviceName";
+      continue;
+    }
+
+    const defaults = deriveDefaults(state.serviceName);
+
+    if (step === "target") {
+      if (args.target) {
+        state.target = args.target;
+      } else {
+        const value = await promptSelectWithBack<DeployTarget>(
+          "Deploy target",
+          [
+            { value: "cloudrun", label: "Cloud Run", hint: "Default" },
+            { value: "workers", label: "Cloudflare Workers" },
+          ],
+          "cloudrun",
+          step,
+          args,
+          state
+        );
+        if (value === BACK) {
+          step = previousPromptStep(step, args, state) ?? step;
+          continue;
+        }
+        state.target = value;
+        state.runtime = undefined;
+        state.framework = undefined;
+      }
+      step = "runtime";
+      continue;
+    }
+
+    if (step === "runtime") {
+      if (!state.target) {
+        step = "target";
+        continue;
+      }
+      if (state.target === "workers") {
+        state.runtime = "bun";
+      } else if (args.runtime) {
+        state.runtime = args.runtime;
+      } else {
+        const value = await promptSelectWithBack<Runtime>(
+          "Runtime",
+          [
+            { value: "go", label: "Go", hint: "Default" },
+            { value: "bun", label: "Bun" },
+          ],
+          "go",
+          step,
+          args,
+          state
+        );
+        if (value === BACK) {
+          step = previousPromptStep(step, args, state) ?? step;
+          continue;
+        }
+        state.runtime = value;
+        state.framework = undefined;
+      }
+      step = "framework";
+      continue;
+    }
+
+    if (step === "framework") {
+      if (!state.target || !state.runtime) {
+        step = state.target ? "runtime" : "target";
+        continue;
+      }
+      const allowed = frameworksForTargetRuntime(state.target, state.runtime);
+      if (args.framework) {
+        if (!allowed.some((framework) => framework === args.framework)) {
+          throw new Error(`Framework ${args.framework} is not valid for target ${state.target} and runtime ${state.runtime}`);
+        }
+        state.framework = args.framework;
+      } else {
+        const value = await promptSelectWithBack<Framework>(
+          "Framework",
+          allowed.map((framework, index) => ({
+            value: framework,
+            label: framework,
+            hint: index === 0 ? "Default" : undefined,
+          })),
+          allowed[0],
+          step,
+          args,
+          state
+        );
+        if (value === BACK) {
+          step = previousPromptStep(step, args, state) ?? step;
+          continue;
+        }
+        state.framework = value;
+      }
+      step = "modulePath";
+      continue;
+    }
+
+    if (step === "modulePath") {
+      if (!state.runtime) {
+        step = "runtime";
+        continue;
+      }
+      if (state.runtime !== "go") {
+        state.modulePath = args.modulePath ?? defaults.modulePath;
+      } else if (args.modulePath) {
+        state.modulePath = args.modulePath.trim();
+      } else {
+        const value = await promptTextWithBack(
+          "Go module path",
+          state.modulePath ?? defaults.modulePath,
+          (input) => {
+            if (!input.trim()) {
+              return "Go module path is required";
+            }
+            return true;
+          },
+          step,
+          args,
+          state
+        );
+        if (value === BACK) {
+          step = previousPromptStep(step, args, state) ?? step;
+          continue;
+        }
+        state.modulePath = value;
+      }
+      step = "gcp";
+      continue;
+    }
+
+    if (step === "gcp") {
+      discovery ??= await waitForDiscovery(discoveryPromise);
+      const value = await resolveGcpSelection(args, defaults, discovery, {
+        allowBack: Boolean(previousPromptStep(step, args, state)),
+      });
+      if (value === BACK) {
+        step = previousPromptStep(step, args, state) ?? step;
+        continue;
+      }
+      state.gcpSelection = value;
+      step = "confirm";
+      continue;
+    }
+
+    if (step === "confirm") {
+      if (!state.target || !state.runtime || !state.framework || !state.modulePath || !state.gcpSelection) {
+        step = "serviceName";
+        continue;
+      }
+      const value = await promptSelectWithBack<"create">(
+        "Create the scaffold with these defaults?",
+        [{ value: "create", label: "Create scaffold", hint: "Default" }],
+        "create",
+        step,
+        args,
+        state
+      );
+      if (value === BACK) {
+        step = previousPromptStep(step, args, state) ?? step;
+        continue;
+      }
+
+      const directory = args.directory ?? state.serviceName;
+      const targetDir = resolve(process.cwd(), directory);
+      await assertTargetDirectoryIsEmpty(targetDir);
+      const billingAccount = chooseBillingAccount(args.billingAccount, discovery?.billingAccounts ?? []);
+
+      for (const warning of discovery?.warnings ?? []) {
+        log.warn(warning);
+      }
+
+      return {
+        directory,
+        serviceName: state.serviceName,
+        modulePath: state.modulePath,
+        target: state.target,
+        runtime: state.runtime,
+        framework: state.framework,
+        profile: args.profile,
+        region: args.region ?? DEFAULT_REGION,
+        gcpProjectMode: state.gcpSelection.mode,
+        gcpProject: state.gcpSelection.projectId,
+        gcpProjectName: state.gcpSelection.projectName,
+        billingAccount,
+        quotaProjectId: args.quotaProjectId ?? QUOTA_PROJECT_DEFAULT,
+        autoDeploy: resolveAutoDeploy(args.autoDeploy),
+        git: buildGitBootstrapConfig(state.serviceName, args.noGit),
+        neonDatabaseName: defaults.neonDatabaseName,
+        apiHostname: defaults.apiHostname,
+        generatorRoot: resolve(dirname(fileURLToPath(import.meta.url)), ".."),
+      };
+    }
+  }
 }
 
 async function waitForDiscovery(discoveryPromise: Promise<DiscoveryState>) {
@@ -561,8 +781,9 @@ async function resolveModulePath(args: ParsedArgs, runtime: Runtime, initialValu
 async function resolveGcpSelection(
   args: ParsedArgs,
   defaults: ReturnType<typeof deriveDefaults>,
-  discovery: DiscoveryState
-) {
+  discovery: DiscoveryState,
+  options: { allowBack?: boolean } = {}
+): Promise<GcpSelection | typeof BACK> {
   if (args.gcpProjectMode && args.gcpProject) {
     const existing = discovery.projects.find((project) => matchesProject(project, args.gcpProject ?? ""));
     return {
@@ -601,6 +822,15 @@ async function resolveGcpSelection(
     message: "GCP project",
     initialValue: "create_new",
     options: [
+      ...(options.allowBack
+        ? [
+            {
+              value: BACK,
+              label: "Back",
+              hint: "Return to previous step",
+            },
+          ]
+        : []),
       {
         value: "create_new",
         label: `Create new project: ${defaults.projectName} (${defaults.projectId})`,
@@ -620,6 +850,10 @@ async function resolveGcpSelection(
     process.exit(1);
   }
 
+  if (mode === BACK) {
+    return BACK;
+  }
+
   if (mode === "create_new") {
     return {
       mode: "create_new" as const,
@@ -632,7 +866,10 @@ async function resolveGcpSelection(
     throw new Error("No existing GCP projects were discovered");
   }
 
-  const selected = await promptForExistingProject(discovery.projects);
+  const selected = await promptForExistingProject(discovery.projects, options);
+  if (selected === BACK) {
+    return BACK;
+  }
   if (!selected) {
     return resolveGcpSelection(
       {
@@ -641,7 +878,8 @@ async function resolveGcpSelection(
         gcpProject: undefined,
       },
       defaults,
-      discovery
+      discovery,
+      options
     );
   }
 
@@ -717,6 +955,108 @@ async function promptText(
   return value.trim();
 }
 
+async function promptTextWithBack(
+  message: string,
+  initialValue: string,
+  validate: (value: string) => true | string,
+  step: InteractiveStep,
+  args: ParsedArgs,
+  state: InteractiveState
+): Promise<string | typeof BACK> {
+  const allowBack = Boolean(previousPromptStep(step, args, state));
+  const value = await text({
+    message: allowBack ? `${message} (type "back" to return)` : message,
+    initialValue,
+    validate: (input) => {
+      const normalized = (input ?? "").trim().toLowerCase();
+      if (allowBack && (normalized === "back" || normalized === "<")) {
+        return undefined;
+      }
+      return normalizeValidationResult(validate((input ?? "").trim()));
+    },
+  });
+
+  if (isCancel(value)) {
+    cancel("Aborted");
+    process.exit(1);
+  }
+
+  const trimmed = value.trim();
+  if (allowBack && (trimmed.toLowerCase() === "back" || trimmed === "<")) {
+    return BACK;
+  }
+
+  return trimmed;
+}
+
+async function promptSelectWithBack<Value extends string>(
+  message: string,
+  options: Array<{ value: Value; label?: string; hint?: string; disabled?: boolean }>,
+  initialValue: Value | undefined,
+  step: InteractiveStep,
+  args: ParsedArgs,
+  state: InteractiveState
+): Promise<Value | typeof BACK> {
+  const allowBack = Boolean(previousPromptStep(step, args, state));
+  const value = await select<Value | typeof BACK>({
+    message,
+    initialValue,
+    options: [
+      ...(allowBack
+        ? [
+            {
+              value: BACK,
+              label: "Back",
+              hint: "Return to previous step",
+            },
+          ]
+        : []),
+      ...options,
+    ] as any,
+  });
+
+  if (isCancel(value)) {
+    cancel("Aborted");
+    process.exit(1);
+  }
+
+  return value;
+}
+
+function previousPromptStep(step: InteractiveStep, args: ParsedArgs, state: InteractiveState): InteractiveStep | undefined {
+  const steps: InteractiveStep[] = ["serviceName", "target", "runtime", "framework", "modulePath", "gcp", "confirm"];
+  const currentIndex = steps.indexOf(step);
+  for (let index = currentIndex - 1; index >= 0; index -= 1) {
+    const candidate = steps[index];
+    if (candidate && isPromptableStep(candidate, args, state)) {
+      return candidate;
+    }
+  }
+  return undefined;
+}
+
+function isPromptableStep(step: InteractiveStep, args: ParsedArgs, state: InteractiveState) {
+  if (step === "serviceName") {
+    return !args.serviceName;
+  }
+  if (step === "target") {
+    return !args.target;
+  }
+  if (step === "runtime") {
+    return state.target !== "workers" && !args.runtime;
+  }
+  if (step === "framework") {
+    return !args.framework;
+  }
+  if (step === "modulePath") {
+    return state.runtime === "go" && !args.modulePath;
+  }
+  if (step === "gcp") {
+    return !args.gcpProjectMode;
+  }
+  return step === "confirm";
+}
+
 function formatError(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
@@ -731,17 +1071,21 @@ function handleCliError(error: unknown) {
   process.exit(1);
 }
 
-async function promptForExistingProject(projects: GcpProject[]) {
+async function promptForExistingProject(projects: GcpProject[], options: { allowBack?: boolean } = {}) {
   const value = await autocomplete({
     message: "Existing GCP project",
     placeholder: "Search by project name or id",
     maxItems: 10,
     options: [
-      {
-        value: "__back__",
-        label: "Back",
-        hint: "Return to project mode",
-      },
+      ...(options.allowBack
+        ? [
+            {
+              value: BACK,
+              label: "Back",
+              hint: "Return to project mode",
+            },
+          ]
+        : []),
       ...projects.map((project) => ({
         value: project.projectId,
         label: project.name,
@@ -755,8 +1099,8 @@ async function promptForExistingProject(projects: GcpProject[]) {
     process.exit(1);
   }
 
-  if (value === "__back__") {
-    return undefined;
+  if (value === BACK) {
+    return BACK;
   }
 
   const project = projects.find((candidate) => candidate.projectId === value);
