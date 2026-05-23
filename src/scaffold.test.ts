@@ -168,9 +168,13 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
 
     if (variant.runtime === "go") {
       const goMod = await Bun.file(join(generatedRoot, "go.mod")).text();
+      const goSumExists = await Bun.file(join(generatedRoot, "go.sum")).exists();
       const packageJson = await Bun.file(join(generatedRoot, "package.json")).text();
       expect(goMod).toContain("module github.com/anmho/dns-api");
       expect(goMod).not.toContain("module example.com/dns-api");
+      expect(goSumExists).toBeTrue();
+      const dockerfile = await Bun.file(join(generatedRoot, "Dockerfile")).text();
+      expect(dockerfile).toContain("COPY go.mod go.sum ./");
       expect(packageJson).toContain('"dev": "make dev"');
       expect(packageJson).toContain('"migrate": "make migrate"');
       expect(packageJson).toContain('"create": "bun run ./scripts/cloudrun/cli.ts create"');
