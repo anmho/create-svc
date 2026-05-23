@@ -1,5 +1,6 @@
 import type { ScaffoldConfig } from "./scaffold";
-import { dirname } from "node:path";
+import { mkdir } from "node:fs/promises";
+import { dirname, join } from "node:path";
 
 type CommandOptions = {
   cwd: string;
@@ -33,7 +34,7 @@ export async function runPostScaffoldFlow(config: ScaffoldConfig, cwd: string) {
     for (const command of buildDeploymentVerificationCommands(config)) {
       runWithRetries(command, { cwd, quiet: true }, DEPLOYMENT_VERIFY_ATTEMPTS, DEPLOYMENT_VERIFY_DELAY_MS);
     }
-    startLocalDevelopment(config, cwd);
+    await startLocalDevelopment(config, cwd);
     for (const command of buildLocalVerificationCommands(config)) {
       runWithRetries(command, { cwd, quiet: true }, 18, 5_000);
     }
@@ -43,14 +44,19 @@ export async function runPostScaffoldFlow(config: ScaffoldConfig, cwd: string) {
   return { message: "Backend package generated" };
 }
 
-function startLocalDevelopment(config: Pick<ScaffoldConfig, "target">, cwd: string) {
-  if (config.target === "workers") {
-    run("sh", ["-c", "mkdir -p .service && nohup bun run dev > .service/local-dev.log 2>&1 < /dev/null & echo $! > .service/local-dev.pid"], { cwd });
-    return;
-  }
-
+async function startLocalDevelopment(config: Pick<ScaffoldConfig, "target">, cwd: string) {
   run("bun", ["run", "migrate"], { cwd });
-  run("sh", ["-c", "mkdir -p .service && nohup bun run dev > .service/local-dev.log 2>&1 < /dev/null & echo $! > .service/local-dev.pid"], { cwd });
+  await mkdir(join(cwd, ".service"), { recursive: true });
+  const child = Bun.spawn(["sh", "-c", "exec bun run dev > .service/local-dev.log 2>&1 < /dev/null"], {
+    cwd,
+    env: postScaffoldEnv(),
+    stdin: "ignore",
+    stdout: "ignore",
+    stderr: "ignore",
+    detached: true,
+  });
+  child.unref();
+  await Bun.write(join(cwd, ".service", "local-dev.pid"), `${child.pid}\n`);
 }
 
 function runWithRetries(command: PostScaffoldCommand, options: CommandOptions, attempts: number, delayMs: number) {
