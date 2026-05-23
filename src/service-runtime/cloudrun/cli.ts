@@ -128,7 +128,11 @@ function runLanguageTask(task: "migrate", env?: Record<string, string | undefine
   }
 
   if (task === "migrate") {
-    run("make", ["migrate"], { env });
+    if (env?.DATABASE_URL) {
+      run("atlas", ["migrate", "apply", "--env", "local"], { env });
+    } else {
+      run("make", ["migrate"], { env });
+    }
     return `${task} finished`;
   }
 
