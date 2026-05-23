@@ -54,7 +54,7 @@ describe("buildDeploymentVerificationCommands", () => {
       command: "sh",
       args: [
         "-c",
-        'curl --fail --show-error --silent "$(gcloud run services describe launch-api --project anmho-infra-prod --region us-west1 --format=value(status.url))/"',
+        'curl --fail --show-error --silent "$(gcloud run services describe launch-api --project anmho-infra-prod --region us-west1 \'--format=value(status.url)\')/"',
       ],
     });
   });
