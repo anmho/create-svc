@@ -37,28 +37,84 @@ export async function runPostScaffoldFlow(config: ScaffoldConfig, cwd: string) {
 }
 
 export function buildDeploymentVerificationCommands(
-  config: Pick<ScaffoldConfig, "apiHostname" | "framework" | "runtime">
+  config: Pick<ScaffoldConfig, "apiHostname" | "framework" | "runtime"> & Partial<Pick<ScaffoldConfig, "target">>
 ): PostScaffoldCommand[] {
   const origin = `https://${config.apiHostname}`;
+  const tokenCommand = `TOKEN="$(bun ${serviceCliPath(config)} auth token)"`;
   return [
     { command: "curl", args: ["--fail", "--show-error", "--silent", `${origin}/healthz`] },
     { command: "curl", args: ["--fail", "--show-error", "--silent", `${origin}/readyz`] },
-    ...(config.framework === "connectrpc"
-      ? [
-          config.runtime === "go"
-            ? { command: "grpcurl", args: [`${config.apiHostname}:443`, "list"] }
-            : { command: "curl", args: ["--fail", "--show-error", "--silent", `${origin}/debug/connectrpc`] },
-        ]
-      : []),
+    protectedVerificationCommand(config, origin, tokenCommand),
   ];
 }
 
-export function buildPostScaffoldCommands(config: Pick<ScaffoldConfig, "framework">): PostScaffoldCommand[] {
+function protectedVerificationCommand(
+  config: Pick<ScaffoldConfig, "apiHostname" | "framework" | "runtime">,
+  origin: string,
+  tokenCommand: string
+): PostScaffoldCommand {
+  if (config.framework === "connectrpc" && config.runtime === "go") {
+    return {
+      command: "sh",
+      args: [
+        "-c",
+        [
+          `${tokenCommand} &&`,
+          "grpcurl",
+          '-H "Authorization: Bearer $TOKEN"',
+          "-d '{\"limit\":1}'",
+          "-proto protos/waitlist/v1/waitlist.proto",
+          `${config.apiHostname}:443`,
+          "waitlist.v1.WaitlistService/ListWaitlistEntries",
+        ].join(" "),
+      ],
+    };
+  }
+
+  if (config.framework === "connectrpc") {
+    return {
+      command: "sh",
+      args: [
+        "-c",
+        [
+          `${tokenCommand} &&`,
+          "curl --fail --show-error --silent",
+          '-H "Authorization: Bearer $TOKEN"',
+          '-H "Content-Type: application/json"',
+          "-d '{\"limit\":1}'",
+          `"${origin}/waitlist.v1.WaitlistService/ListWaitlistEntries"`,
+        ].join(" "),
+      ],
+    };
+  }
+
+  return {
+    command: "sh",
+    args: [
+      "-c",
+      [
+        `${tokenCommand} &&`,
+        "curl --fail --show-error --silent",
+        '-H "Authorization: Bearer $TOKEN"',
+        `"${origin}/v1/admin/waitlist?limit=1"`,
+      ].join(" "),
+    ],
+  };
+}
+
+export function buildPostScaffoldCommands(
+  config: Pick<ScaffoldConfig, "framework"> & Partial<Pick<ScaffoldConfig, "target">>
+): PostScaffoldCommand[] {
+  const serviceCli = serviceCliPath(config);
   return [
-    ...(config.framework === "connectrpc" ? [{ command: "bun", args: ["./scripts/cloudrun/cli.ts", "sdk", "build"] }] : []),
-    { command: "bun", args: ["./scripts/cloudrun/cli.ts", "create"] },
-    { command: "bun", args: ["./scripts/cloudrun/cli.ts", "deploy"] },
+    ...(config.target !== "workers" && config.framework === "connectrpc" ? [{ command: "bun", args: [serviceCli, "sdk", "build"] }] : []),
+    { command: "bun", args: [serviceCli, "create"] },
+    { command: "bun", args: [serviceCli, "deploy"] },
   ];
+}
+
+function serviceCliPath(config: Partial<Pick<ScaffoldConfig, "target">>) {
+  return config.target === "workers" ? "./scripts/workers/cli.ts" : "./scripts/cloudrun/cli.ts";
 }
 
 function installProjectDependencies(cwd: string) {

@@ -9,6 +9,7 @@ test("plans every generated service variant by default", () => {
     "bun-connectrpc",
     "go-chi",
     "go-connectrpc",
+    "workers-bun-hono",
   ]);
 });
 
@@ -40,13 +41,12 @@ test("plans connectrpc introspection checks for the bun connectrpc variant", () 
 
   expect(plan[0]?.commandSteps.map((step) => step.command.join(" "))).toContain("bun run gen");
   expect(plan[0]?.smokeChecks).toContainEqual({
-    name: "typed connect client",
-    kind: "connect-client",
+    name: "connect json endpoint",
+    kind: "connect-http",
   });
   expect(plan[0]?.smokeChecks).toContainEqual({
     name: "connectrpc introspection",
     path: "/debug/connectrpc",
-    protocol: "http2",
   });
 });
 
@@ -57,6 +57,20 @@ test("plans a typed gRPC client smoke for the go connectrpc variant", () => {
     name: "typed grpc client",
     kind: "connect-client",
   });
+});
+
+test("plans the workers preset with wrangler package checks", () => {
+  const plan = planValidation(["--variant", "workers-bun-hono"]);
+
+  expect(plan[0]?.target).toBe("workers");
+  expect(plan[0]?.runtime).toBe("bun");
+  expect(plan[0]?.framework).toBe("hono");
+  expect(plan[0]?.commandSteps).toEqual([
+    { name: "install dependencies", command: ["bun", "install"] },
+    { name: "run tests", command: ["bun", "run", "test"] },
+    { name: "run lint", command: ["bun", "run", "lint"] },
+  ]);
+  expect(plan[0]?.smokeChecks).toEqual([]);
 });
 
 test("parses keep mode and rejects unknown variants", () => {

@@ -27,6 +27,17 @@ type ResourceServerMutationCommand = ResourceServerCommand & {
   mutationAction: "upsert" | "create";
 };
 
+type ClientCredentials = {
+  client_id: string;
+  client_secret: string;
+};
+
+type TokenResponse = {
+  access_token?: string;
+  token_type?: string;
+  expires_in?: number;
+};
+
 export function defaultAuthResourceServerArgs() {
   const auth = serviceConfig.auth;
   return [
@@ -92,13 +103,45 @@ export function runAuthCommand(args: string[]) {
     return runClientCommand(action, rest);
   }
 
-  throw new Error("Usage: service auth <doctor|resource-server|client> [args]");
+  if (subject === "token") {
+    return mintAuthToken(parseTokenOptions([action, ...rest].filter(Boolean) as string[]));
+  }
+
+  throw new Error("Usage: service auth <doctor|resource-server|client|token> [args]");
 }
 
 export function ensureAuthResourceServer() {
   const command = ensureResourceServerCommandAvailable();
   authctl([command.subject, command.mutationAction, ...defaultAuthResourceServerArgs(), "--json"], { quiet: true });
   return `Auth resource server ready: ${serviceConfig.auth.resource_server.audience}`;
+}
+
+export function ensureAuthClient() {
+  const existing = readStoredClientCredentials();
+  if (existing) {
+    return `Auth client ready: ${existing.client_id}`;
+  }
+
+  const result = authctl(
+    [
+      "clients",
+      "create",
+      "--client-app",
+      serviceConfig.auth.client.app_id,
+      "--client-identity",
+      serviceConfig.auth.client.identity,
+      ...defaultClientTargetArgs([]),
+      "--stage",
+      serviceConfig.stage_default,
+      "--yes",
+      "--json",
+    ],
+    { quiet: true }
+  );
+
+  const created = parseClientSecretResponse(result.stdout);
+  storeClientCredentials(created);
+  return `Auth client ready: ${created.client_id}`;
 }
 
 export function deleteAuthResourceServer() {
@@ -164,8 +207,12 @@ export function runAuthDoctor(): AuthDoctorResult {
 }
 
 function runClientCommand(action = "", rest: string[]) {
+  if (!action || action === "ensure") {
+    return ensureAuthClient();
+  }
+
   if (action === "create") {
-    authctl([
+    const result = authctl([
       "clients",
       "create",
       "--client-app",
@@ -179,6 +226,8 @@ function runClientCommand(action = "", rest: string[]) {
       "--json",
       ...rest,
     ]);
+    const created = parseClientSecretResponse(result.stdout);
+    storeClientCredentials(created);
     return "Auth client created";
   }
 
@@ -197,6 +246,112 @@ function defaultClientTargetArgs(rest: string[]) {
     ...(hasResourceServer ? [] : ["--resource-server", serviceConfig.auth.resource_server.id]),
     ...(hasScope ? [] : serviceConfig.auth.resource_server.default_scopes.flatMap((scope) => ["--scope", scope])),
   ];
+}
+
+function parseTokenOptions(args: string[]) {
+  const options: { json: boolean; scope?: string[]; resource?: string; audience?: string } = { json: false };
+  for (let index = 0; index < args.length; index += 1) {
+    const token = args[index];
+    if (!token) continue;
+    const next = args[index + 1];
+    const readValue = () => {
+      if (!next || next.startsWith("-")) {
+        throw new Error(`Missing value for ${token}`);
+      }
+      index += 1;
+      return next;
+    };
+    if (token === "--json") {
+      options.json = true;
+      continue;
+    }
+    if (token === "--scope") {
+      options.scope = [...(options.scope ?? []), readValue()];
+      continue;
+    }
+    if (token.startsWith("--scope=")) {
+      options.scope = [...(options.scope ?? []), token.slice("--scope=".length)];
+      continue;
+    }
+    if (token === "--resource") {
+      options.resource = readValue();
+      continue;
+    }
+    if (token.startsWith("--resource=")) {
+      options.resource = token.slice("--resource=".length);
+      continue;
+    }
+    if (token === "--audience") {
+      options.audience = readValue();
+      continue;
+    }
+    if (token.startsWith("--audience=")) {
+      options.audience = token.slice("--audience=".length);
+      continue;
+    }
+    throw new Error(`Unknown service auth token argument: ${token}`);
+  }
+  return options;
+}
+
+function mintAuthToken(options: { json: boolean; scope?: string[]; resource?: string; audience?: string }) {
+  const credentials = readStoredClientCredentials() ?? createAndStoreClientCredentials();
+  const scopes = options.scope?.length ? options.scope : serviceConfig.auth.resource_server.default_scopes;
+  const resource = options.resource ?? serviceConfig.auth.resource_server.audience;
+  const token = requestClientCredentialsToken(credentials, {
+    scope: scopes.join(" "),
+    resource,
+    audience: options.audience,
+  });
+
+  if (options.json) {
+    return JSON.stringify(token, null, 2);
+  }
+
+  if (!token.access_token) {
+    throw new Error("token response did not include access_token");
+  }
+  return token.access_token;
+}
+
+function createAndStoreClientCredentials() {
+  ensureAuthClient();
+  const stored = readStoredClientCredentials();
+  if (!stored) {
+    throw new Error(`Auth client credentials were not written to Vault path ${clientVaultPath()}`);
+  }
+  return stored;
+}
+
+function requestClientCredentialsToken(credentials: ClientCredentials, options: { scope: string; resource: string; audience?: string }) {
+  const body = new URLSearchParams({
+    grant_type: "client_credentials",
+    scope: options.scope,
+    resource: options.resource,
+  });
+  if (options.audience) {
+    body.set("audience", options.audience);
+  }
+
+  const response = fetchSync(serviceConfig.auth.token_endpoint, {
+    method: "POST",
+    headers: {
+      authorization: `Basic ${basicAuth(credentials.client_id, credentials.client_secret)}`,
+      "content-type": "application/x-www-form-urlencoded",
+      accept: "application/json",
+    },
+    body: body.toString(),
+  });
+
+  if (response.status < 200 || response.status >= 300) {
+    throw new Error(`token request failed: ${response.status} ${response.body}`);
+  }
+
+  const token = JSON.parse(response.body) as TokenResponse;
+  if (token.token_type?.toLowerCase() !== "bearer" || !token.access_token) {
+    throw new Error("token response did not include a bearer access_token");
+  }
+  return token;
 }
 
 function hasFlag(args: string[], name: string) {
@@ -334,4 +489,113 @@ function readAuthctlAccessVaultField(env: Record<string, string | undefined>, fi
   }
 
   return decoder.decode(result.stdout).trim();
+}
+
+function parseClientSecretResponse(stdout: string): ClientCredentials {
+  if (!stdout) {
+    throw new Error("authctl did not return client credentials");
+  }
+  const parsed = JSON.parse(stdout) as { client_id?: string; client_secret?: string };
+  if (!parsed.client_id || !parsed.client_secret) {
+    throw new Error("authctl client create did not return one-time client credentials");
+  }
+  return {
+    client_id: parsed.client_id,
+    client_secret: parsed.client_secret,
+  };
+}
+
+function readStoredClientCredentials(): ClientCredentials | undefined {
+  const clientId = readVaultField(clientVaultPath(), "client_id");
+  const clientSecret = readVaultField(clientVaultPath(), "client_secret");
+  if (!clientId || !clientSecret) {
+    return undefined;
+  }
+  return {
+    client_id: clientId,
+    client_secret: clientSecret,
+  };
+}
+
+function storeClientCredentials(credentials: ClientCredentials) {
+  const vault = requireVaultCommand();
+  const result = Bun.spawnSync(
+    [
+      vault,
+      "kv",
+      "put",
+      `-mount=${vaultMount()}`,
+      clientVaultPath(),
+      `client_id=${credentials.client_id}`,
+      `client_secret=${credentials.client_secret}`,
+    ],
+    {
+      cwd: process.cwd(),
+      env: process.env,
+      stdout: "pipe",
+      stderr: "pipe",
+    }
+  );
+  if (!result.success) {
+    const stderr = result.stderr ? decoder.decode(result.stderr).trim() : "";
+    throw new Error(`failed to store auth client credentials in Vault at ${clientVaultPath()}\n${stderr}`);
+  }
+}
+
+function readVaultField(path: string, field: string) {
+  const vault = Bun.which("vault");
+  if (!vault) {
+    return "";
+  }
+  const result = Bun.spawnSync([vault, "kv", "get", `-mount=${vaultMount()}`, `-field=${field}`, path], {
+    cwd: process.cwd(),
+    env: process.env,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (!result.success || !result.stdout) {
+    return "";
+  }
+  return decoder.decode(result.stdout).trim();
+}
+
+function requireVaultCommand() {
+  const vault = Bun.which("vault");
+  if (!vault) {
+    throw new Error("vault is required to store generated auth client credentials");
+  }
+  return vault;
+}
+
+function vaultMount() {
+  return serviceConfig.providers.vault.mount || "secret";
+}
+
+function clientVaultPath() {
+  return `${serviceConfig.auth.client.vault_path_prefix}/${serviceConfig.auth.resource_server.id}`;
+}
+
+function basicAuth(clientId: string, clientSecret: string) {
+  return Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+}
+
+function fetchSync(url: string, init: { method: string; headers: Record<string, string>; body: string }) {
+  const script = [
+    "const url = process.argv[1];",
+    "const init = JSON.parse(process.argv[2]);",
+    "const response = await fetch(url, init);",
+    "const body = await response.text();",
+    "console.log(JSON.stringify({ status: response.status, body }));",
+  ].join("\n");
+  const result = Bun.spawnSync([process.execPath, "--eval", script, url, JSON.stringify(init)], {
+    cwd: process.cwd(),
+    env: process.env,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (!result.success) {
+    const stderr = result.stderr ? decoder.decode(result.stderr).trim() : "";
+    throw new Error(`token request process failed\n${stderr}`);
+  }
+  return JSON.parse(decoder.decode(result.stdout).trim()) as { status: number; body: string };
 }

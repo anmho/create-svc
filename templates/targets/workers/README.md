@@ -43,6 +43,7 @@ small waitlist/trigger schema on first use.
 - `POST /v1/waitlist`
 - `GET /v1/waitlist?email=<email>`
 - `GET /v1/waitlist/:entryId`
+- `GET /v1/admin/waitlist`
 - `POST /v1/triggers/waitlist`
 - `POST /webhooks/:provider`
 - `GET /webhooks/:provider/health`
@@ -62,6 +63,8 @@ https://{{API_HOSTNAME}}
 
 Use `service doctor` after create to verify Wrangler auth, route config, Cron,
 Hyperdrive, dashboard tooling, auth tooling, and deployed health.
+
+{{PRODUCTION_PROTECTED_CHECKS}}
 
 If the Hyperdrive binding id is empty, `service create` uses `DATABASE_URL`, or
 `NEON_API_KEY` to create/resolve the generated Neon database and connection URI,

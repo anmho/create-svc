@@ -41,7 +41,7 @@ service deploy
 To install from npm:
 
 ```bash
-npm install -g create-svc
+bun install -g create-svc
 ```
 
 For the strict one-command production path:
@@ -70,8 +70,7 @@ Without publishing to npm:
 
 ```bash
 bun install
-npm pack
-npm install -g ./create-svc-*.tgz
+bun link
 service create my-service
 ```
 
@@ -130,6 +129,21 @@ service destroy
 
 Language-specific tasks such as local running, linting, formatting, testing, and building stay in package scripts or Make targets. Service lifecycle operations are exposed through the generated `service` CLI.
 
+After `service create` has provisioned auth, the generated repo can mint a
+client-credentials bearer token for smoke checks:
+
+```bash
+TOKEN="$(service auth token)"
+curl --fail --show-error --silent -H "Authorization: Bearer $TOKEN" "https://api.<service_id>.anmho.com/v1/admin/waitlist?limit=1"
+```
+
+For Go ConnectRPC services, use the same token with `grpcurl`:
+
+```bash
+TOKEN="$(service auth token)"
+grpcurl -H "Authorization: Bearer $TOKEN" -d '{"limit":1}' -proto protos/waitlist/v1/waitlist.proto api.<service_id>.anmho.com:443 waitlist.v1.WaitlistService/ListWaitlistEntries
+```
+
 The generated service is intended to be consumed by a web app, mobile client, or another service over HTTPS. In v1, production is expected to live at `https://api.<service_id>.anmho.com`, while preview and personal environments keep using deterministic platform URLs where appropriate.
 
 The generated microservice domain is a small waitlist/launch service example with public submit/status APIs and target-specific scheduled work.
@@ -142,7 +156,8 @@ bun test src scripts
 bun run index.ts create my-service
 ```
 
-Validate the generated app matrix against local Docker Compose Postgres:
+Validate the generated service matrix against local Docker Compose Postgres and
+Workers package checks:
 
 ```bash
 bun run validate:generated
@@ -150,7 +165,7 @@ bun run validate:generated -- --variant bun-hono
 bun run validate:generated -- --variant go-connectrpc --keep
 ```
 
-The validation harness scaffolds generated services into ignored `bin/generated/run-*` workspaces, runs the generated public commands, starts the local server, and smoke-tests health or typed ConnectRPC clients where applicable.
+The validation harness scaffolds generated services into ignored `bin/generated/run-*` workspaces, runs the generated public commands, starts the local server for Cloud Run presets, smoke-tests health plus ConnectRPC clients where applicable, and verifies the Workers preset package compiles and tests.
 
 ## npm Trusted Publishing
 

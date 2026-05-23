@@ -179,6 +179,7 @@ Use `service auth` for follow-up auth operations:
 {{COMMAND_BOOTSTRAP}} # includes resource-server registration
 {{COMMAND_AUTH_RESOURCE}}
 {{COMMAND_AUTH_CLIENT}} --resource-server <target-service> --scope <scope>
+{{COMMAND_AUTH_TOKEN}}
 ```
 
 `authctl clients create` prints a one-time client secret plus the recommended
@@ -193,6 +194,10 @@ When requesting a client-credentials token for a generated service, include the
 target resource server as `resource=api://<resource_server_id>`. The generated
 runtime expects a JWT with that audience; omitting `resource` can return an
 opaque access token that the service will reject.
+
+`{{COMMAND_AUTH_TOKEN}}` reads the generated service-client credentials from
+Vault, creates and stores them if missing, and prints a bearer token suitable
+for local smoke checks.
 
 Webhook signature hooks are provider-specific and optional in v1. Add provider
 secrets only when you add a provider adapter. A generic adapter can honor:
@@ -231,6 +236,8 @@ The main environment is intended to be public at:
 https://{{API_HOSTNAME}}
 ```
 
+{{PRODUCTION_PROTECTED_CHECKS}}
+
 Preview and personal environments keep using deterministic Cloud Run hostnames in v1 so the generated backend stays easy to use inside standalone repos or monorepos.
 
 ## Generated backend domain
@@ -253,6 +260,7 @@ Hono variants expose:
 - `POST /v1/waitlist`
 - `GET /v1/waitlist?email=...`
 - `GET /v1/waitlist/{entryId}`
+- `GET /v1/admin/waitlist`
 - `POST /v1/triggers/waitlist`
 - `POST /webhooks/:provider`
 

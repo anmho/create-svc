@@ -10,7 +10,7 @@
     "service": "bun run ./scripts/workers/cli.ts",
     "migrate": "bun run ./scripts/workers/cli.ts migrate",
     "seed": "bun run ./scripts/workers/cli.ts seed",
-    "lint": "bunx tsc --noEmit",
+    "lint": "tsc --noEmit",
     "test": "bun test",
     "create": "bun run ./scripts/workers/cli.ts create",
     "deploy": "bun run ./scripts/workers/cli.ts deploy",

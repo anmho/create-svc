@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 import { mkdir } from "node:fs/promises";
-import { ensureAuthResourceServer, runAuthCommand, runAuthDoctor } from "../authctl";
+import { ensureAuthClient, ensureAuthResourceServer, runAuthCommand, runAuthDoctor } from "../authctl";
 import { bootstrap, prepareGcpProject } from "./bootstrap";
 import { cleanup } from "./cleanup";
 import { deploy } from "./deploy";
@@ -37,6 +37,7 @@ async function main(argv = Bun.argv.slice(2)) {
       assertProductionDomainAvailable(config.serviceName);
       await prepareGcpProject();
       await runStep("Registering auth resource server", () => ensureAuthResourceServer());
+      await runStep("Provisioning auth client", () => ensureAuthClient());
       await bootstrap({ skipProjectSetup: true });
       const target = resolveDeploymentTarget("main");
       const databaseUrl = await runStep("Reading production database URL", () => accessSecretVersion(target.databaseSecretName));
@@ -79,6 +80,10 @@ async function main(argv = Bun.argv.slice(2)) {
   }
 
   if (command === "auth") {
+    if (rest[0] === "token") {
+      console.log(runAuthCommand(rest));
+      return;
+    }
     await runMain("Auth", () => runAuthCommand(rest));
     return;
   }
@@ -108,6 +113,7 @@ function formatHelp() {
     "  seed        Run the seed script when configured",
     "  doctor      Check local tools and cloud access",
     "  auth        Manage auth resource server and clients",
+    "  auth token  Mint a bearer token for protected API checks",
     "  sdk         Build or publish generated SDK artifacts",
     "  dns         Repair or inspect DNS mappings",
     "  dashboards  Publish Grafana resources",

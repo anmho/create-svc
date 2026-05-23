@@ -218,6 +218,8 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
       expect(serviceCli).toContain("Provision auth, database, migrations, and first deploy");
       expect(serviceCli).toContain("assertServiceNameAvailable(config.serviceName)");
       expect(serviceCli).toContain("ensureAuthResourceServer");
+      expect(serviceCli).toContain("ensureAuthClient");
+      expect(serviceCli).toContain("auth token");
       expect(serviceCli).toContain('["resources", "push", "--path", "./grafana"]');
       const cloudrunLib = await Bun.file(join(generatedRoot, "scripts", "cloudrun", "lib.ts")).text();
       expect(cloudrunLib).toContain("resolveTemporalRuntimeConfig");
@@ -229,6 +231,9 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
       expect(authctlScript).toContain("resource-servers");
       expect(authctlScript).toContain("clients");
       expect(authctlScript).toContain("defaultClientTargetArgs");
+      expect(authctlScript).toContain("ensureAuthClient");
+      expect(authctlScript).toContain("mintAuthToken");
+      expect(authctlScript).toContain("clientVaultPath");
       expect(authctlScript).toContain("deleteAuthResourceServer");
       expect(authctlScript).toContain("readAuthctlAccessVaultField");
       expect(authctlScript).toContain("prod/apps/auth/authctl/cloudflare-access");
@@ -363,6 +368,8 @@ test("scaffolds the workers target with wrangler lifecycle commands", async () =
   expect(workerCli).toContain("hyperdrive");
   expect(workerCli).toContain('["resources", "push", "--path", "./grafana"]');
   expect(workerCli).toContain("ensureAuthResourceServer");
+  expect(workerCli).toContain("ensureAuthClient");
+  expect(workerCli).toContain("auth token");
   expect(workerCli).toContain("Workers database schema applied");
   expect(workerCli).toContain("create table if not exists waitlist_entries");
   expect(workerCli).toContain("DATABASE_URL or NEON_API_KEY is required to provision the Hyperdrive binding");
