@@ -61,7 +61,7 @@ export function buildDeploymentVerificationCommands(
   const origin = verificationOrigin(config);
   const tokenCommand = `TOKEN="$(bun ${serviceCliPath(config)} auth token)"`;
   return [
-    shellVerificationCommand(`curl --fail --show-error --silent "${origin}/healthz"`),
+    shellVerificationCommand(`curl --fail --show-error --silent "${origin}/"`),
     shellVerificationCommand(`curl --fail --show-error --silent "${origin}/readyz"`),
     protectedVerificationCommand(config, origin, tokenCommand),
   ];

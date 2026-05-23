@@ -28,7 +28,7 @@ describe("buildPostScaffoldCommands", () => {
 describe("buildDeploymentVerificationCommands", () => {
   test("uses curl health checks for HTTP services", () => {
     expect(buildDeploymentVerificationCommands({ apiHostname: "api.launch.anmho.com", framework: "hono", runtime: "bun" })).toEqual([
-      { command: "sh", args: ["-c", 'curl --fail --show-error --silent "https://api.launch.anmho.com/healthz"'] },
+      { command: "sh", args: ["-c", 'curl --fail --show-error --silent "https://api.launch.anmho.com/"'] },
       { command: "sh", args: ["-c", 'curl --fail --show-error --silent "https://api.launch.anmho.com/readyz"'] },
       {
         command: "sh",
@@ -54,7 +54,7 @@ describe("buildDeploymentVerificationCommands", () => {
       command: "sh",
       args: [
         "-c",
-        'curl --fail --show-error --silent "$(gcloud run services describe launch-api --project anmho-infra-prod --region us-west1 --format=value(status.url))/healthz"',
+        'curl --fail --show-error --silent "$(gcloud run services describe launch-api --project anmho-infra-prod --region us-west1 --format=value(status.url))/"',
       ],
     });
   });
