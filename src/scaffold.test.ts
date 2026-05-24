@@ -149,6 +149,7 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
     const deployWorkflow = await Bun.file(join(generatedRoot, ".github", "workflows", "deploy.yml")).text();
     expect(deployWorkflow).toContain("branches:");
     expect(deployWorkflow).toContain("- main");
+    expect(deployWorkflow).toContain("gcloud components install beta --quiet");
     expect(deployWorkflow).toContain("bun install -g create-svc@latest");
     expect(deployWorkflow).toContain("service deploy --ci");
     expect(deployWorkflow).toContain("bun run dashboards");
