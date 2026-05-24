@@ -70,6 +70,9 @@ If the Hyperdrive binding id is empty, `service create` uses `DATABASE_URL`, or
 `NEON_API_KEY` to create/resolve the generated Neon database and connection URI,
 applies the waitlist schema, then runs `wrangler hyperdrive create` and writes
 the returned id back into `wrangler.toml` before deploy.
+For production create, a generated local `DATABASE_URL` pointing at localhost is
+ignored when `NEON_API_KEY` or the generated Vault Neon provider path is
+available.
 
 You can also apply the schema manually:
 

@@ -7,6 +7,7 @@ import { manualGitHubDeleteCommand } from "../../git-bootstrap";
 import { ensureAuthClient, ensureAuthResourceServer, runAuthCommand, runAuthDoctor } from "../authctl";
 import { stopLocalDev } from "../local-dev";
 import { serviceConfig } from "../runtime";
+import { isLocalDatabaseUrl, resolveCommandPath } from "./lib";
 
 const config = {
   serviceName: serviceConfig.service_id,
@@ -35,7 +36,7 @@ export async function main(argv = Bun.argv.slice(2)) {
     return runMain("Create", async () => {
       ensureAuthResourceServer();
       ensureAuthClient();
-      const databaseUrl = await resolveDatabaseUrl();
+      const databaseUrl = await resolveDatabaseUrl({ preferRemote: true });
       await applySchema(databaseUrl);
       await ensureHyperdrive(databaseUrl);
       run("wrangler", ["deploy"]);
@@ -196,10 +197,11 @@ async function confirmGitHubRepositoryDeletion(force: boolean) {
 }
 
 function run(command: string, args: string[], options: { allowFailure?: boolean; capture?: boolean } = {}) {
-  if (!Bun.which(command)) {
+  const resolvedCommand = resolveCommandPath(command);
+  if (!resolvedCommand) {
     throw new Error(`missing required command: ${command}`);
   }
-  const result = Bun.spawnSync([command, ...args], {
+  const result = Bun.spawnSync([resolvedCommand, ...args], {
     cwd: process.cwd(),
     env: process.env,
     stdin: "inherit",
@@ -254,15 +256,15 @@ async function deleteHyperdrive() {
   run("wrangler", ["hyperdrive", "delete", id, "--force"], { allowFailure: true });
 }
 
-async function resolveDatabaseUrl() {
+async function resolveDatabaseUrl(options: { preferRemote?: boolean } = {}) {
   const direct = Bun.env.DATABASE_URL?.trim();
-  if (direct) {
+  const apiKey = resolveNeonApiKey();
+  if (direct && (!options.preferRemote || !isLocalDatabaseUrl(direct) || !apiKey)) {
     return direct;
   }
 
-  const apiKey = Bun.env.NEON_API_KEY?.trim();
   if (!apiKey) {
-    throw new Error("DATABASE_URL or NEON_API_KEY is required to provision the Hyperdrive binding");
+    throw new Error("NEON_API_KEY, readable Vault Neon provider path, or non-local DATABASE_URL is required to provision the Hyperdrive binding");
   }
 
   const { neon, projectId, branchId } = await resolveNeonTarget(apiKey);
@@ -293,6 +295,32 @@ async function resolveDatabaseUrl() {
     throw new Error(`Neon did not return a connection URI for ${config.neonDatabaseName}`);
   }
   return uri;
+}
+
+function resolveNeonApiKey() {
+  const direct = Bun.env.NEON_API_KEY?.trim();
+  if (direct) {
+    return direct;
+  }
+
+  const vault = resolveCommandPath("vault");
+  if (!vault) {
+    return "";
+  }
+
+  const mount = Bun.env.VAULT_SECRET_MOUNT?.trim() || "secret";
+  const path = Bun.env.VAULT_NEON_API_KEY_PATH?.trim() || "prod/providers/neon";
+  const field = Bun.env.VAULT_NEON_API_KEY_FIELD?.trim() || "api_key";
+  const result = Bun.spawnSync([vault, "kv", "get", `-mount=${mount}`, `-field=${field}`, path], {
+    cwd: process.cwd(),
+    env: process.env,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (!result.success || !result.stdout) {
+    return "";
+  }
+  return new TextDecoder().decode(result.stdout).trim();
 }
 
 async function resolveNeonTarget(apiKey: string) {
@@ -462,7 +490,7 @@ async function record(
 }
 
 function checkCommand(name: string) {
-  const path = Bun.which(name);
+  const path = resolveCommandPath(name);
   if (!path) {
     throw new Error(`${name} is not installed`);
   }

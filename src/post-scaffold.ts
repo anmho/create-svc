@@ -58,7 +58,9 @@ export function runPreGitBootstrapFlow(config: Pick<ScaffoldConfig, "framework">
 }
 
 async function startLocalDevelopment(config: Pick<ScaffoldConfig, "target">, cwd: string) {
-  run("bun", ["run", "migrate"], { cwd });
+  if (shouldRunLocalMigrate(config)) {
+    run("bun", ["run", "migrate"], { cwd });
+  }
   await mkdir(join(cwd, ".service"), { recursive: true });
   const child = Bun.spawn(["sh", "-c", "exec bun run dev > .service/local-dev.log 2>&1 < /dev/null"], {
     cwd,
@@ -70,6 +72,10 @@ async function startLocalDevelopment(config: Pick<ScaffoldConfig, "target">, cwd
   });
   child.unref();
   await Bun.write(join(cwd, ".service", "local-dev.pid"), `${child.pid}\n`);
+}
+
+export function shouldRunLocalMigrate(config: Pick<ScaffoldConfig, "target">) {
+  return config.target !== "workers";
 }
 
 function runWithRetries(command: PostScaffoldCommand, options: CommandOptions, attempts: number, delayMs: number) {
