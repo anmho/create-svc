@@ -13,6 +13,17 @@ test("plans every generated service variant by default", () => {
   ]);
 });
 
+test("plans webhook idempotency acceptance checks for every generated service variant", () => {
+  const plan = planValidation([]);
+
+  for (const variant of plan.filter((item) => item.target === "cloudrun")) {
+    expect(variant.smokeChecks).toContainEqual({
+      name: "duplicate webhook delivery is idempotent",
+      kind: "webhook-idempotency",
+    });
+  }
+});
+
 test("plans only the selected variant when --variant is provided", () => {
   const plan = planValidation(["--variant", "bun-hono"]);
 
@@ -63,7 +74,10 @@ test("plans the public commands for the bun hono tracer bullet", () => {
       "cloudtrace.googleapis.com",
     ],
   });
-  expect(plan[0]?.smokeChecks).toEqual([{ name: "health endpoint", path: "/healthz" }]);
+  expect(plan[0]?.smokeChecks).toEqual([
+    { name: "health endpoint", path: "/healthz" },
+    { name: "duplicate webhook delivery is idempotent", kind: "webhook-idempotency" },
+  ]);
 });
 
 test("plans authctl command-surface checks for every generated variant", () => {

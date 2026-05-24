@@ -110,15 +110,26 @@ export function createApp(service: WaitlistService) {
   app.post("/webhooks/:provider", async (context) => {
     try {
       const rawBody = await context.req.text();
-      const trigger = await service.recordTrigger({
-        type: `webhook.${context.req.param("provider")}`,
-        entryId: null,
-        payload: {
-          headers: Object.fromEntries(context.req.raw.headers),
-          rawBody,
-        },
+      const provider = context.req.param("provider");
+      const headers = Object.fromEntries(context.req.raw.headers);
+      const payload = parseWebhookPayload(rawBody);
+      const result = await service.recordWebhookEvent({
+        provider,
+        externalEventId: webhookEventId(payload, context.req.raw.headers),
+        payload,
+        headers,
       });
-      return context.json({ trigger }, 202);
+      if (!result.duplicate) {
+        await service.recordTrigger({
+          type: `webhook.${provider}`,
+          entryId: null,
+          payload: {
+            headers,
+            rawBody,
+          },
+        });
+      }
+      return context.json(result, result.duplicate ? 200 : 202);
     } catch (error) {
       return writeError(context, error);
     }
@@ -140,6 +151,21 @@ function writeError(context: any, error: unknown) {
 
 function parseOptionalNumber(value: string | undefined) {
   return value ? Number(value) : null;
+}
+
+function parseWebhookPayload(rawBody: string) {
+  try {
+    return rawBody ? JSON.parse(rawBody) : {};
+  } catch {
+    return { rawBody };
+  }
+}
+
+function webhookEventId(payload: unknown, headers: Headers) {
+  if (payload && typeof payload === "object" && "id" in payload && typeof payload.id === "string") {
+    return payload.id;
+  }
+  return headers.get("x-webhook-event-id") ?? crypto.randomUUID();
 }
 
 if (import.meta.main) {

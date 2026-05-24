@@ -36,6 +36,15 @@ type WaitlistTrigger struct {
 	ProcessedAt string `json:"processed_at,omitempty" db:"processed_at"`
 }
 
+type WebhookEvent struct {
+	ID              string         `json:"id" db:"id"`
+	Provider        string         `json:"provider" db:"provider"`
+	ExternalEventID string         `json:"external_event_id" db:"external_event_id"`
+	Payload         map[string]any `json:"payload"`
+	Headers         map[string]any `json:"headers"`
+	ReceivedAt      string         `json:"received_at" db:"received_at"`
+}
+
 type JoinWaitlistInput struct {
 	Email   string `json:"email"`
 	Name    string `json:"name"`
@@ -52,6 +61,18 @@ type RecordTriggerInput struct {
 	Type    string `json:"type"`
 	EntryID string `json:"entry_id"`
 	Payload any    `json:"payload"`
+}
+
+type RecordWebhookEventInput struct {
+	Provider        string         `json:"provider"`
+	ExternalEventID string         `json:"external_event_id"`
+	Payload         map[string]any `json:"payload"`
+	Headers         map[string]any `json:"headers"`
+}
+
+type RecordWebhookEventResult struct {
+	Event     WebhookEvent `json:"event"`
+	Duplicate bool         `json:"duplicate"`
 }
 
 type ListWaitlistEntriesInput struct {
@@ -252,6 +273,53 @@ returning id, type, coalesce(entry_id, '') as entry_id, status, payload_json, cr
 	return row.toTrigger()
 }
 
+func (s *WaitlistService) RecordWebhookEvent(ctx context.Context, input RecordWebhookEventInput) (RecordWebhookEventResult, error) {
+	provider := strings.TrimSpace(input.Provider)
+	if provider == "" {
+		return RecordWebhookEventResult{}, &AppError{Status: 400, Code: "invalid_webhook_provider", Err: errors.New("webhook provider is required")}
+	}
+	externalEventID := strings.TrimSpace(input.ExternalEventID)
+	if externalEventID == "" {
+		return RecordWebhookEventResult{}, &AppError{Status: 400, Code: "invalid_webhook_event_id", Err: errors.New("webhook event id is required")}
+	}
+
+	payloadBytes, err := json.Marshal(input.Payload)
+	if err != nil {
+		return RecordWebhookEventResult{}, err
+	}
+	headersBytes, err := json.Marshal(input.Headers)
+	if err != nil {
+		return RecordWebhookEventResult{}, err
+	}
+
+	id := fmt.Sprintf("wh_%d", time.Now().UnixNano())
+	var row webhookEventRow
+	err = s.db.GetContext(ctx, &row, `
+insert into webhook_events (id, provider, external_event_id, payload_json, headers_json)
+values ($1, $2, $3, $4, $5)
+on conflict (provider, external_event_id) do nothing
+returning id, provider, external_event_id, payload_json, headers_json, received_at::text
+`, id, provider, externalEventID, string(payloadBytes), string(headersBytes))
+	if err == nil {
+		event, err := row.toWebhookEvent()
+		return RecordWebhookEventResult{Event: event, Duplicate: false}, err
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return RecordWebhookEventResult{}, err
+	}
+
+	err = s.db.GetContext(ctx, &row, `
+select id, provider, external_event_id, payload_json, headers_json, received_at::text
+from webhook_events
+where provider = $1 and external_event_id = $2
+`, provider, externalEventID)
+	if err != nil {
+		return RecordWebhookEventResult{}, err
+	}
+	event, err := row.toWebhookEvent()
+	return RecordWebhookEventResult{Event: event, Duplicate: true}, err
+}
+
 type waitlistTriggerRow struct {
 	ID          string `db:"id"`
 	Type        string `db:"type"`
@@ -260,6 +328,34 @@ type waitlistTriggerRow struct {
 	PayloadJSON string `db:"payload_json"`
 	CreatedAt   string `db:"created_at"`
 	ProcessedAt string `db:"processed_at"`
+}
+
+type webhookEventRow struct {
+	ID              string `db:"id"`
+	Provider        string `db:"provider"`
+	ExternalEventID string `db:"external_event_id"`
+	PayloadJSON     string `db:"payload_json"`
+	HeadersJSON     string `db:"headers_json"`
+	ReceivedAt      string `db:"received_at"`
+}
+
+func (r webhookEventRow) toWebhookEvent() (WebhookEvent, error) {
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(r.PayloadJSON), &payload); err != nil {
+		return WebhookEvent{}, err
+	}
+	var headers map[string]any
+	if err := json.Unmarshal([]byte(r.HeadersJSON), &headers); err != nil {
+		return WebhookEvent{}, err
+	}
+	return WebhookEvent{
+		ID:              r.ID,
+		Provider:        r.Provider,
+		ExternalEventID: r.ExternalEventID,
+		Payload:         payload,
+		Headers:         headers,
+		ReceivedAt:      r.ReceivedAt,
+	}, nil
 }
 
 func (r waitlistTriggerRow) toTrigger() (WaitlistTrigger, error) {

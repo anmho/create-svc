@@ -93,5 +93,18 @@ function createMockService(): WaitlistService {
         processedAt: null,
       };
     },
+    async recordWebhookEvent() {
+      return {
+        duplicate: false,
+        event: {
+          id: "webhook_1",
+          provider: "generic",
+          externalEventId: "evt_1",
+          payload: {},
+          headers: {},
+          receivedAt: "2026-01-01T00:00:00.000Z",
+        },
+      };
+    },
   };
 }

@@ -18,3 +18,13 @@ create table if not exists waitlist_triggers (
   created_at timestamptz not null default now(),
   processed_at timestamptz
 );
+
+create table if not exists webhook_events (
+  id text primary key,
+  provider text not null,
+  external_event_id text not null,
+  payload_json text not null,
+  headers_json text not null,
+  received_at timestamptz not null default now(),
+  unique (provider, external_event_id)
+);

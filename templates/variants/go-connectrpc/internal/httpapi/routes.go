@@ -3,10 +3,12 @@ package httpapi
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -130,18 +132,35 @@ func RegisterRoutes(router chi.Router, service *app.WaitlistService) {
 			writeError(w, err)
 			return
 		}
-		trigger, err := service.RecordTrigger(request.Context(), app.RecordTriggerInput{
-			Type: "webhook." + chi.URLParam(request, "provider"),
-			Payload: map[string]any{
-				"headers": request.Header,
-				"rawBody": string(rawBody),
-			},
+		provider := chi.URLParam(request, "provider")
+		payload := parseWebhookPayload(rawBody)
+		result, err := service.RecordWebhookEvent(request.Context(), app.RecordWebhookEventInput{
+			Provider:        provider,
+			ExternalEventID: webhookEventID(payload, request.Header),
+			Payload:         payload,
+			Headers:         headersPayload(request.Header),
 		})
 		if err != nil {
 			writeError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusAccepted, map[string]any{"trigger": trigger})
+		if !result.Duplicate {
+			if _, err := service.RecordTrigger(request.Context(), app.RecordTriggerInput{
+				Type: "webhook." + provider,
+				Payload: map[string]any{
+					"headers": headersPayload(request.Header),
+					"rawBody": string(rawBody),
+				},
+			}); err != nil {
+				writeError(w, err)
+				return
+			}
+		}
+		if result.Duplicate {
+			writeJSON(w, http.StatusOK, result)
+			return
+		}
+		writeJSON(w, http.StatusAccepted, result)
 	})
 
 	router.Get("/webhooks/{provider}/health", func(w http.ResponseWriter, request *http.Request) {
@@ -155,6 +174,36 @@ func RegisterRoutes(router chi.Router, service *app.WaitlistService) {
 func decodeJSON(request *http.Request, out any) error {
 	defer request.Body.Close()
 	return json.NewDecoder(request.Body).Decode(out)
+}
+
+func parseWebhookPayload(rawBody []byte) map[string]any {
+	var payload map[string]any
+	if len(rawBody) == 0 || json.Unmarshal(rawBody, &payload) != nil {
+		return map[string]any{"rawBody": string(rawBody)}
+	}
+	return payload
+}
+
+func webhookEventID(payload map[string]any, headers http.Header) string {
+	if id, ok := payload["id"].(string); ok && id != "" {
+		return id
+	}
+	if id := headers.Get("X-Webhook-Event-Id"); id != "" {
+		return id
+	}
+	return fmt.Sprintf("evt_%d", time.Now().UnixNano())
+}
+
+func headersPayload(headers http.Header) map[string]any {
+	out := make(map[string]any, len(headers))
+	for key, values := range headers {
+		if len(values) == 1 {
+			out[key] = values[0]
+			continue
+		}
+		out[key] = values
+	}
+	return out
 }
 
 func decodeOptionalJSON(request *http.Request, out any) error {
