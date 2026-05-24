@@ -489,13 +489,6 @@ async function runDoctor() {
     }
     return "name and custom domain route configured";
   });
-  await record(results, "Cron Trigger", "fail", async () => {
-    const text = await Bun.file("./wrangler.toml").text();
-    if (!text.includes("[triggers]") || !text.includes("crons")) {
-      throw new Error("wrangler.toml is missing a cron trigger");
-    }
-    return "cron trigger configured";
-  });
   await record(results, "Hyperdrive binding", "warn", async () => {
     const text = await Bun.file("./wrangler.toml").text();
     if (!text.includes('binding = "HYPERDRIVE"')) {

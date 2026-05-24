@@ -7,7 +7,6 @@ This `{{PROFILE}}` profile targets `{{RUNTIME}} + {{FRAMEWORK}}` on Cloudflare W
 - one `wrangler.toml`
 - a lightweight waitlist/launch API
 - the `service` CLI for create, deploy, doctor, dashboards, DNS, and destroy
-- Cron Trigger wiring for scheduled follow-up work
 - a Hyperdrive binding for Neon-backed Postgres persistence
 - a production API origin at `https://{{API_HOSTNAME}}`
 
@@ -62,7 +61,7 @@ configured in `wrangler.toml`:
 https://{{API_HOSTNAME}}
 ```
 
-Use `service doctor` after create to verify Wrangler auth, route config, Cron,
+Use `service doctor` after create to verify Wrangler auth, route config,
 Hyperdrive, dashboard tooling, auth tooling, and deployed health.
 
 {{PRODUCTION_PROTECTED_CHECKS}}
