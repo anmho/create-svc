@@ -12,9 +12,6 @@ AUTH_ISSUER = "{{AUTH_ISSUER}}"
 AUTH_AUDIENCE = "{{AUTH_AUDIENCE}}"
 AUTH_JWKS_URL = "{{AUTH_JWKS_URL}}"
 
-[triggers]
-crons = ["*/15 * * * *"]
-
 [[routes]]
 pattern = "{{API_HOSTNAME}}"
 custom_domain = true
