@@ -58,7 +58,19 @@ export async function bootstrapGitHubRepository(targetDir: string, config: GitBo
 }
 
 export function commitAndPushGeneratedArtifacts(targetDir: string, message: string) {
-  run(["git", "add", "."], targetDir);
+  run(
+    [
+      "git",
+      "add",
+      "--all",
+      ".",
+      ":!node_modules",
+      ":!.service/*.log",
+      ":!.service/*.pid",
+      ":!.wrangler",
+    ],
+    targetDir
+  );
   if (!hasStagedChanges(targetDir)) {
     return { committed: false };
   }
