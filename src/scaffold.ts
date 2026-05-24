@@ -13,7 +13,10 @@ import { exampleForProfile, type Profile } from "./profiles";
 import type { GitBootstrapConfig } from "./git-bootstrap";
 
 const GENERATED_GITHUB_ACTION_WORKFLOWS = new Set([
+  ".github/workflows/ci.yml",
   ".github/workflows/preview.yml",
+  ".github/workflows/preview-cleanup.yml",
+  ".github/workflows/personal.yml",
   ".github/workflows/deploy.yml",
 ]);
 
@@ -243,9 +246,9 @@ function buildReplacements(config: ScaffoldConfig) {
       config.runtime === "bun" ? "bun run observability-bootstrap" : "make observability-bootstrap",
     WORKFLOW_DEPLOY_MAIN_COMMAND: "service deploy --ci",
     WORKFLOW_DEPLOY_PREVIEW_COMMAND:
-      "service deploy --ci --environment preview --name ${{ github.ref_name }}",
+      "service deploy --ci --environment preview --name ${{ steps.pr.outputs.number }}",
     WORKFLOW_DEPLOY_MAIN_DOC_COMMAND: "service deploy --ci",
-    WORKFLOW_DEPLOY_PREVIEW_DOC_COMMAND: "service deploy --ci --environment preview --name <branch-name>",
+    WORKFLOW_DEPLOY_PREVIEW_DOC_COMMAND: "service deploy --ci --environment preview --name <pull-request-number>",
     COMMAND_AUTH_RESOURCE: "service auth resource-server",
     COMMAND_AUTH_CLIENT: "service auth client create",
     COMMAND_AUTH_TOKEN: "service auth token",
