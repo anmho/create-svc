@@ -97,7 +97,6 @@
     "service_account": "{{RUNTIME_SERVICE_ACCOUNT}}",
     "required_apis": [
       "run.googleapis.com",
-      "cloudbuild.googleapis.com",
       "artifactregistry.googleapis.com",
       "iam.googleapis.com",
       "iamcredentials.googleapis.com",

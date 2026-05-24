@@ -70,6 +70,8 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
     expect(serviceConfig).toContain('"api_key_secret_name": "dns-api-temporal-api-key"');
     expect(serviceConfig).toContain('"project_mode": "create_new"');
     expect(serviceConfig).toContain('"quota_project_id": "anmho-infra-prod"');
+    expect(serviceConfig).toContain('"artifact_repository": "cloud-run"');
+    expect(serviceConfig).not.toContain("cloudbuild.googleapis.com");
     expect(serviceConfig).toContain('"jwks_url": "https://auth.anmho.com/api/auth/jwks"');
     expect(serviceConfig).toContain('"git": {');
     expect(serviceConfig).toContain('"repository": "dns-api"');

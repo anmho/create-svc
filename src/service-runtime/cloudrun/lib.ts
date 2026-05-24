@@ -2,18 +2,12 @@ import { intro, log, outro, spinner } from "@clack/prompts";
 import { join } from "node:path";
 import { config } from "./config";
 import { serviceRoot } from "../runtime";
+import { parseDeployArgs, type DeployArgs } from "./deploy-args";
 
 type CommandOptions = {
   allowFailure?: boolean;
   input?: string;
   env?: Record<string, string | undefined>;
-};
-
-type DeployArgs = {
-  ci: boolean;
-  destroy: boolean;
-  environment: "main" | "preview" | "personal";
-  name?: string;
 };
 
 type CleanupArgs = {
@@ -123,6 +117,10 @@ export async function gcloudStreaming(args: string[], options: CommandOptions = 
     normalized.push("--billing-project", config.project.quotaProjectId);
   }
   return runStreaming("gcloud", normalized, options);
+}
+
+export async function dockerStreaming(args: string[], options: CommandOptions = {}) {
+  return runStreaming("docker", args, options);
 }
 
 export async function runStreaming(command: string, args: string[], options: CommandOptions = {}): Promise<CommandResult> {
@@ -454,61 +452,7 @@ export function imageUrl(tag = imageTag()) {
   return `${artifactImageBase()}:${tag}`;
 }
 
-export function parseDeployArgs(argv: string[]): DeployArgs {
-  const parsed: DeployArgs = {
-    ci: false,
-    destroy: false,
-    environment: "main",
-  };
-
-  for (let i = 0; i < argv.length; i += 1) {
-    const token = argv[i];
-    if (!token) {
-      continue;
-    }
-
-    const next = argv[i + 1];
-    const readValue = () => {
-      if (!next || next.startsWith("-")) {
-        throw new Error(`Missing value for ${token}`);
-      }
-      i += 1;
-      return next;
-    };
-
-    if (token === "--ci") {
-      parsed.ci = true;
-      continue;
-    }
-
-    if (token === "--destroy") {
-      parsed.destroy = true;
-      continue;
-    }
-
-    if (token === "--environment") {
-      parsed.environment = readValue() as DeployArgs["environment"];
-      continue;
-    }
-
-    if (token.startsWith("--environment=")) {
-      parsed.environment = token.slice("--environment=".length) as DeployArgs["environment"];
-      continue;
-    }
-
-    if (token === "--name") {
-      parsed.name = readValue();
-      continue;
-    }
-
-    if (token.startsWith("--name=")) {
-      parsed.name = token.slice("--name=".length);
-      continue;
-    }
-  }
-
-  return parsed;
-}
+export { parseDeployArgs };
 
 export function parseCleanupArgs(argv: string[]): CleanupArgs {
   const parsed: CleanupArgs = {
