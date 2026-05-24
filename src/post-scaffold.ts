@@ -98,6 +98,16 @@ export function buildDeploymentVerificationCommands(
   config: Pick<ScaffoldConfig, "apiHostname" | "framework" | "runtime"> &
     Partial<Pick<ScaffoldConfig, "target" | "serviceName" | "gcpProject" | "region">>
 ): PostScaffoldCommand[] {
+  if (config.target === "workers") {
+    const host = config.apiHostname;
+    const tokenCommand = 'TOKEN="$(service auth token)"';
+    return [
+      workersCurlCommand(host, "/"),
+      workersCurlCommand(host, "/readyz"),
+      workersProtectedVerificationCommand(host, tokenCommand),
+    ];
+  }
+
   const origin = verificationOrigin(config);
   const tokenCommand = 'TOKEN="$(service auth token)"';
   return [
@@ -105,6 +115,30 @@ export function buildDeploymentVerificationCommands(
     shellVerificationCommand(`curl --fail --show-error --silent "${origin}/readyz"`),
     protectedVerificationCommand(config, origin, tokenCommand),
   ];
+}
+
+function workersCurlCommand(host: string, path: string): PostScaffoldCommand {
+  return shellVerificationCommand(workersCurlScript(host, path));
+}
+
+function workersProtectedVerificationCommand(host: string, tokenCommand: string): PostScaffoldCommand {
+  return shellVerificationCommand(
+    `${tokenCommand} && ${workersCurlScript(host, "/v1/admin/waitlist?limit=1", ['-H "Authorization: Bearer $TOKEN"'])}`
+  );
+}
+
+function workersCurlScript(host: string, path: string, flags: string[] = []) {
+  const url = `https://${host}${path}`;
+  return [
+    `IP="$(dig @1.1.1.1 +short ${host} | head -n 1)"`,
+    "&&",
+    'test -n "$IP"',
+    "&&",
+    "curl --fail --show-error --silent",
+    `--resolve "${host}:443:$IP"`,
+    ...flags,
+    `"${url}"`,
+  ].join(" ");
 }
 
 export function buildLocalVerificationCommands(
