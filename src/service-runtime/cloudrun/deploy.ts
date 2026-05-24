@@ -4,6 +4,7 @@ import { deleteBranch, ensureBranch, ensureDatabase, getConnectionUri, listBranc
 import {
   addSecretVersion,
   deleteService,
+  dockerStreaming,
   ensureArtifactRepository,
   ensureProductionDomainMapping,
   ensureSecretAccessor,
@@ -74,9 +75,18 @@ export async function deploy(args = Bun.argv.slice(2), deployOptions: DeployOpti
     });
   }
   const image = imageUrl();
-  await runStep("Building container image in Cloud Build", () =>
-    gcloudStreaming(["builds", "submit", "--project", config.project.id, "--region", config.region, "--tag", image])
-  );
+  if (options.build === "cloudbuild") {
+    await runStep("Building container image in Cloud Build", () =>
+      gcloudStreaming(["builds", "submit", "--project", config.project.id, "--region", config.region, "--tag", image])
+    );
+  } else {
+    requireCommand("docker");
+    await runStep("Authenticating Docker to Artifact Registry", () =>
+      gcloud(["auth", "configure-docker", `${config.region}-docker.pkg.dev`, "--quiet"])
+    );
+    await runStep("Building container image locally", () => dockerStreaming(["build", "-t", image, "."]));
+    await runStep("Pushing container image to Artifact Registry", () => dockerStreaming(["push", image]));
+  }
 
   const renderedManifestPath = await runStep("Rendering Cloud Run manifest", () => writeRenderedManifest(image, target));
 

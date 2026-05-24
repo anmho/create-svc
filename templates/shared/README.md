@@ -66,10 +66,14 @@ Create, deploy, and destroy use:
 
 - known-good CLIs first, especially `gcloud`
 - `gcloud`
+- Docker for local image builds and Artifact Registry pushes
 - `NEON_API_KEY`, or a working Vault login via `VAULT_ADDR` plus `VAULT_TOKEN`, `VAULT_TOKEN_FILE`, or `~/.vault-token`
 - the repo-aware `service` CLI from this package
 
 Local provisioning intentionally prefers known-good CLIs over SDKs for Google Cloud operations.
+Cloud Run deploys build and push the container image locally by default. Use
+`service deploy --build cloudbuild` only when you explicitly want Google Cloud
+Build to build the image remotely.
 
 Authenticate `gcloud` on the machine before running provisioning commands:
 
