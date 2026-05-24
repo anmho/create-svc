@@ -74,6 +74,8 @@ Local provisioning intentionally prefers known-good CLIs over SDKs for Google Cl
 Cloud Run deploys build and push the container image locally by default. Use
 `service deploy --build cloudbuild` only when you explicitly want Google Cloud
 Build to build the image remotely.
+Local Docker builds target `linux/amd64` so images built on Apple Silicon run on
+Cloud Run.
 
 Authenticate `gcloud` on the machine before running provisioning commands:
 
