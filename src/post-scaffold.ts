@@ -129,15 +129,16 @@ function workersProtectedVerificationCommand(host: string, tokenCommand: string)
 
 function workersCurlScript(host: string, path: string, flags: string[] = []) {
   const url = `https://${host}${path}`;
+  const curl = ["curl --fail --show-error --silent", ...flags, `"${url}"`].join(" ");
+  const resolvedCurl = ["curl --fail --show-error --silent", `--resolve "${host}:443:$IP"`, ...flags, `"${url}"`].join(" ");
   return [
-    `IP="$(dig @1.1.1.1 +short ${host} | head -n 1)"`,
-    "&&",
-    'test -n "$IP"',
-    "&&",
-    "curl --fail --show-error --silent",
-    `--resolve "${host}:443:$IP"`,
-    ...flags,
-    `"${url}"`,
+    `(${curl})`,
+    "||",
+    `for IP in $(dig @1.1.1.1 +short ${host}); do`,
+    `${resolvedCurl}`,
+    "&& exit 0;",
+    "done;",
+    "exit 1",
   ].join(" ");
 }
 
