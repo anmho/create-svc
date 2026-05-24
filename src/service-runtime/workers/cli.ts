@@ -4,8 +4,9 @@ import { confirm, intro, isCancel, log, outro } from "@clack/prompts";
 import { createApiClient } from "@neondatabase/api-client";
 import { Client } from "pg";
 import { manualGitHubDeleteCommand } from "../../git-bootstrap";
-import { ensureAuthClient, ensureAuthResourceServer, runAuthCommand, runAuthDoctor } from "../authctl";
+import { deleteAuthResourceServer, ensureAuthClient, ensureAuthResourceServer, runAuthCommand, runAuthDoctor } from "../authctl";
 import { stopLocalDev } from "../local-dev";
+import { runParallelTasks, type ParallelTask } from "../parallel-tasks";
 import { serviceConfig } from "../runtime";
 import { isLocalDatabaseUrl, isMissingDatabaseError, resolveCommandPath } from "./lib";
 
@@ -78,7 +79,7 @@ export async function main(argv = Bun.argv.slice(2)) {
     if (rest[0] !== "down") {
       throw new Error(`Unknown dev command: ${rest[0] || ""}\n\n${formatHelp()}`);
     }
-    return runMain("Dev", () => stopLocalDev({ dockerCompose: false }));
+    return runMain("Dev", () => stopLocalDev({ dockerCompose: true, removeVolumes: false }));
   }
 
   if (command === "doctor") {
@@ -97,14 +98,45 @@ export async function main(argv = Bun.argv.slice(2)) {
     return runMain("Destroy", async () => {
       await requireDestroyConfirmation(rest.includes("--force"));
       const wranglerArgs = rest.filter((arg) => arg !== "--force");
-      await stopLocalDev({ dockerCompose: false });
+      const tasks: ParallelTask[] = [
+        {
+          label: "Stopping local dev resources",
+          task: () => stopLocalDev({ dockerCompose: true, removeVolumes: true }),
+        },
+        {
+          label: `Deleting auth resource server ${config.serviceName}`,
+          task: () => deleteAuthResourceServer(),
+        },
+        {
+          label: "Deleting Hyperdrive",
+          task: () => deleteHyperdrive(),
+        },
+        {
+          label: `Deleting Worker ${config.serviceName}`,
+          task: () => run("wrangler", ["delete", "--name", config.serviceName, "--force", ...wranglerArgs]),
+        },
+        {
+          label: "Deleting Neon database",
+          task: () => deleteNeonDatabase(),
+        },
+        {
+          label: "Deleting Grafana resources",
+          task: () => deleteGrafanaResources(),
+        },
+      ];
+
       if (await confirmGitHubRepositoryDeletion(rest.includes("--force"))) {
-        deleteGitHubRepositoryIfOwned();
+        tasks.push({
+          label: `Deleting GitHub repository ${config.git.owner}/${config.git.repository}`,
+          task: () => deleteGitHubRepositoryIfOwned(),
+        });
       }
-      await deleteHyperdrive();
-      run("wrangler", ["delete", "--name", config.serviceName, "--force", ...wranglerArgs]);
-      await deleteNeonDatabase();
-      await deleteGrafanaResources();
+
+      log.step(`Deleting ${tasks.length} resource groups in parallel`);
+      await runParallelTasks(tasks, {
+        onSuccess: (label) => log.step(`${label}: done`),
+        onFailure: (label, error) => log.error(`${label} failed\n${error instanceof Error ? error.message : String(error)}`),
+      });
       return `Destroyed ${config.serviceName}`;
     });
   }
@@ -129,7 +161,7 @@ function formatHelp() {
     "  doctor      Check local tools and cloud access",
     "  auth        Manage auth resource server and clients",
     "  auth token  Mint a bearer token for protected API checks",
-    "  dev down    Stop local dev",
+    "  dev down    Stop local dev and Docker Compose containers",
     "  dns         Show Workers custom-domain configuration",
     "  dashboards  Publish Grafana resources",
     "  destroy     Remove service-managed Worker resources",

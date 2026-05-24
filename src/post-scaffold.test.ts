@@ -42,6 +42,7 @@ describe("buildLocalPreparationCommands", () => {
   test("starts local Postgres before migrating Workers dev", () => {
     expect(buildLocalPreparationCommands({ target: "workers" })).toEqual([
       { command: "bun", args: ["run", "./scripts/ensure-local-db.ts"] },
+      { command: "bun", args: ["run", "./scripts/wait-for-db.ts"] },
       { command: "bun", args: ["run", "migrate"] },
     ]);
   });
