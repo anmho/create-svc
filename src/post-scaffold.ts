@@ -44,6 +44,19 @@ export async function runPostScaffoldFlow(config: ScaffoldConfig, cwd: string) {
   return { message: "Backend package generated" };
 }
 
+export function runPreGitBootstrapFlow(config: Pick<ScaffoldConfig, "framework"> & Partial<Pick<ScaffoldConfig, "target">>, cwd: string) {
+  const commands = buildPreGitBootstrapCommands(config);
+  if (commands.length === 0) {
+    return { changed: false };
+  }
+
+  installProjectDependencies(cwd);
+  for (const command of commands) {
+    run(command.command, command.args, { cwd });
+  }
+  return { changed: true };
+}
+
 async function startLocalDevelopment(config: Pick<ScaffoldConfig, "target">, cwd: string) {
   run("bun", ["run", "migrate"], { cwd });
   await mkdir(join(cwd, ".service"), { recursive: true });
@@ -222,10 +235,16 @@ function localVerificationHost(config: Partial<Pick<ScaffoldConfig, "target" | "
 export function buildPostScaffoldCommands(
   config: Pick<ScaffoldConfig, "framework"> & Partial<Pick<ScaffoldConfig, "target">>
 ): PostScaffoldCommand[] {
-  return [
-    ...(config.target !== "workers" && config.framework === "connectrpc" ? [{ command: "service", args: ["sdk", "build"] }] : []),
-    { command: "service", args: ["create"] },
-  ];
+  return [{ command: "service", args: ["create"] }];
+}
+
+export function buildPreGitBootstrapCommands(
+  config: Pick<ScaffoldConfig, "framework"> & Partial<Pick<ScaffoldConfig, "target">>
+): PostScaffoldCommand[] {
+  if (config.target === "workers" || config.framework !== "connectrpc") {
+    return [];
+  }
+  return [{ command: "service", args: ["sdk", "build"] }];
 }
 
 function installProjectDependencies(cwd: string) {

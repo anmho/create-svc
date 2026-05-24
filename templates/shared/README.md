@@ -8,7 +8,7 @@ This `{{PROFILE}}` profile targets `{{RUNTIME}} + {{FRAMEWORK}}` on Cloud Run wi
 - a lightweight `{{EXAMPLE_LABEL}}` example surface
 - local Docker Compose Postgres for first-run development
 - the `service` CLI for create, deploy, doctor, dashboards, and destroy
-- GCP project create with billing and quota-project-aware `gcloud` calls
+- shared GCP project deployment with quota-project-aware `gcloud` calls
 - Neon-backed remote database provisioning during create and deploy
 - Better Auth client-credentials resource-server registration through `authctl`
 - stage-aware waitlist data and trigger ingestion

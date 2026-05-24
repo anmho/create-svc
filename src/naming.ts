@@ -1,5 +1,7 @@
 export const BILLING_ACCOUNT_DEFAULT = "billingAccounts/01BD2E-3A6949-8F4C84";
 export const QUOTA_PROJECT_DEFAULT = "anmho-infra-prod";
+export const SERVICES_PROJECT_DEFAULT = "anmho-services";
+export const SERVICES_PROJECT_NAME_DEFAULT = "services";
 
 export const DEPLOY_TARGETS = ["cloudrun", "workers"] as const;
 
@@ -108,19 +110,27 @@ export function buildGcpProjectOptions(
   projectName: string,
   projects: Array<{ projectId: string; name: string }>
 ) {
+  const servicesProject = projects.find((project) => project.projectId === SERVICES_PROJECT_DEFAULT);
+  const remainingProjects = projects.filter((project) => project.projectId !== SERVICES_PROJECT_DEFAULT);
   return [
+    {
+      label: `Use shared services project: ${servicesProject?.name ?? SERVICES_PROJECT_NAME_DEFAULT} (${SERVICES_PROJECT_DEFAULT})`,
+      mode: "use_existing" as const,
+      projectId: SERVICES_PROJECT_DEFAULT,
+      projectName: servicesProject?.name ?? SERVICES_PROJECT_NAME_DEFAULT,
+    },
+    ...remainingProjects.map((project) => ({
+      label: `Use existing project: ${project.name} (${project.projectId})`,
+      mode: "use_existing" as const,
+      projectId: project.projectId,
+      projectName: project.name,
+    })),
     {
       label: buildCreateProjectLabel(serviceName, projectId),
       mode: "create_new" as const,
       projectId,
       projectName,
     },
-    ...projects.map((project) => ({
-      label: `Use existing project: ${project.name} (${project.projectId})`,
-      mode: "use_existing" as const,
-      projectId: project.projectId,
-      projectName: project.name,
-    })),
   ];
 }
 

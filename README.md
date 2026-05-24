@@ -54,6 +54,10 @@ By default, that scaffolds the repo, installs dependencies, runs the generated
 repo's `service create`, deploys once, verifies production, starts local dev,
 and verifies local. Pass `--no-auto-deploy` for scaffold-only generation.
 
+Cloud Run services default to the shared existing GCP project `anmho-services`.
+Override with `--project-id <id>` or explicitly opt into per-service project
+creation with `--project-mode create_new`.
+
 `--profile microservice` is accepted as a compatibility no-op. App workspaces live outside this package in private app template repositories.
 
 By default, a standalone generated service is initialized as a git repository,

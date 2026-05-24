@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdir, mkdtemp, realpath, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { buildGitBootstrapConfig, findExistingGitWorktree, markGitHubRepositoryDeleteOnDestroy } from "./git-bootstrap";
+import { buildGitBootstrapConfig, findExistingGitWorktree, manualGitHubDeleteCommand, markGitHubRepositoryDeleteOnDestroy } from "./git-bootstrap";
 
 test("buildGitBootstrapConfig defaults to anmho private repo creation", () => {
   expect(buildGitBootstrapConfig("launch-api", undefined)).toEqual({
@@ -18,6 +18,10 @@ test("buildGitBootstrapConfig honors --no-git", () => {
     owner: "anmho",
     repository: "launch-api",
   });
+});
+
+test("manualGitHubDeleteCommand formats the advisory cleanup command", () => {
+  expect(manualGitHubDeleteCommand("anmho/launch-api")).toBe("gh repo delete anmho/launch-api --yes");
 });
 
 test("findExistingGitWorktree detects parent repositories", async () => {

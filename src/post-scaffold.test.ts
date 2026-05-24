@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { buildDeploymentVerificationCommands, buildLocalVerificationCommands, buildPostScaffoldCommands } from "./post-scaffold";
+import {
+  buildDeploymentVerificationCommands,
+  buildLocalVerificationCommands,
+  buildPostScaffoldCommands,
+  buildPreGitBootstrapCommands,
+} from "./post-scaffold";
 
 describe("buildPostScaffoldCommands", () => {
   test("runs create for HTTP services", () => {
@@ -8,9 +13,8 @@ describe("buildPostScaffoldCommands", () => {
     ]);
   });
 
-  test("builds SDK artifacts before create for ConnectRPC services", () => {
+  test("runs create for ConnectRPC services after pre-git SDK preparation", () => {
     expect(buildPostScaffoldCommands({ framework: "connectrpc" })).toEqual([
-      { command: "service", args: ["sdk", "build"] },
       { command: "service", args: ["create"] },
     ]);
   });
@@ -19,6 +23,17 @@ describe("buildPostScaffoldCommands", () => {
     expect(buildPostScaffoldCommands({ target: "workers", framework: "hono" })).toEqual([
       { command: "service", args: ["create"] },
     ]);
+  });
+});
+
+describe("buildPreGitBootstrapCommands", () => {
+  test("builds SDK artifacts before the initial GitHub push for ConnectRPC services", () => {
+    expect(buildPreGitBootstrapCommands({ framework: "connectrpc" })).toEqual([{ command: "service", args: ["sdk", "build"] }]);
+  });
+
+  test("does not build SDK artifacts for HTTP or Workers services", () => {
+    expect(buildPreGitBootstrapCommands({ framework: "hono" })).toEqual([]);
+    expect(buildPreGitBootstrapCommands({ target: "workers", framework: "connectrpc" })).toEqual([]);
   });
 });
 
