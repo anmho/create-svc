@@ -11,6 +11,8 @@ AUTH_ENABLED = "true"
 AUTH_ISSUER = "{{AUTH_ISSUER}}"
 AUTH_AUDIENCE = "{{AUTH_AUDIENCE}}"
 AUTH_JWKS_URL = "{{AUTH_JWKS_URL}}"
+TRIGGER_TASK_ID = "{{SERVICE_ID}}-waitlist-follow-up"
+TRIGGER_API_URL = "https://api.trigger.dev"
 
 [[routes]]
 pattern = "{{API_HOSTNAME}}"

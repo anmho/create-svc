@@ -15,6 +15,12 @@ const config = {
   hostname: serviceConfig.dns.hostname,
   neonDatabaseName: serviceConfig.neon.database_name,
   neonRoleName: serviceConfig.neon.role_name,
+  triggerDev: {
+    projectRefEnv: serviceConfig.workers?.trigger_dev?.project_ref_env || "TRIGGER_PROJECT_REF",
+    accessTokenEnv: serviceConfig.workers?.trigger_dev?.access_token_env || "TRIGGER_ACCESS_TOKEN",
+    secretKeyEnv: serviceConfig.workers?.trigger_dev?.secret_key_env || "TRIGGER_SECRET_KEY",
+    waitlistTaskId: serviceConfig.workers?.trigger_dev?.waitlist_task_id || `${serviceConfig.service_id}-waitlist-follow-up`,
+  },
   git: {
     enabled: Boolean(serviceConfig.git?.enabled),
     owner: serviceConfig.git?.owner || "anmho",
@@ -35,11 +41,14 @@ export async function main(argv = Bun.argv.slice(2)) {
 
   if (command === "create") {
     return runMain("Create", async () => {
+      ensureTriggerDevConfig();
       ensureAuthResourceServer();
       ensureAuthClient();
       const databaseUrl = await resolveDatabaseUrl({ preferRemote: true });
       await applySchemaWithRetries(databaseUrl);
       await ensureHyperdrive(databaseUrl);
+      deployTriggerDevTasks();
+      publishTriggerDevSecret();
       run("wrangler", ["deploy"]);
       return `Created https://${config.hostname}`;
     });
@@ -47,6 +56,9 @@ export async function main(argv = Bun.argv.slice(2)) {
 
   if (command === "deploy") {
     return runMain("Deploy", () => {
+      ensureTriggerDevConfig();
+      deployTriggerDevTasks();
+      publishTriggerDevSecret();
       run("wrangler", ["deploy", ...rest]);
       return `Deployed https://${config.hostname}`;
     });
@@ -507,6 +519,11 @@ async function runDoctor() {
     return "dashboard directory found";
   });
   await record(results, "authctl", "warn", () => runAuthDoctor().detail);
+  await record(results, "Trigger.dev config", "fail", () => {
+    ensureTriggerDevConfig();
+    return `${config.triggerDev.waitlistTaskId} configured`;
+  });
+  await record(results, "Trigger.dev CLI", "warn", () => checkCommand("trigger"));
   await record(results, "deployed health", "warn", async () => {
     const response = await fetch(`https://${config.hostname}/healthz`, { signal: AbortSignal.timeout(5_000) });
     if (!response.ok) {
@@ -521,6 +538,69 @@ async function runDoctor() {
     throw new Error(`Doctor found ${failures.length} failing check(s)\n${output}`);
   }
   return output;
+}
+
+function ensureTriggerDevConfig() {
+  const missing = [];
+  if (!process.env[config.triggerDev.projectRefEnv]?.trim()) {
+    missing.push(config.triggerDev.projectRefEnv);
+  }
+  if (!process.env[config.triggerDev.accessTokenEnv]?.trim()) {
+    missing.push(config.triggerDev.accessTokenEnv);
+  }
+  if (!process.env[config.triggerDev.secretKeyEnv]?.trim()) {
+    missing.push(config.triggerDev.secretKeyEnv);
+  }
+  if (missing.length > 0) {
+    throw new Error(`${formatList(missing)} required for Workers Trigger.dev task deployment and dispatch`);
+  }
+}
+
+function formatList(values: string[]) {
+  if (values.length <= 1) {
+    return values[0] ?? "";
+  }
+  if (values.length === 2) {
+    return values.join(" and ");
+  }
+  return `${values.slice(0, -1).join(", ")}, and ${values.at(-1)}`;
+}
+
+function deployTriggerDevTasks() {
+  run("trigger", ["deploy", "--project-ref", process.env[config.triggerDev.projectRefEnv]?.trim() || ""]);
+}
+
+function publishTriggerDevSecret() {
+  const secret = process.env[config.triggerDev.secretKeyEnv]?.trim();
+  if (!secret) {
+    throw new Error(`${config.triggerDev.secretKeyEnv} required to publish the Workers Trigger.dev secret`);
+  }
+  const wrangler = resolveCommandPath("wrangler");
+  if (!wrangler) {
+    throw new Error("missing required command: wrangler");
+  }
+  runShell(`printf %s "$${config.triggerDev.secretKeyEnv}" | ${shellQuote(wrangler)} secret put TRIGGER_SECRET_KEY --name ${shellQuote(config.serviceName)}`);
+}
+
+function runShell(script: string) {
+  const shell = Bun.which("sh");
+  if (!shell) {
+    throw new Error("missing required command: sh");
+  }
+  const result = Bun.spawnSync([shell, "-c", script], {
+    cwd: process.cwd(),
+    env: process.env,
+    stdin: "inherit",
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  if (!result.success) {
+    throw new Error(`shell command failed with exit code ${result.exitCode}: ${script}`);
+  }
+}
+
+function shellQuote(value: string) {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
 async function record(

@@ -94,7 +94,12 @@ type AppError struct {
 func (e *AppError) Error() string { return e.Err.Error() }
 
 type WaitlistService struct {
-	db *sqlx.DB
+	db                *sqlx.DB
+	triggerDispatcher TriggerDispatcher
+}
+
+type TriggerDispatcher interface {
+	DispatchWaitlistFollowUp(context.Context, WaitlistTrigger) error
 }
 
 func OpenDatabase(ctx context.Context, databaseURL string) (*sqlx.DB, error) {
@@ -106,6 +111,10 @@ func OpenDatabase(ctx context.Context, databaseURL string) (*sqlx.DB, error) {
 
 func NewWaitlistService(db *sqlx.DB) *WaitlistService {
 	return &WaitlistService{db: db}
+}
+
+func (s *WaitlistService) SetTriggerDispatcher(dispatcher TriggerDispatcher) {
+	s.triggerDispatcher = dispatcher
 }
 
 func (s *WaitlistService) JoinWaitlist(ctx context.Context, input JoinWaitlistInput) (JoinWaitlistResult, error) {
@@ -270,7 +279,18 @@ returning id, type, coalesce(entry_id, '') as entry_id, status, payload_json, cr
 	if err != nil {
 		return WaitlistTrigger{}, err
 	}
-	return row.toTrigger()
+	trigger, err := row.toTrigger()
+	if err != nil {
+		return WaitlistTrigger{}, err
+	}
+	if s.triggerDispatcher != nil {
+		go func() {
+			if err := s.triggerDispatcher.DispatchWaitlistFollowUp(context.Background(), trigger); err != nil {
+				fmt.Printf("failed to start waitlist follow-up workflow: %v\n", err)
+			}
+		}()
+	}
+	return trigger, nil
 }
 
 func (s *WaitlistService) RecordWebhookEvent(ctx context.Context, input RecordWebhookEventInput) (RecordWebhookEventResult, error) {

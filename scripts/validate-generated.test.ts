@@ -135,6 +135,16 @@ test("plans generated workflow validation with service deploy commands", () => {
   expect(workflowChecks?.[1]?.includes).toContain("service deploy --ci");
 });
 
+test("generated validation starts services with local Temporal defaults", () => {
+  const plan = planValidation(["--variant", "bun-hono"]);
+
+  expect(plan[0]?.runtimeEnv).toMatchObject({
+    TEMPORAL_ENABLED: "true",
+    TEMPORAL_ADDRESS: "localhost:7233",
+    TEMPORAL_NAMESPACE: "default",
+  });
+});
+
 test("plans connectrpc introspection checks for the bun connectrpc variant", () => {
   const plan = planValidation(["--variant=bun-connectrpc"]);
 

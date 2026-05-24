@@ -20,15 +20,18 @@ npm: <https://www.npmjs.com/package/create-svc>
 ## Usage
 
 ```bash
-service create my-service
+service new my-service
 ```
 
 That creates `./my-service` by default. To write somewhere else while keeping
 the service id as `my-service`, pass `--dir`:
 
 ```bash
-service create my-service --dir /Users/andrewho/repos/projects/my-service
+service new my-service --dir /Users/andrewho/repos/projects/my-service
 ```
+
+`service create <service_id>` remains an alias for `service new <service_id>`
+when you are outside a generated service repo.
 
 Inside a generated service repo, the same command operates that repo:
 
@@ -47,7 +50,7 @@ npm install -g create-svc@latest
 For the strict one-command production path:
 
 ```bash
-service create my-service --yes
+service new my-service --yes
 ```
 
 By default, that scaffolds the repo, installs dependencies, runs the generated
@@ -75,14 +78,14 @@ Without publishing to npm:
 ```bash
 bun install
 bun link
-service create my-service
+service new my-service
 ```
 
 For faster iteration against your working tree:
 
 ```bash
 bun link
-service create my-service
+service new my-service
 ```
 
 During scaffold, the generator can discover:
@@ -166,7 +169,7 @@ The generated microservice domain is a small waitlist/launch service example wit
 ```bash
 bun install
 bun test src scripts
-bun run index.ts create my-service
+bun run index.ts new my-service
 ```
 
 Validate the generated service matrix against local Docker Compose Postgres and

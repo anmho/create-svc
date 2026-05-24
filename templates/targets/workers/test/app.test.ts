@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { createApp } from "../src/index";
+import type { TriggerDispatcher } from "../src/trigger";
 
 type JoinResponse = {
   entry: {
@@ -92,7 +93,8 @@ test("waitlist join persists an idempotent entry", async () => {
 });
 
 test("waitlist trigger is queued for cron processing", async () => {
-  const response = await createApp().request("/v1/triggers/waitlist", {
+  const calls: unknown[] = [];
+  const response = await createApp({ triggerDispatcher: mockTriggerDispatcher(calls) }).request("/v1/triggers/waitlist", {
     method: "POST",
     body: JSON.stringify({ type: "cron.digest" }),
     headers: { "content-type": "application/json" },
@@ -104,5 +106,48 @@ test("waitlist trigger is queued for cron processing", async () => {
       type: "cron.digest",
       status: "queued",
     },
+    trigger_dev_run_id: "run_test",
+  });
+  expect(calls).toHaveLength(1);
+});
+
+test("waitlist trigger reports missing Trigger.dev configuration", async () => {
+  const response = await createApp().request("/v1/triggers/waitlist", {
+    method: "POST",
+    body: JSON.stringify({ type: "manual" }),
+    headers: { "content-type": "application/json" },
+  });
+
+  expect(response.status).toBe(500);
+  await expect(response.json()).resolves.toMatchObject({
+    code: "trigger_dev_not_configured",
   });
 });
+
+test("webhook dispatches a Trigger.dev run", async () => {
+  const calls: unknown[] = [];
+  const response = await createApp({ triggerDispatcher: mockTriggerDispatcher(calls) }).request("/webhooks/stripe", {
+    method: "POST",
+    body: JSON.stringify({ id: "evt_test" }),
+    headers: { "content-type": "application/json" },
+  });
+
+  expect(response.status).toBe(202);
+  await expect(response.json()).resolves.toMatchObject({
+    trigger: {
+      type: "webhook.stripe",
+      status: "queued",
+    },
+    trigger_dev_run_id: "run_test",
+  });
+  expect(calls).toHaveLength(1);
+});
+
+function mockTriggerDispatcher(calls: unknown[]): TriggerDispatcher {
+  return {
+    async dispatchWaitlistFollowUp(trigger) {
+      calls.push(trigger);
+      return { id: "run_test" };
+    },
+  };
+}

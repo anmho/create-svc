@@ -60,6 +60,7 @@ export type ValidationPlanItem = {
   commandSteps: ValidationCommandStep[];
   generatedChecks: GeneratedCheck[];
   smokeChecks: SmokeCheck[];
+  runtimeEnv: Record<string, string>;
 };
 
 export type ValidationOptions = {
@@ -317,6 +318,11 @@ export function planValidation(args: string[] | ValidationOptions): ValidationPl
       commandSteps: withAuthctlCommandSurfaceCheck(definition.commandSteps),
       generatedChecks: definition.generatedChecks,
       smokeChecks: definition.smokeChecks,
+      runtimeEnv: {
+        TEMPORAL_ENABLED: "true",
+        TEMPORAL_ADDRESS: "localhost:7233",
+        TEMPORAL_NAMESPACE: "default",
+      },
     };
   });
 }
@@ -588,6 +594,7 @@ async function runSmokeCheck(item: ValidationPlanItem, cwd: string, smoke: Smoke
     cwd,
     env: {
       ...process.env,
+      ...item.runtimeEnv,
       PORT: String(port),
       ENABLE_RPC_INTROSPECTION: "true",
       COMPOSE_PROJECT_NAME: item.composeProjectName,
@@ -1039,8 +1046,12 @@ function formatError(error: unknown) {
 }
 
 if (import.meta.main) {
-  validateGeneratedApps().catch((error) => {
-    console.error(formatError(error));
-    process.exit(1);
-  });
+  validateGeneratedApps()
+    .then(() => {
+      process.exit(process.exitCode ?? 0);
+    })
+    .catch((error) => {
+      console.error(formatError(error));
+      process.exit(1);
+    });
 }

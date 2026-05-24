@@ -23,7 +23,7 @@ test("formatOutsideServiceCommandError rejects repo-local commands outside gener
 test("formatOutsideServiceCommandError does not treat positional names as scaffold commands", () => {
   const message = formatOutsideServiceCommandError("launch-api");
   expect(message).toContain("Unknown command: launch-api");
-  expect(message).toContain("service create <service_id>");
+  expect(message).toContain("service new <service_id>");
 });
 
 test("findGeneratedServiceRoot detects generated service context from nested directories", async () => {

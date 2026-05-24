@@ -36,6 +36,8 @@ type CommandResult = {
   exitCode: number;
 };
 
+type CloudRunProcess = "api" | "worker";
+
 const decoder = new TextDecoder();
 const encoder = new TextEncoder();
 const CLOUDFLARE_DNS_TTL_AUTO = 1;
@@ -506,12 +508,16 @@ export function resolveDeploymentTarget(environment: DeployArgs["environment"], 
   };
 }
 
-export async function renderManifest(image: string, target: DeploymentTarget) {
+export async function renderManifest(image: string, target: DeploymentTarget, process: CloudRunProcess = "api") {
   const template = await Bun.file(join(serviceRoot, "service.yaml")).text();
   const temporal = resolveTemporalRuntimeConfig();
+  const serviceName = process === "worker" ? `${target.serviceName}-worker` : target.serviceName;
   const values = {
-    SERVICE_NAME: target.serviceName,
+    SERVICE_NAME: serviceName,
     SERVICE_ID: config.serviceName,
+    SERVICE_ROLE: process,
+    SERVICE_INGRESS: process === "worker" ? "internal" : "all",
+    CONTAINER_COMMAND: renderContainerCommand(process),
     RUNTIME_SERVICE_ACCOUNT: config.runtimeServiceAccount,
     IMAGE_URL: image,
     DATABASE_URL_SECRET: target.databaseSecretName,
@@ -552,7 +558,7 @@ export function resolveTemporalRuntimeConfig() {
   const apiKeySecretName = process.env.TEMPORAL_API_KEY_SECRET?.trim() || (process.env.TEMPORAL_API_KEY?.trim() ? config.temporal.apiKeySecretName : "");
   const enabled = enabledOverride
     ? ["1", "true", "yes", "on"].includes(enabledOverride.toLowerCase())
-    : Boolean(process.env.TEMPORAL_ADDRESS?.trim() || process.env.TEMPORAL_API_KEY?.trim() || process.env.TEMPORAL_API_KEY_SECRET?.trim());
+    : config.temporal.enabled;
 
   return {
     enabled,
@@ -568,6 +574,23 @@ export async function writeRenderedManifest(image: string, target: DeploymentTar
   const path = new URL("../../.cloudrun.rendered.yaml", import.meta.url);
   await Bun.write(path, rendered);
   return path;
+}
+
+export async function writeRenderedWorkerManifest(image: string, target: DeploymentTarget) {
+  const rendered = await renderManifest(image, target, "worker");
+  const path = new URL("../../.cloudrun.worker.rendered.yaml", import.meta.url);
+  await Bun.write(path, rendered);
+  return path;
+}
+
+function renderContainerCommand(process: CloudRunProcess) {
+  if (process === "api") {
+    return "";
+  }
+  if (config.runtime === "bun") {
+    return ["          command:", "            - bun", "          args:", "            - run", "            - ./src/worker.ts"].join("\n");
+  }
+  return ["          command:", "            - /app/worker"].join("\n");
 }
 
 export function serviceUrl(serviceName: string) {

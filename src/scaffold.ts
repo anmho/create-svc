@@ -113,6 +113,7 @@ function shouldSkipForTarget(target: DeployTarget, templateKind: "shared" | "var
     return (
       relativePath.startsWith("src/db/") ||
       relativePath.startsWith("src/temporal/") ||
+      relativePath === "src/worker.ts" ||
       relativePath.startsWith("src/waitlist/") ||
       relativePath.startsWith("test/") ||
       relativePath.startsWith("migrations/") ||
@@ -230,6 +231,10 @@ function buildReplacements(config: ScaffoldConfig) {
     AUTH_ISSUER: authIssuer,
     AUTH_AUDIENCE: authAudience,
     AUTH_JWKS_URL: authJwksUrl,
+    TEMPORAL_ENABLED: "true",
+    TEMPORAL_ADDRESS: "localhost:7233",
+    TEMPORAL_NAMESPACE: "default",
+    TEMPORAL_TASK_QUEUE: config.serviceName,
     LOCAL_DATABASE_NAME: localDatabaseName,
     LOCAL_DATABASE_PORT: localDatabasePort,
     LOCAL_DATABASE_USER: "postgres",
@@ -318,6 +323,11 @@ async function writeLocalEnvFile(targetDir: string, replacements: Record<string,
       "# This file is user-owned after scaffold and is gitignored.",
       "",
       "DATABASE_URL=postgres://{{LOCAL_DATABASE_USER}}:{{LOCAL_DATABASE_PASSWORD}}@127.0.0.1:{{LOCAL_DATABASE_PORT}}/{{LOCAL_DATABASE_NAME}}?sslmode=disable",
+      "TEMPORAL_ENABLED={{TEMPORAL_ENABLED}}",
+      "TEMPORAL_ADDRESS={{TEMPORAL_ADDRESS}}",
+      "TEMPORAL_NAMESPACE={{TEMPORAL_NAMESPACE}}",
+      "TEMPORAL_TASK_QUEUE={{TEMPORAL_TASK_QUEUE}}",
+      "",
       "",
       "VAULT_SECRET_MOUNT=secret",
       "VAULT_AUTHCTL_ACCESS_PATH=prod/apps/auth/authctl/cloudflare-access",

@@ -32,6 +32,12 @@ test("compactDatabaseName switches to underscores", () => {
   expect(compactDatabaseName("preview-worker")).toBe("preview_worker");
 });
 
+test("deriveLocalPostgresPort stays out of ephemeral port ranges", () => {
+  const port = Number(deriveLocalPostgresPort("preview-worker"));
+  expect(port).toBeGreaterThanOrEqual(15432);
+  expect(port).toBeLessThan(16432);
+});
+
 test("buildGcpProjectOptions puts the shared services project first", () => {
   const options = buildGcpProjectOptions("preview-worker", "anmho-preview-worker", "preview-worker", [
     { projectId: "anmho-existing", name: "existing" },

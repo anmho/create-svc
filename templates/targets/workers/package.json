@@ -13,12 +13,16 @@
     "deploy": "service deploy",
     "dashboards": "service dashboards",
     "auth": "service auth",
-    "destroy": "service destroy"
+    "destroy": "service destroy",
+    "trigger": "trigger",
+    "trigger:dev": "trigger dev",
+    "trigger:deploy": "trigger deploy"
   },
   "dependencies": {
     "@anmho/authctl": "0.1.1",
     "@clack/prompts": "^1.2.0",
     "@neondatabase/api-client": "^2.7.1",
+    "@trigger.dev/sdk": "^4.4.6",
     "hono": "^4.10.1",
     "pg": "^8.16.3"
   },
@@ -26,6 +30,7 @@
     "@cloudflare/workers-types": "latest",
     "@types/pg": "^8.16.0",
     "@types/bun": "latest",
+    "trigger.dev": "^4.4.6",
     "typescript": "^5.9.3",
     "wrangler": "^4.49.0"
   }

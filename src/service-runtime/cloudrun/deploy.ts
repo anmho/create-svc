@@ -15,11 +15,13 @@ import {
   localDockerBuildArgs,
   parseDeployArgs,
   requireCommand,
+  resolveTemporalRuntimeConfig,
   resolveDeploymentTarget,
   runMain,
   runStep,
   serviceOrigin,
   writeRenderedManifest,
+  writeRenderedWorkerManifest,
 } from "./lib";
 
 type DeployOptions = {
@@ -94,6 +96,13 @@ export async function deploy(args = Bun.argv.slice(2), deployOptions: DeployOpti
   await runStep(`Deploying Cloud Run service ${target.serviceName}`, () =>
     gcloud(["run", "services", "replace", renderedManifestPath.pathname, "--project", config.project.id, "--region", config.region])
   );
+
+  if (resolveTemporalRuntimeConfig().enabled) {
+    const renderedWorkerManifestPath = await runStep("Rendering Cloud Run worker manifest", () => writeRenderedWorkerManifest(image, target));
+    await runStep(`Deploying Cloud Run worker ${target.serviceName}-worker`, () =>
+      gcloud(["run", "services", "replace", renderedWorkerManifestPath.pathname, "--project", config.project.id, "--region", config.region])
+    );
+  }
 
   await runStep("Granting public invoker access", () =>
     gcloudWithRetry([
