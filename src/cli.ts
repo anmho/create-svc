@@ -11,7 +11,13 @@ import {
   markGitHubRepositoryDeleteOnDestroy,
   type GitBootstrapResult,
 } from "./git-bootstrap";
-import { listOpenBillingAccounts, listAccessibleProjects, type BillingAccount, type GcpProject } from "./gcp";
+import {
+  assertExistingProjectReadyForAutoDeploy,
+  listOpenBillingAccounts,
+  listAccessibleProjects,
+  type BillingAccount,
+  type GcpProject,
+} from "./gcp";
 import {
   BILLING_ACCOUNT_DEFAULT,
   QUOTA_PROJECT_DEFAULT,
@@ -91,6 +97,7 @@ export async function run(argv: string[]) {
 
     const config = await resolveConfig(args);
     const targetDir = resolve(process.cwd(), config.directory);
+    await assertPreScaffoldReady(config);
 
     note(
       [
@@ -957,6 +964,14 @@ async function discoverCloudInputs(): Promise<DiscoveryState> {
 
 export function assertDiscoveryReady(discovery: DiscoveryState) {
   return discovery;
+}
+
+async function assertPreScaffoldReady(config: ScaffoldConfig) {
+  if (config.target !== "cloudrun" || !config.autoDeploy || config.gcpProjectMode !== "use_existing") {
+    return;
+  }
+
+  await assertExistingProjectReadyForAutoDeploy(config.gcpProject);
 }
 
 function chooseBillingAccount(input: string | undefined, accounts: BillingAccount[]) {
