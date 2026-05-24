@@ -52,6 +52,8 @@ test("commitAndPushGeneratedArtifacts excludes local dependencies and dev runtim
   const remote = await mkdtemp(join(tmpdir(), "create-svc-remote-"));
   run(["git", "init", "--bare"], remote);
   run(["git", "init", "-b", "main"], root);
+  run(["git", "config", "user.name", "create-svc test"], root);
+  run(["git", "config", "user.email", "create-svc@example.invalid"], root);
   run(["git", "remote", "add", "origin", remote], root);
   await writeFile(join(root, "README.md"), "# generated\n");
   run(["git", "add", "."], root);
