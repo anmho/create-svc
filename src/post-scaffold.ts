@@ -78,6 +78,7 @@ export function buildLocalPreparationCommands(config: Pick<ScaffoldConfig, "targ
   if (config.target === "workers") {
     return [
       { command: "bun", args: ["run", "./scripts/ensure-local-db.ts"] },
+      { command: "bun", args: ["run", "./scripts/wait-for-db.ts"] },
       { command: "bun", args: ["run", "migrate"] },
     ];
   }
