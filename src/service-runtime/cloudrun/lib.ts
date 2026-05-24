@@ -605,7 +605,6 @@ export function ensureProductionDomainMapping(serviceName: string) {
   }
 
   const result = gcloud([
-    "beta",
     "run",
     "domain-mappings",
     "create",
@@ -627,7 +626,6 @@ export function describeProductionDomainMapping():
   | undefined {
   const result = gcloud(
     [
-      "beta",
       "run",
       "domain-mappings",
       "describe",
@@ -680,7 +678,6 @@ export function deleteProductionDomainMapping() {
   deleteCloudflareDnsRecord();
   gcloud(
     [
-      "beta",
       "run",
       "domain-mappings",
       "delete",

@@ -105,6 +105,8 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
 
     const gitignore = await Bun.file(join(generatedRoot, ".gitignore")).text();
     expect(gitignore).toContain("node_modules");
+    expect(gitignore).toContain(".service/*.log");
+    expect(gitignore).toContain(".wrangler");
     expect(await Bun.file(join(generatedRoot, "website", "package.json")).exists()).toBeFalse();
 
     const dockerCompose = await Bun.file(join(generatedRoot, "docker-compose.yml")).text();
@@ -147,6 +149,7 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
     const deployWorkflow = await Bun.file(join(generatedRoot, ".github", "workflows", "deploy.yml")).text();
     expect(deployWorkflow).toContain("branches:");
     expect(deployWorkflow).toContain("- main");
+    expect(deployWorkflow).toContain("bun install -g create-svc@latest");
     expect(deployWorkflow).toContain("service deploy --ci");
     expect(deployWorkflow).toContain("bun run dashboards");
     expect(deployWorkflow).toContain("GCX_ENABLED");
@@ -160,6 +163,11 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
       expect(goSumExists).toBeTrue();
       const dockerfile = await Bun.file(join(generatedRoot, "Dockerfile")).text();
       expect(dockerfile).toContain("COPY go.mod go.sum ./");
+      if (variant.framework === "chi") {
+        expect(dockerfile).not.toContain("COPY gen ./gen");
+      } else {
+        expect(dockerfile).toContain("COPY gen ./gen");
+      }
       expect(packageJson).toContain('"dev": "make dev"');
       expect(packageJson).toContain('"service": "service"');
       expect(packageJson).toContain('"migrate": "service migrate"');

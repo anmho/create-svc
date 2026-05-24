@@ -1,2 +1,9 @@
+node_modules
 bin/generated
-templates/**/node_modules
+coverage
+dist
+out
+.DS_Store
+.codex-bin-test
+plans
+package-lock.json

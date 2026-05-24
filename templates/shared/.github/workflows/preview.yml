@@ -25,6 +25,7 @@ jobs:
           service_account: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
       - uses: google-github-actions/setup-gcloud@v2
       - run: bun install
+      - run: bun install -g create-svc@latest
       - run: {{WORKFLOW_DEPLOY_PREVIEW_COMMAND}}
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}

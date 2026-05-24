@@ -69,7 +69,7 @@ export async function scaffoldProject(config: ScaffoldConfig) {
         continue;
       }
       const sourcePath = join(template.root, relativePath);
-      const destinationPath = join(targetDir, relativePath);
+      const destinationPath = join(targetDir, templateDestinationPath(relativePath));
       const raw = await Bun.file(sourcePath).text();
       const rendered = renderTemplate(raw, replacements);
 
@@ -79,6 +79,10 @@ export async function scaffoldProject(config: ScaffoldConfig) {
   }
 
   await writeLocalEnvFile(targetDir, replacements);
+}
+
+function templateDestinationPath(relativePath: string) {
+  return relativePath === "_gitignore" ? ".gitignore" : relativePath;
 }
 
 function shouldSkipForTarget(target: DeployTarget, templateKind: "shared" | "variant" | "target", relativePath: string) {
@@ -237,9 +241,9 @@ function buildReplacements(config: ScaffoldConfig) {
     COMMAND_DEPLOY: "service deploy",
     COMMAND_OBSERVABILITY_BOOTSTRAP:
       config.runtime === "bun" ? "bun run observability-bootstrap" : "make observability-bootstrap",
-    WORKFLOW_DEPLOY_MAIN_COMMAND: "npm install -g create-svc@latest && service deploy --ci",
+    WORKFLOW_DEPLOY_MAIN_COMMAND: "service deploy --ci",
     WORKFLOW_DEPLOY_PREVIEW_COMMAND:
-      "npm install -g create-svc@latest && service deploy --ci --environment preview --name ${{ github.ref_name }}",
+      "service deploy --ci --environment preview --name ${{ github.ref_name }}",
     WORKFLOW_DEPLOY_MAIN_DOC_COMMAND: "service deploy --ci",
     WORKFLOW_DEPLOY_PREVIEW_DOC_COMMAND: "service deploy --ci --environment preview --name <branch-name>",
     COMMAND_AUTH_RESOURCE: "service auth resource-server",
