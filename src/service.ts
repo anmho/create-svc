@@ -1,9 +1,22 @@
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { run as runScaffoldCli } from "./cli";
+import { formatScaffoldHelp, run as runScaffoldCli } from "./cli";
 import { parseJsonc } from "./jsonc";
 
 const SCAFFOLD_COMMANDS = new Set(["create", "new", "init"]);
+const GENERATED_SERVICE_COMMANDS = new Set([
+  "auth",
+  "create",
+  "dashboards",
+  "deploy",
+  "destroy",
+  "dev",
+  "dns",
+  "doctor",
+  "migrate",
+  "sdk",
+  "seed",
+]);
 
 export async function runServiceCommand(argv: string[], cwd = process.cwd()) {
   const serviceRoot = findGeneratedServiceRoot(cwd);
@@ -12,7 +25,19 @@ export async function runServiceCommand(argv: string[], cwd = process.cwd()) {
     return;
   }
 
-  await runScaffoldCli(normalizeScaffoldArgs(argv));
+  const [command] = argv;
+  if (!command || command === "--help" || command === "-h" || command === "help") {
+    console.log(formatScaffoldHelp());
+    return;
+  }
+
+  if (SCAFFOLD_COMMANDS.has(command)) {
+    await runScaffoldCli(normalizeScaffoldArgs(argv));
+    return;
+  }
+
+  console.error(formatOutsideServiceCommandError(command));
+  process.exit(1);
 }
 
 export function normalizeScaffoldArgs(argv: string[]) {
@@ -24,6 +49,20 @@ export function normalizeScaffoldArgs(argv: string[]) {
     return ["--help", ...rest];
   }
   return argv;
+}
+
+export function formatOutsideServiceCommandError(command: string) {
+  if (GENERATED_SERVICE_COMMANDS.has(command)) {
+    return [
+      `service ${command} must be run inside a generated service repo.`,
+      "",
+      "No service.jsonc was found in this directory or its parents.",
+      "To create a new service, run:",
+      "  service create <service_id>",
+    ].join("\n");
+  }
+
+  return [`Unknown command: ${command}`, "", formatScaffoldHelp()].join("\n");
 }
 
 export function findGeneratedServiceRoot(start: string): string | undefined {
