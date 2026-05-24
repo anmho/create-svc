@@ -23,6 +23,42 @@ test("listAccessibleProjects filters deleted projects and sorts by name", async 
   ]);
 });
 
+test("listAccessibleProjects tolerates projects without a display name", async () => {
+  const api: GcpApi = {
+    async listProjects() {
+      return [{ projectId: "b" }, { projectId: "a", name: "alpha" }];
+    },
+    async listBillingAccounts() {
+      return [];
+    },
+    async createProject() {},
+    async attachBillingAccount() {},
+  };
+
+  await expect(listAccessibleProjects(api)).resolves.toEqual([{ projectId: "a", name: "alpha" }, { projectId: "b" }]);
+});
+
+test("listOpenBillingAccounts tolerates accounts without a display name", async () => {
+  const api: GcpApi = {
+    async listProjects() {
+      return [];
+    },
+    async listBillingAccounts() {
+      return [
+        { name: "billingAccounts/2", displayName: "", open: true },
+        { name: "billingAccounts/1", displayName: "A", open: true },
+      ];
+    },
+    async createProject() {},
+    async attachBillingAccount() {},
+  };
+
+  await expect(listOpenBillingAccounts(api)).resolves.toEqual([
+    { name: "billingAccounts/1", displayName: "A", open: true },
+    { name: "billingAccounts/2", displayName: "", open: true },
+  ]);
+});
+
 test("listOpenBillingAccounts keeps only open accounts", async () => {
   const api: GcpApi = {
     async listProjects() {

@@ -1131,7 +1131,7 @@ async function promptForExistingProject(projects: GcpProject[], options: { allow
         : []),
       ...projects.map((project) => ({
         value: project.projectId,
-        label: project.name,
+        label: project.name ?? project.projectId,
         hint: project.projectId,
       })),
     ],
@@ -1151,7 +1151,7 @@ async function promptForExistingProject(projects: GcpProject[], options: { allow
     return {
       mode: "use_existing" as const,
       projectId: project.projectId,
-      projectName: project.name,
+      projectName: project.name ?? project.projectId,
     };
   }
 
