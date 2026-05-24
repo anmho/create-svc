@@ -1,5 +1,5 @@
 import { config } from "./config";
-import { bootstrap } from "./bootstrap";
+import { bootstrap, type BootstrapResult } from "./bootstrap";
 import { deleteBranch, ensureBranch, ensureDatabase, getConnectionUri, listBranches, resolveNeonConfig } from "./neon";
 import {
   addSecretVersion,
@@ -8,6 +8,7 @@ import {
   ensureProductionDomainMapping,
   ensureSecretAccessor,
   gcloud,
+  gcloudStreaming,
   gcloudWithRetry,
   imageUrl,
   parseDeployArgs,
@@ -19,17 +20,22 @@ import {
   writeRenderedManifest,
 } from "./lib";
 
-export async function deploy(args = Bun.argv.slice(2)) {
+type DeployOptions = {
+  bootstrapResult?: BootstrapResult;
+};
+
+export async function deploy(args = Bun.argv.slice(2), deployOptions: DeployOptions = {}) {
   requireCommand("gcloud");
   requireCommand("bun");
 
   const options = parseDeployArgs(args);
-  if (!options.ci) {
-    await bootstrap();
-  }
+  const bootstrapResult = deployOptions.bootstrapResult ?? (!options.ci ? await bootstrap() : undefined);
 
-  const target = resolveDeploymentTarget(options.environment, options.name);
-  const neon = await runStep("Resolving Neon defaults", () => resolveNeonConfig());
+  const target =
+    bootstrapResult && options.environment === "main" && !options.name
+      ? bootstrapResult.target
+      : resolveDeploymentTarget(options.environment, options.name);
+  const neon = bootstrapResult?.neon ?? (await runStep("Resolving Neon defaults", () => resolveNeonConfig()));
 
   if (options.destroy) {
     if (options.environment === "main") {
@@ -47,7 +53,9 @@ export async function deploy(args = Bun.argv.slice(2)) {
     return `Destroyed ${target.serviceName}`;
   }
 
-  await runStep("Ensuring Artifact Registry repository", () => ensureArtifactRepository());
+  if (!bootstrapResult?.artifactRepositoryReady) {
+    await runStep("Ensuring Artifact Registry repository", () => ensureArtifactRepository());
+  }
 
   let branchId: string = neon.baseBranchId;
   if (options.environment !== "main") {
@@ -57,15 +65,17 @@ export async function deploy(args = Bun.argv.slice(2)) {
     branchId = branch.id;
   }
 
-  await runStep("Publishing environment database secret", async () => {
-    await ensureDatabase(neon.projectId, branchId, neon.databaseName);
-    const connectionUri = await getConnectionUri(neon.projectId, branchId, neon.databaseName, neon.roleName);
-    addSecretVersion(target.databaseSecretName, connectionUri);
-    ensureSecretAccessor(target.databaseSecretName, `serviceAccount:${config.runtimeServiceAccount}`);
-  });
+  if (!bootstrapResult || target.environment !== "main") {
+    await runStep("Publishing environment database secret", async () => {
+      await ensureDatabase(neon.projectId, branchId, neon.databaseName);
+      const connectionUri = await getConnectionUri(neon.projectId, branchId, neon.databaseName, neon.roleName);
+      addSecretVersion(target.databaseSecretName, connectionUri);
+      ensureSecretAccessor(target.databaseSecretName, `serviceAccount:${config.runtimeServiceAccount}`);
+    });
+  }
   const image = imageUrl();
-  await runStep("Building container image", () =>
-    gcloud(["builds", "submit", "--project", config.project.id, "--region", config.region, "--tag", image])
+  await runStep("Building container image in Cloud Build", () =>
+    gcloudStreaming(["builds", "submit", "--project", config.project.id, "--region", config.region, "--tag", image])
   );
 
   const renderedManifestPath = await runStep("Rendering Cloud Run manifest", () => writeRenderedManifest(image, target));

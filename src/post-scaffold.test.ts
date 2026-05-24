@@ -2,25 +2,22 @@ import { describe, expect, test } from "bun:test";
 import { buildDeploymentVerificationCommands, buildLocalVerificationCommands, buildPostScaffoldCommands } from "./post-scaffold";
 
 describe("buildPostScaffoldCommands", () => {
-  test("runs create and deploy for HTTP services", () => {
+  test("runs create for HTTP services", () => {
     expect(buildPostScaffoldCommands({ framework: "hono" })).toEqual([
       { command: "service", args: ["create"] },
-      { command: "service", args: ["deploy"] },
     ]);
   });
 
-  test("builds SDK artifacts before create and deploy for ConnectRPC services", () => {
+  test("builds SDK artifacts before create for ConnectRPC services", () => {
     expect(buildPostScaffoldCommands({ framework: "connectrpc" })).toEqual([
       { command: "service", args: ["sdk", "build"] },
       { command: "service", args: ["create"] },
-      { command: "service", args: ["deploy"] },
     ]);
   });
 
   test("uses the workers service CLI for workers services", () => {
     expect(buildPostScaffoldCommands({ target: "workers", framework: "hono" })).toEqual([
       { command: "service", args: ["create"] },
-      { command: "service", args: ["deploy"] },
     ]);
   });
 });

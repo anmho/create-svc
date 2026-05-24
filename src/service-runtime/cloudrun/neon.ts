@@ -18,7 +18,7 @@ type NeonDatabase = {
   ownerName: string;
 };
 
-type ResolvedNeonConfig = {
+export type ResolvedNeonConfig = {
   projectId: string;
   baseBranchId: string;
   baseBranchName: string;

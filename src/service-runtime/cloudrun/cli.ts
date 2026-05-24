@@ -2,6 +2,7 @@
 
 import { mkdir } from "node:fs/promises";
 import { ensureAuthClient, ensureAuthResourceServer, runAuthCommand, runAuthDoctor } from "../authctl";
+import { stopLocalDev } from "../local-dev";
 import { bootstrap, prepareGcpProject } from "./bootstrap";
 import { cleanup } from "./cleanup";
 import { deploy } from "./deploy";
@@ -38,11 +39,10 @@ export async function main(argv = Bun.argv.slice(2)) {
       await prepareGcpProject();
       await runStep("Registering auth resource server", () => ensureAuthResourceServer());
       await runStep("Provisioning auth client", () => ensureAuthClient());
-      await bootstrap({ skipProjectSetup: true });
-      const target = resolveDeploymentTarget("main");
-      const databaseUrl = await runStep("Reading production database URL", () => accessSecretVersion(target.databaseSecretName));
+      const bootstrapResult = await bootstrap({ skipProjectSetup: true });
+      const databaseUrl = bootstrapResult.databaseUrl;
       await runStep("Applying production migrations", () => runLanguageTask("migrate", { DATABASE_URL: databaseUrl }));
-      const origin = await deploy(["--ci"]);
+      const origin = await deploy(["--ci"], { bootstrapResult });
       await runOptionalBunScript("seed", { DATABASE_URL: databaseUrl });
       return `Created ${origin}`;
     });
@@ -66,6 +66,14 @@ export async function main(argv = Bun.argv.slice(2)) {
 
   if (command === "dashboards") {
     await runMain("Dashboards", () => runDashboards());
+    return;
+  }
+
+  if (command === "dev") {
+    if (rest[0] !== "down") {
+      throw new Error(`Unknown dev command: ${rest[0] || ""}\n\n${formatHelp()}`);
+    }
+    await runMain("Dev", () => stopLocalDev({ dockerCompose: true, removeVolumes: false }));
     return;
   }
 
@@ -116,6 +124,7 @@ function formatHelp() {
     "  auth token  Mint a bearer token for protected API checks",
     "  sdk         Build or publish generated SDK artifacts",
     "  dns         Repair or inspect DNS mappings",
+    "  dev down    Stop local dev and Docker Compose containers",
     "  dashboards  Publish Grafana resources",
     "  destroy     Remove service-managed cloud resources",
   ].join("\n");

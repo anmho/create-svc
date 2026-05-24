@@ -224,6 +224,7 @@ function buildReplacements(config: ScaffoldConfig) {
     COMMAND_GEN: config.runtime === "bun" ? "bun run gen" : "make gen",
     COMMAND_LINT: config.runtime === "bun" ? "bun run lint" : "make lint",
     COMMAND_TEST: config.runtime === "bun" ? "bun run test" : "make test",
+    COMMAND_DEV_DOWN: "service dev down",
     COMMAND_BOOTSTRAP: "service create",
     COMMAND_DEPLOY: "service deploy",
     COMMAND_AUTH_RESOURCE: "service auth resource-server",

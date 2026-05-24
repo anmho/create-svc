@@ -1,21 +1,29 @@
 import { config } from "./config";
-import { ensureDatabase, getConnectionUri, resolveNeonConfig } from "./neon";
+import { ensureDatabase, getConnectionUri, resolveNeonConfig, type ResolvedNeonConfig } from "./neon";
 import {
   addSecretVersion,
   attachBilling,
   ensureArtifactRepository,
   ensureProject,
   ensureProjectRole,
+  ensureRequiredApis,
   ensureSecretAccessor,
   ensureServiceAccount,
-  gcloud,
   requireCommand,
   requireGcloudAuth,
   resolveDeploymentTarget,
   resolveTemporalRuntimeConfig,
   runMain,
   runStep,
+  type DeploymentTarget,
 } from "./lib";
+
+export type BootstrapResult = {
+  target: DeploymentTarget;
+  neon: ResolvedNeonConfig;
+  databaseUrl: string;
+  artifactRepositoryReady: boolean;
+};
 
 export async function bootstrap(options: { skipProjectSetup?: boolean } = {}) {
   requireCommand("gcloud");
@@ -39,7 +47,7 @@ export async function bootstrap(options: { skipProjectSetup?: boolean } = {}) {
   const target = resolveDeploymentTarget("main");
   await runStep("Ensuring Neon database", () => ensureDatabase(neon.projectId, neon.baseBranchId, neon.databaseName));
 
-  await runStep("Publishing database secret", async () => {
+  const databaseUrl = await runStep("Publishing database secret", async () => {
     const connectionUri = await getConnectionUri(
       neon.projectId,
       neon.baseBranchId,
@@ -48,15 +56,25 @@ export async function bootstrap(options: { skipProjectSetup?: boolean } = {}) {
     );
     addSecretVersion(target.databaseSecretName, connectionUri);
     ensureSecretAccessor(target.databaseSecretName, `serviceAccount:${config.runtimeServiceAccount}`);
+    return connectionUri;
   });
 
-  await runStep("Publishing Temporal secrets", () => publishTemporalSecrets());
+  if (shouldPublishTemporalSecrets()) {
+    await runStep("Publishing Temporal secrets", () => publishTemporalSecrets());
+  }
+
+  return {
+    target,
+    neon,
+    databaseUrl,
+    artifactRepositoryReady: true,
+  } satisfies BootstrapResult;
 }
 
 export async function prepareGcpProject() {
   await runStep("Ensuring GCP project", () => ensureProject());
   await runStep("Attaching billing", () => attachBilling());
-  await runStep("Enabling required GCP APIs", () => gcloud(["services", "enable", ...config.requiredApis, "--project", config.project.id]));
+  await runStep("Enabling required GCP APIs", () => ensureRequiredApis());
 }
 
 function publishTemporalSecrets() {
@@ -69,6 +87,11 @@ function publishTemporalSecrets() {
   addSecretVersion(temporal.apiKeySecretName, apiKey);
   ensureSecretAccessor(temporal.apiKeySecretName, `serviceAccount:${config.runtimeServiceAccount}`);
   return temporal.apiKeySecretName;
+}
+
+function shouldPublishTemporalSecrets() {
+  const temporal = resolveTemporalRuntimeConfig();
+  return Boolean(process.env.TEMPORAL_API_KEY?.trim() && temporal.apiKeySecretName);
 }
 
 if (import.meta.main) {

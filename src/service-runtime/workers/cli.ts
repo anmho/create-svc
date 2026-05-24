@@ -4,6 +4,7 @@ import { confirm, intro, isCancel, log, outro } from "@clack/prompts";
 import { createApiClient } from "@neondatabase/api-client";
 import { Client } from "pg";
 import { ensureAuthClient, ensureAuthResourceServer, runAuthCommand, runAuthDoctor } from "../authctl";
+import { stopLocalDev } from "../local-dev";
 import { serviceConfig } from "../runtime";
 
 const config = {
@@ -71,6 +72,13 @@ export async function main(argv = Bun.argv.slice(2)) {
     return runMain("DNS", () => `Workers custom domain is configured in wrangler.toml for ${config.hostname}`);
   }
 
+  if (command === "dev") {
+    if (rest[0] !== "down") {
+      throw new Error(`Unknown dev command: ${rest[0] || ""}\n\n${formatHelp()}`);
+    }
+    return runMain("Dev", () => stopLocalDev({ dockerCompose: false }));
+  }
+
   if (command === "doctor") {
     return runMain("Doctor", () => runDoctor());
   }
@@ -87,6 +95,7 @@ export async function main(argv = Bun.argv.slice(2)) {
     return runMain("Destroy", async () => {
       await requireDestroyConfirmation(rest.includes("--force"));
       const wranglerArgs = rest.filter((arg) => arg !== "--force");
+      await stopLocalDev({ dockerCompose: false });
       deleteGitHubRepositoryIfOwned();
       await deleteHyperdrive();
       run("wrangler", ["delete", "--name", config.serviceName, "--force", ...wranglerArgs]);
@@ -116,6 +125,7 @@ function formatHelp() {
     "  doctor      Check local tools and cloud access",
     "  auth        Manage auth resource server and clients",
     "  auth token  Mint a bearer token for protected API checks",
+    "  dev down    Stop local dev",
     "  dns         Show Workers custom-domain configuration",
     "  dashboards  Publish Grafana resources",
     "  destroy     Remove service-managed Worker resources",
