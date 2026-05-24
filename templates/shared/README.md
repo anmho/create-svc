@@ -226,6 +226,28 @@ secrets only when you add a provider adapter. A generic adapter can honor:
 
 - `WEBHOOK_<PROVIDER>_SECRET`
 
+## GitHub Actions deployment
+
+The scaffold emits a minimal deployment workflow slice for Cloud Run:
+
+- [.github/workflows/preview.yml](.github/workflows/preview.yml) deploys a preview environment on pushes to non-main branches. It runs `{{WORKFLOW_DEPLOY_PREVIEW_DOC_COMMAND}}`.
+- [.github/workflows/deploy.yml](.github/workflows/deploy.yml) deploys the main production environment on pushes to `main`. It runs `{{WORKFLOW_DEPLOY_MAIN_DOC_COMMAND}}`.
+
+These workflows intentionally assume only GitHub OIDC, Google Cloud Workload Identity Federation, the generated `service` CLI, and Neon.
+They do not use a long-lived Google service account key.
+
+Before enabling the workflows, set these GitHub repository variables:
+
+- `GCP_WIF_PROVIDER`: full Workload Identity Provider resource name that trusts this repository
+- `GCP_DEPLOYER_SERVICE_ACCOUNT`: deployer service account email
+
+Set this GitHub repository secret:
+
+- `NEON_API_KEY`: Neon admin API key used to create preview branches and resolve the main database
+
+The deployer service account needs enough access in the generated GCP project to run `service deploy`, including Cloud Run, Artifact Registry, Secret Manager, IAM service account usage, and storage operations for this service.
+Run `{{COMMAND_BOOTSTRAP}}` once before relying on the production workflow for a fresh project.
+
 ## One-command production create
 
 The one-command production create path is designed for a fresh standalone service.

@@ -1,8 +1,9 @@
 name: Preview
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
+  push:
+    branches-ignore:
+      - main
 
 permissions:
   contents: read
@@ -24,6 +25,6 @@ jobs:
           service_account: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
       - uses: google-github-actions/setup-gcloud@v2
       - run: bun install
-      - run: bun run deploy -- --ci --environment preview --name ${{ github.event.pull_request.number }}
+      - run: {{WORKFLOW_DEPLOY_PREVIEW_COMMAND}}
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
