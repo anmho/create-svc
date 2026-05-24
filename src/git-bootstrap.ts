@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
 export type GitBootstrapConfig = {
@@ -60,6 +61,16 @@ export function commitAndPushGeneratedArtifacts(targetDir: string, message: stri
   run(["git", "commit", "--quiet", "-m", message], targetDir);
   run(["git", "push", "--quiet"], targetDir, undefined, { quiet: true });
   return { committed: true };
+}
+
+export async function markGitHubRepositoryDeleteOnDestroy(targetDir: string) {
+  const path = `${targetDir}/service.jsonc`;
+  const text = await readFile(path, "utf8");
+  const updated = text.replace('"delete_on_destroy": false', '"delete_on_destroy": true');
+  if (updated === text) {
+    throw new Error("service.jsonc does not contain a delete_on_destroy marker");
+  }
+  await writeFile(path, updated);
 }
 
 export function findExistingGitWorktree(targetDir: string) {

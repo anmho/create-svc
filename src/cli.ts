@@ -8,6 +8,7 @@ import {
   bootstrapGitHubRepository,
   buildGitBootstrapConfig,
   commitAndPushGeneratedArtifacts,
+  markGitHubRepositoryDeleteOnDestroy,
   type GitBootstrapResult,
 } from "./git-bootstrap";
 import { listOpenBillingAccounts, listAccessibleProjects, type BillingAccount, type GcpProject } from "./gcp";
@@ -111,6 +112,7 @@ export async function run(argv: string[]) {
     gitSpinner.start("Preparing git repository");
     const gitResult = await bootstrapGitHubRepository(targetDir, config.git);
     if (gitResult.status === "created") {
+      await markGitHubRepositoryDeleteOnDestroy(targetDir);
       gitSpinner.stop(`GitHub repository created: ${gitResult.url}`);
     } else if (gitResult.status === "skipped-existing-worktree") {
       gitSpinner.stop(`Existing git worktree detected: ${gitResult.root}`);
@@ -136,6 +138,11 @@ export async function run(argv: string[]) {
         const result = commitAndPushGeneratedArtifacts(targetDir, "Record generated deployment artifacts");
         publishSpinner.stop(result.committed ? "Generated artifacts committed and pushed" : "Generated artifacts already committed");
       }
+    } else if (gitResult.status === "created") {
+      const publishSpinner = spinner();
+      publishSpinner.start("Publishing generated git ownership");
+      const result = commitAndPushGeneratedArtifacts(targetDir, "Record generated GitHub ownership");
+      publishSpinner.stop(result.committed ? "GitHub ownership committed and pushed" : "GitHub ownership already committed");
     }
 
     outro(config.autoDeploy ? "Created and deployed" : "Created");

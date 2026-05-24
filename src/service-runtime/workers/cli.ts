@@ -11,6 +11,12 @@ const config = {
   hostname: serviceConfig.dns.hostname,
   neonDatabaseName: serviceConfig.neon.database_name,
   neonRoleName: serviceConfig.neon.role_name,
+  git: {
+    enabled: Boolean(serviceConfig.git?.enabled),
+    owner: serviceConfig.git?.owner || "anmho",
+    repository: serviceConfig.git?.repository || serviceConfig.service_id,
+    deleteOnDestroy: Boolean(serviceConfig.git?.delete_on_destroy),
+  },
 };
 
 type DoctorStatus = "pass" | "warn" | "fail";
@@ -81,6 +87,7 @@ export async function main(argv = Bun.argv.slice(2)) {
     return runMain("Destroy", async () => {
       await requireDestroyConfirmation(rest.includes("--force"));
       const wranglerArgs = rest.filter((arg) => arg !== "--force");
+      deleteGitHubRepositoryIfOwned();
       await deleteHyperdrive();
       run("wrangler", ["delete", "--name", config.serviceName, "--force", ...wranglerArgs]);
       await deleteNeonDatabase();
@@ -113,6 +120,21 @@ function formatHelp() {
     "  dashboards  Publish Grafana resources",
     "  destroy     Remove service-managed Worker resources",
   ].join("\n");
+}
+
+function deleteGitHubRepositoryIfOwned() {
+  const repository = `${config.git.owner}/${config.git.repository}`;
+  if (!config.git.deleteOnDestroy) {
+    log.step(`Skipping GitHub repository ${repository}: ${config.git.enabled ? "not created by this service CLI run" : "git disabled"}`);
+    return;
+  }
+  run("gh", ["auth", "status"], { capture: true });
+  const view = run("gh", ["repo", "view", repository, "--json", "name"], { allowFailure: true, capture: true });
+  if (!view.success) {
+    log.step(`Skipping GitHub repository ${repository}: not found`);
+    return;
+  }
+  run("gh", ["repo", "delete", repository, "--yes"]);
 }
 
 function run(command: string, args: string[], options: { allowFailure?: boolean; capture?: boolean } = {}) {

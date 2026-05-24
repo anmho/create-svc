@@ -71,6 +71,9 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
     expect(serviceConfig).toContain('"project_mode": "create_new"');
     expect(serviceConfig).toContain('"quota_project_id": "anmho-infra-prod"');
     expect(serviceConfig).toContain('"jwks_url": "https://auth.anmho.com/api/auth/jwks"');
+    expect(serviceConfig).toContain('"git": {');
+    expect(serviceConfig).toContain('"repository": "dns-api"');
+    expect(serviceConfig).toContain('"delete_on_destroy": false');
     expect(serviceConfig).toContain('"project_id": ""');
     expect(serviceConfig).toContain('"base_branch_id": ""');
     expect(serviceConfig).toContain('"base_branch_name": "main"');
