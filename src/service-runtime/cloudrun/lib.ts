@@ -734,9 +734,24 @@ export function assertServiceNameAvailable(serviceName: string) {
 
 export function deleteProductionDomainMapping() {
   deleteCloudflareDnsRecord();
-  gcloud(["beta", "run", "domain-mappings", "delete", "--domain", config.domain.hostname, "--project", config.project.id, "--quiet"], {
-    allowFailure: true,
-  });
+  gcloud(
+    [
+      "beta",
+      "run",
+      "domain-mappings",
+      "delete",
+      "--domain",
+      config.domain.hostname,
+      "--project",
+      config.project.id,
+      "--region",
+      config.region,
+      "--quiet",
+    ],
+    {
+      allowFailure: true,
+    }
+  );
 }
 
 export function listCloudRunServices() {

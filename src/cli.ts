@@ -3,7 +3,7 @@ import pc from "picocolors";
 import { readdirSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildDeploymentVerificationCommands, buildLocalVerificationCommands, runPostScaffoldFlow } from "./post-scaffold";
+import { buildDeploymentVerificationCommands, buildLocalVerificationCommands, runPostScaffoldFlow, runPreGitBootstrapFlow } from "./post-scaffold";
 import {
   bootstrapGitHubRepository,
   buildGitBootstrapConfig,
@@ -15,6 +15,8 @@ import { listOpenBillingAccounts, listAccessibleProjects, type BillingAccount, t
 import {
   BILLING_ACCOUNT_DEFAULT,
   QUOTA_PROJECT_DEFAULT,
+  SERVICES_PROJECT_DEFAULT,
+  SERVICES_PROJECT_NAME_DEFAULT,
   deriveDefaults,
   frameworksForTargetRuntime,
   parseDeployTarget,
@@ -107,6 +109,11 @@ export async function run(argv: string[]) {
     buildSpinner.start("Generating project files");
     await scaffoldProject(config);
     buildSpinner.stop("Project files generated");
+
+    const preGitResult = runPreGitBootstrapFlow(config, targetDir);
+    if (preGitResult.changed) {
+      log.step("Generated local SDK artifacts before initial GitHub push");
+    }
 
     const gitSpinner = spinner();
     gitSpinner.start("Preparing git repository");
@@ -798,6 +805,15 @@ async function resolveGcpSelection(
   discovery: DiscoveryState,
   options: { allowBack?: boolean } = {}
 ): Promise<GcpSelection | typeof BACK> {
+  if (args.gcpProject && !args.gcpProjectMode) {
+    const existing = discovery.projects.find((project) => matchesProject(project, args.gcpProject ?? ""));
+    return {
+      mode: "use_existing" as const,
+      projectId: args.gcpProject,
+      projectName: existing?.name ?? args.gcpProject,
+    };
+  }
+
   if (args.gcpProjectMode && args.gcpProject) {
     const existing = discovery.projects.find((project) => matchesProject(project, args.gcpProject ?? ""));
     return {
@@ -819,22 +835,18 @@ async function resolveGcpSelection(
     const existing = discovery.projects.find((project) => project.projectId === args.gcpProject);
     return {
       mode: "use_existing" as const,
-      projectId: args.gcpProject ?? discovery.projects[0]?.projectId ?? defaults.projectId,
-      projectName: existing?.name ?? args.gcpProject ?? defaults.projectName,
+      projectId: args.gcpProject ?? SERVICES_PROJECT_DEFAULT,
+      projectName: existing?.name ?? args.gcpProject ?? SERVICES_PROJECT_NAME_DEFAULT,
     };
   }
 
   if (args.yes) {
-    return {
-      mode: "create_new" as const,
-      projectId: defaults.projectId,
-      projectName: defaults.projectName,
-    };
+    return sharedServicesProjectSelection(discovery);
   }
 
   const mode = await select({
     message: "GCP project",
-    initialValue: "create_new",
+    initialValue: "use_shared",
     options: [
       ...(options.allowBack
         ? [
@@ -846,15 +858,19 @@ async function resolveGcpSelection(
           ]
         : []),
       {
-        value: "create_new",
-        label: `Create new project: ${defaults.projectName} (${defaults.projectId})`,
+        value: "use_shared",
+        label: `Use shared services project: ${sharedServicesProjectSelection(discovery).projectName} (${SERVICES_PROJECT_DEFAULT})`,
         hint: "Default",
       },
       {
+        value: "create_new",
+        label: `Create new project: ${defaults.projectName} (${defaults.projectId})`,
+        hint: "May hit billing quota limits",
+      },
+      {
         value: "use_existing",
-        label: "Use existing project...",
-        hint: discovery.projects.length > 0 ? `${discovery.projects.length} available` : "Unavailable",
-        disabled: discovery.projects.length === 0,
+        label: "Use another existing project...",
+        hint: discovery.projects.length > 0 ? `${discovery.projects.length} available` : "Pass --project-id to use an undiscovered project",
       },
     ],
   });
@@ -868,6 +884,10 @@ async function resolveGcpSelection(
     return BACK;
   }
 
+  if (mode === "use_shared") {
+    return sharedServicesProjectSelection(discovery);
+  }
+
   if (mode === "create_new") {
     return {
       mode: "create_new" as const,
@@ -877,7 +897,7 @@ async function resolveGcpSelection(
   }
 
   if (discovery.projects.length === 0) {
-    throw new Error("No existing GCP projects were discovered");
+    return sharedServicesProjectSelection(discovery);
   }
 
   const selected = await promptForExistingProject(discovery.projects, options);
@@ -901,6 +921,15 @@ async function resolveGcpSelection(
     mode: selected.mode,
     projectId: selected.projectId,
     projectName: selected.projectName,
+  };
+}
+
+function sharedServicesProjectSelection(discovery: DiscoveryState): GcpSelection {
+  const project = discovery.projects.find((candidate) => candidate.projectId === SERVICES_PROJECT_DEFAULT);
+  return {
+    mode: "use_existing" as const,
+    projectId: SERVICES_PROJECT_DEFAULT,
+    projectName: project?.name ?? SERVICES_PROJECT_NAME_DEFAULT,
   };
 }
 

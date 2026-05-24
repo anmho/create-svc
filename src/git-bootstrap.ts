@@ -21,6 +21,10 @@ export function buildGitBootstrapConfig(serviceName: string, noGit: boolean | un
   };
 }
 
+export function manualGitHubDeleteCommand(repository: string) {
+  return `gh repo delete ${repository} --yes`;
+}
+
 export async function bootstrapGitHubRepository(targetDir: string, config: GitBootstrapConfig): Promise<GitBootstrapResult> {
   if (!config.enabled) {
     return { status: "disabled" };

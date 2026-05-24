@@ -1,6 +1,8 @@
 import { confirm, isCancel, log } from "@clack/prompts";
 import { deleteAuthResourceServer } from "../authctl";
+import { manualGitHubDeleteCommand } from "../../git-bootstrap";
 import { buildLocalDevCleanupPlan, stopLocalDev } from "../local-dev";
+import { runParallelTasks, type ParallelTask } from "../parallel-tasks";
 import { config } from "./config";
 import { deleteBranch, deleteDatabase, listBranches, resolveNeonConfig } from "./neon";
 import {
@@ -74,57 +76,7 @@ export async function cleanup(args = Bun.argv.slice(2)) {
 
   await requireDestroyConfirmation(options.force);
 
-  await runStep("Stopping local dev resources", () => stopLocalDev({ dockerCompose: true, removeVolumes: true }));
-
-  if (plan.githubRepository) {
-    await runStep(`Deleting GitHub repository ${plan.githubRepository}`, () => deleteGitHubRepository(plan.githubRepository!));
-  }
-
-  await runStep(`Deleting auth resource server ${config.serviceName}`, () => deleteAuthResourceServer());
-
-  if (plan.hasProductionDomainMapping) {
-    await runStep(`Deleting production domain mapping ${config.domain.hostname}`, () => deleteProductionDomainMapping());
-  }
-
-  const serviceNames = plan.serviceNames;
-  await runStep("Deleting Cloud Run services", () => {
-    for (const serviceName of serviceNames) {
-      assertOwnedResource(`Cloud Run service ${serviceName}`, describeCloudRunService(serviceName));
-      deleteService(serviceName);
-    }
-  });
-
-  const artifactImages = plan.artifactImages;
-  await runStep("Deleting Artifact Registry images", () => {
-    for (const image of artifactImages) {
-      deleteArtifactImage(image);
-    }
-  });
-
-  const secretNames = plan.secretNames;
-  await runStep("Deleting service secrets", () => {
-    for (const secretName of secretNames) {
-      assertOwnedResource(`Secret ${secretName}`, describeSecret(secretName));
-      deleteSecret(secretName);
-    }
-  });
-
-  const neonPlan = plan.neon;
-  if (neonPlan) {
-    await runStep("Deleting Neon preview and personal branches", async () => {
-      for (const branch of neonPlan.branches) {
-        await deleteBranch(neonPlan.projectId, branch.id);
-      }
-    });
-
-    await runStep("Deleting Neon service database", () => deleteDatabase(neonPlan.projectId, neonPlan.baseBranchId, neonPlan.databaseName));
-  }
-
-  await runStep("Deleting Grafana resources", async () => deleteGrafanaResources());
-
-  await runStep("Deleting service-specific identity resources", () => {
-    deleteServiceAccount(config.runtimeServiceAccount);
-  });
+  await deletePlannedResources(plan);
 
   if (options.destroyProject) {
     await runStep(`Deleting GCP project ${config.project.id}`, () => deleteProject());
@@ -133,6 +85,96 @@ export async function cleanup(args = Bun.argv.slice(2)) {
 
   log.step(`Production API hostname released: ${config.domain.hostname}`);
   return `Destroy finished for ${config.serviceName}`;
+}
+
+async function deletePlannedResources(plan: DestroyPlan) {
+  const tasks: ParallelTask[] = [
+    {
+      label: "Stopping local dev resources",
+      task: () => stopLocalDev({ dockerCompose: true, removeVolumes: true }),
+    },
+    {
+      label: `Deleting auth resource server ${config.serviceName}`,
+      task: () => deleteAuthResourceServer(),
+    },
+    {
+      label: "Deleting Cloud Run services",
+      task: () => {
+        for (const serviceName of plan.serviceNames) {
+          assertOwnedResource(`Cloud Run service ${serviceName}`, describeCloudRunService(serviceName));
+          deleteService(serviceName);
+        }
+      },
+    },
+    {
+      label: "Deleting Artifact Registry images",
+      task: () => {
+        for (const image of plan.artifactImages) {
+          deleteArtifactImage(image);
+        }
+      },
+    },
+    {
+      label: "Deleting service secrets",
+      task: () => {
+        for (const secretName of plan.secretNames) {
+          assertOwnedResource(`Secret ${secretName}`, describeSecret(secretName));
+          deleteSecret(secretName);
+        }
+      },
+    },
+    {
+      label: "Deleting Grafana resources",
+      task: () => deleteGrafanaResources(),
+    },
+    {
+      label: "Deleting service-specific identity resources",
+      task: () => {
+        deleteServiceAccount(config.runtimeServiceAccount);
+      },
+    },
+  ];
+
+  if (plan.githubRepository) {
+    tasks.push({
+      label: `Deleting GitHub repository ${plan.githubRepository}`,
+      task: () => deleteGitHubRepository(plan.githubRepository!),
+    });
+  }
+
+  if (plan.hasProductionDomainMapping) {
+    tasks.push({
+      label: `Deleting production domain mapping ${config.domain.hostname}`,
+      task: () => deleteProductionDomainMapping(),
+    });
+  }
+
+  if (plan.neon) {
+    const neonPlan = plan.neon;
+    tasks.push(
+      {
+        label: "Deleting Neon preview and personal branches",
+        task: async () => {
+          await Promise.all(neonPlan.branches.map((branch) => deleteBranch(neonPlan.projectId, branch.id)));
+        },
+      },
+      {
+        label: "Deleting Neon service database",
+        task: () => deleteDatabase(neonPlan.projectId, neonPlan.baseBranchId, neonPlan.databaseName),
+      }
+    );
+  }
+
+  await runDestroyTasks(tasks);
+}
+
+async function runDestroyTasks(tasks: Array<{ label: string; task: () => Promise<unknown> | unknown }>) {
+  log.step(`Deleting ${tasks.length} resource groups in parallel`);
+  await runParallelTasks(tasks, {
+    formatError,
+    onSuccess: (label) => log.step(`${label}: done`),
+    onFailure: (label, error) => log.error(`${label} failed\n${formatError(error)}`),
+  });
 }
 
 async function buildDestroyPlan(destroyProject: boolean): Promise<DestroyPlan> {
@@ -181,7 +223,7 @@ function planGitHubRepository(plan: DestroyPlan) {
   if (!config.git.deleteOnDestroy) {
     plan.skipped.push({
       label: `GitHub repository ${repository}`,
-      detail: config.git.enabled ? "not created by this service CLI run" : "git disabled",
+      detail: config.git.enabled ? `not created by this service CLI run; manual cleanup: ${manualGitHubDeleteCommand(repository)}` : "git disabled",
     });
     return;
   }

@@ -3,6 +3,7 @@
 import { confirm, intro, isCancel, log, outro } from "@clack/prompts";
 import { createApiClient } from "@neondatabase/api-client";
 import { Client } from "pg";
+import { manualGitHubDeleteCommand } from "../../git-bootstrap";
 import { ensureAuthClient, ensureAuthResourceServer, runAuthCommand, runAuthDoctor } from "../authctl";
 import { stopLocalDev } from "../local-dev";
 import { serviceConfig } from "../runtime";
@@ -135,7 +136,11 @@ function formatHelp() {
 function deleteGitHubRepositoryIfOwned() {
   const repository = `${config.git.owner}/${config.git.repository}`;
   if (!config.git.deleteOnDestroy) {
-    log.step(`Skipping GitHub repository ${repository}: ${config.git.enabled ? "not created by this service CLI run" : "git disabled"}`);
+    log.step(
+      `Skipping GitHub repository ${repository}: ${
+        config.git.enabled ? `not created by this service CLI run; manual cleanup: ${manualGitHubDeleteCommand(repository)}` : "git disabled"
+      }`
+    );
     return;
   }
   run("gh", ["auth", "status"], { capture: true });
