@@ -320,6 +320,9 @@ test("scaffolds the workers target with wrangler lifecycle commands", async () =
   expect(wranglerConfig).toContain('binding = "HYPERDRIVE"');
   expect(wranglerConfig).toContain('AUTH_ENABLED = "true"');
   expect(wranglerConfig).toContain('AUTH_AUDIENCE = "api://dns-api"');
+  const authSource = await Bun.file(join(generatedRoot, "src", "auth.ts")).text();
+  expect(authSource).toContain('alg === "EdDSA"');
+  expect(authSource).toContain('name: "Ed25519"');
 
   const entrypoint = await Bun.file(join(generatedRoot, "src", "index.ts")).text();
   expect(entrypoint).toContain("/v1/waitlist");
