@@ -115,7 +115,7 @@ describe("buildDeploymentVerificationCommands", () => {
     });
   });
 
-  test("uses the workers service CLI for protected workers verification", () => {
+  test("uses public DNS resolution for Workers production verification", () => {
     expect(
       buildDeploymentVerificationCommands({
         target: "workers",
@@ -127,7 +127,7 @@ describe("buildDeploymentVerificationCommands", () => {
       command: "sh",
       args: [
         "-c",
-        'TOKEN="$(service auth token)" && curl --fail --show-error --silent -H "Authorization: Bearer $TOKEN" "https://api.launch.anmho.com/v1/admin/waitlist?limit=1"',
+        'TOKEN="$(service auth token)" && IP="$(dig @1.1.1.1 +short api.launch.anmho.com | head -n 1)" && test -n "$IP" && curl --fail --show-error --silent --resolve "api.launch.anmho.com:443:$IP" -H "Authorization: Bearer $TOKEN" "https://api.launch.anmho.com/v1/admin/waitlist?limit=1"',
       ],
     });
   });
