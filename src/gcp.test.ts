@@ -1,5 +1,12 @@
 import { expect, test } from "bun:test";
-import { attachBillingAccount, createProject, listAccessibleProjects, listOpenBillingAccounts, type GcpApi } from "./gcp";
+import {
+  assertExistingProjectReadyForAutoDeploy,
+  attachBillingAccount,
+  createProject,
+  listAccessibleProjects,
+  listOpenBillingAccounts,
+  type GcpApi,
+} from "./gcp";
 
 test("listAccessibleProjects filters deleted projects and sorts by name", async () => {
   const api: GcpApi = {
@@ -104,4 +111,71 @@ test("createProject and attachBillingAccount call the expected endpoints", async
   expect(calls).toHaveLength(2);
   expect(calls[0]).toBe("create:anmho-test:test");
   expect(calls[1]).toBe("billing:anmho-test:billingAccounts/123");
+});
+
+test("assertExistingProjectReadyForAutoDeploy passes when project exists with billing", async () => {
+  const api: GcpApi = {
+    async listProjects() {
+      return [];
+    },
+    async listBillingAccounts() {
+      return [];
+    },
+    async describeProject(projectId) {
+      return { projectId, name: "services" };
+    },
+    async describeBillingProject() {
+      return { billingEnabled: true, billingAccountName: "billingAccounts/123" };
+    },
+    async createProject() {},
+    async attachBillingAccount() {},
+  };
+
+  await expect(assertExistingProjectReadyForAutoDeploy("anmho-services", api)).resolves.toBeUndefined();
+});
+
+test("assertExistingProjectReadyForAutoDeploy rejects missing projects", async () => {
+  const api: GcpApi = {
+    async listProjects() {
+      return [];
+    },
+    async listBillingAccounts() {
+      return [];
+    },
+    async describeProject() {
+      throw new Error("not found");
+    },
+    async describeBillingProject() {
+      return { billingEnabled: true };
+    },
+    async createProject() {},
+    async attachBillingAccount() {},
+  };
+
+  await expect(assertExistingProjectReadyForAutoDeploy("anmho-services", api)).rejects.toThrow(
+    "GCP project anmho-services does not exist or is not accessible"
+  );
+});
+
+test("assertExistingProjectReadyForAutoDeploy rejects projects without billing", async () => {
+  const api: GcpApi = {
+    async listProjects() {
+      return [];
+    },
+    async listBillingAccounts() {
+      return [];
+    },
+    async describeProject(projectId) {
+      return { projectId, name: "services" };
+    },
+    async describeBillingProject() {
+      return { billingEnabled: false };
+    },
+    async createProject() {},
+    async attachBillingAccount() {},
+  };
+
+  await expect(assertExistingProjectReadyForAutoDeploy("anmho-services", api)).rejects.toThrow(
+    "GCP project anmho-services exists but billing is not enabled"
+  );
 });

@@ -75,8 +75,9 @@ export async function cleanup(args = Bun.argv.slice(2)) {
   }
 
   await requireDestroyConfirmation(options.force);
+  const deleteGitHubRepository = await confirmGitHubRepositoryDeletion(plan.githubRepository, options.force);
 
-  await deletePlannedResources(plan);
+  await deletePlannedResources(plan, { deleteGitHubRepository });
 
   if (options.destroyProject) {
     await runStep(`Deleting GCP project ${config.project.id}`, () => deleteProject());
@@ -87,7 +88,7 @@ export async function cleanup(args = Bun.argv.slice(2)) {
   return `Destroy finished for ${config.serviceName}`;
 }
 
-async function deletePlannedResources(plan: DestroyPlan) {
+async function deletePlannedResources(plan: DestroyPlan, options: { deleteGitHubRepository: boolean }) {
   const tasks: ParallelTask[] = [
     {
       label: "Stopping local dev resources",
@@ -135,7 +136,7 @@ async function deletePlannedResources(plan: DestroyPlan) {
     },
   ];
 
-  if (plan.githubRepository) {
+  if (plan.githubRepository && options.deleteGitHubRepository) {
     tasks.push({
       label: `Deleting GitHub repository ${plan.githubRepository}`,
       task: () => deleteGitHubRepository(plan.githubRepository!),
@@ -246,7 +247,10 @@ function planGitHubRepository(plan: DestroyPlan) {
   }
 
   plan.githubRepository = repository;
-  plan.resources.push({ label: `GitHub repository ${repository}`, detail: "private generated repo" });
+  plan.skipped.push({
+    label: `GitHub repository ${repository}`,
+    detail: "owned by this service CLI run; deletion is optional and defaults to no",
+  });
 }
 
 function deleteGitHubRepository(repository: string) {
@@ -398,6 +402,41 @@ async function requireDestroyConfirmation(force: boolean) {
   if (isCancel(answer) || !answer) {
     throw new Error("Destroy cancelled");
   }
+}
+
+async function confirmGitHubRepositoryDeletion(repository: string | undefined, force: boolean) {
+  if (!repository) {
+    return false;
+  }
+
+  if (force) {
+    log.step(`Keeping GitHub repository ${repository}; delete manually with: ${manualGitHubDeleteCommand(repository)}`);
+    return false;
+  }
+
+  if (!process.stdin.isTTY) {
+    return false;
+  }
+
+  const deleteAnswer = await confirm({
+    message: `Delete GitHub repository ${repository}?`,
+    initialValue: false,
+  });
+  if (isCancel(deleteAnswer) || !deleteAnswer) {
+    log.step(`Keeping GitHub repository ${repository}; delete manually with: ${manualGitHubDeleteCommand(repository)}`);
+    return false;
+  }
+
+  const confirmAnswer = await confirm({
+    message: `Confirm deleting GitHub repository ${repository}? This cannot be undone.`,
+    initialValue: false,
+  });
+  if (isCancel(confirmAnswer) || !confirmAnswer) {
+    log.step(`Keeping GitHub repository ${repository}; delete manually with: ${manualGitHubDeleteCommand(repository)}`);
+    return false;
+  }
+
+  return true;
 }
 
 if (import.meta.main) {

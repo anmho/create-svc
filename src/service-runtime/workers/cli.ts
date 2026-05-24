@@ -97,7 +97,9 @@ export async function main(argv = Bun.argv.slice(2)) {
       await requireDestroyConfirmation(rest.includes("--force"));
       const wranglerArgs = rest.filter((arg) => arg !== "--force");
       await stopLocalDev({ dockerCompose: false });
-      deleteGitHubRepositoryIfOwned();
+      if (await confirmGitHubRepositoryDeletion(rest.includes("--force"))) {
+        deleteGitHubRepositoryIfOwned();
+      }
       await deleteHyperdrive();
       run("wrangler", ["delete", "--name", config.serviceName, "--force", ...wranglerArgs]);
       await deleteNeonDatabase();
@@ -150,6 +152,47 @@ function deleteGitHubRepositoryIfOwned() {
     return;
   }
   run("gh", ["repo", "delete", repository, "--yes"]);
+}
+
+async function confirmGitHubRepositoryDeletion(force: boolean) {
+  const repository = `${config.git.owner}/${config.git.repository}`;
+  if (!config.git.deleteOnDestroy) {
+    log.step(
+      `Skipping GitHub repository ${repository}: ${
+        config.git.enabled ? `not created by this service CLI run; manual cleanup: ${manualGitHubDeleteCommand(repository)}` : "git disabled"
+      }`
+    );
+    return false;
+  }
+
+  if (force) {
+    log.step(`Keeping GitHub repository ${repository}; delete manually with: ${manualGitHubDeleteCommand(repository)}`);
+    return false;
+  }
+
+  if (!process.stdin.isTTY) {
+    return false;
+  }
+
+  const deleteAnswer = await confirm({
+    message: `Delete GitHub repository ${repository}?`,
+    initialValue: false,
+  });
+  if (isCancel(deleteAnswer) || !deleteAnswer) {
+    log.step(`Keeping GitHub repository ${repository}; delete manually with: ${manualGitHubDeleteCommand(repository)}`);
+    return false;
+  }
+
+  const confirmAnswer = await confirm({
+    message: `Confirm deleting GitHub repository ${repository}? This cannot be undone.`,
+    initialValue: false,
+  });
+  if (isCancel(confirmAnswer) || !confirmAnswer) {
+    log.step(`Keeping GitHub repository ${repository}; delete manually with: ${manualGitHubDeleteCommand(repository)}`);
+    return false;
+  }
+
+  return true;
 }
 
 function run(command: string, args: string[], options: { allowFailure?: boolean; capture?: boolean } = {}) {
