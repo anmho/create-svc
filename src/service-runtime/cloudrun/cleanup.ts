@@ -45,6 +45,7 @@ type DestroyPlan = {
   resources: PlannedResource[];
   skipped: PlannedResource[];
   blockers: string[];
+  githubRepository?: string;
   hasProductionDomainMapping: boolean;
   serviceNames: string[];
   secretNames: string[];
@@ -68,6 +69,10 @@ export async function cleanup(args = Bun.argv.slice(2)) {
   }
 
   await requireDestroyConfirmation(options.force);
+
+  if (plan.githubRepository) {
+    await runStep(`Deleting GitHub repository ${plan.githubRepository}`, () => deleteGitHubRepository(plan.githubRepository!));
+  }
 
   await runStep(`Deleting auth resource server ${config.serviceName}`, () => deleteAuthResourceServer());
 
@@ -125,11 +130,13 @@ async function buildDestroyPlan(destroyProject: boolean): Promise<DestroyPlan> {
     ],
     skipped: [],
     blockers: [],
+    githubRepository: undefined,
     hasProductionDomainMapping: false,
     serviceNames: [],
     secretNames: [],
   };
 
+  planGitHubRepository(plan);
   planProductionDomainMapping(plan);
   planCloudRunServices(plan);
   planSecrets(plan);
@@ -141,6 +148,41 @@ async function buildDestroyPlan(destroyProject: boolean): Promise<DestroyPlan> {
   }
 
   return plan;
+}
+
+function planGitHubRepository(plan: DestroyPlan) {
+  const repository = `${config.git.owner}/${config.git.repository}`;
+  if (!config.git.deleteOnDestroy) {
+    plan.skipped.push({
+      label: `GitHub repository ${repository}`,
+      detail: config.git.enabled ? "not created by this service CLI run" : "git disabled",
+    });
+    return;
+  }
+
+  if (!Bun.which("gh")) {
+    plan.blockers.push(`GitHub repository ${repository}: missing required command gh`);
+    return;
+  }
+
+  const auth = run("gh", ["auth", "status"], { allowFailure: true });
+  if (!auth.success) {
+    plan.blockers.push(`GitHub repository ${repository}: authenticate GitHub CLI with gh auth login`);
+    return;
+  }
+
+  const view = run("gh", ["repo", "view", repository, "--json", "name"], { allowFailure: true });
+  if (!view.success) {
+    plan.skipped.push({ label: `GitHub repository ${repository}`, detail: "not found" });
+    return;
+  }
+
+  plan.githubRepository = repository;
+  plan.resources.push({ label: `GitHub repository ${repository}`, detail: "private generated repo" });
+}
+
+function deleteGitHubRepository(repository: string) {
+  run("gh", ["repo", "delete", repository, "--yes"], { allowFailure: true });
 }
 
 function planProductionDomainMapping(plan: DestroyPlan) {

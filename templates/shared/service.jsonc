@@ -27,6 +27,15 @@
     "service_id": "{{SERVICE_ID}}"
   },
 
+  "git": {
+    "enabled": {{GIT_ENABLED}},
+    "owner": "{{GIT_OWNER}}",
+    "repository": "{{GIT_REPOSITORY}}",
+    // This flips to true only after `service create` actually creates the
+    // GitHub repository. Existing worktrees and --no-git stay false.
+    "delete_on_destroy": false
+  },
+
   "auth": {
     "issuer": "{{AUTH_ISSUER}}",
     "token_endpoint": "https://auth.anmho.com/api/auth/oauth2/token",

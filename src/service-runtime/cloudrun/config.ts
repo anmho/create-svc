@@ -49,6 +49,12 @@ export const config = {
     previewBranchPrefix: neon.preview_branch_prefix,
     personalBranchPrefix: neon.personal_branch_prefix,
   },
+  git: {
+    enabled: Boolean(serviceConfig.git?.enabled),
+    owner: serviceConfig.git?.owner || "anmho",
+    repository: serviceConfig.git?.repository || serviceConfig.service_id,
+    deleteOnDestroy: Boolean(serviceConfig.git?.delete_on_destroy),
+  },
   requiredApis: cloudrun.required_apis,
 } as const;
 
