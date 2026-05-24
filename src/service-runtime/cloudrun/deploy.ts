@@ -12,6 +12,7 @@ import {
   gcloudStreaming,
   gcloudWithRetry,
   imageUrl,
+  localDockerBuildArgs,
   parseDeployArgs,
   requireCommand,
   resolveDeploymentTarget,
@@ -84,7 +85,7 @@ export async function deploy(args = Bun.argv.slice(2), deployOptions: DeployOpti
     await runStep("Authenticating Docker to Artifact Registry", () =>
       gcloud(["auth", "configure-docker", `${config.region}-docker.pkg.dev`, "--quiet"])
     );
-    await runStep("Building container image locally", () => dockerStreaming(["build", "-t", image, "."]));
+    await runStep("Building container image locally", () => dockerStreaming(localDockerBuildArgs(image)));
     await runStep("Pushing container image to Artifact Registry", () => dockerStreaming(["push", image]));
   }
 

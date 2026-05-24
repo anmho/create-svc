@@ -6,6 +6,12 @@ export type DeployArgs = {
   name?: string;
 };
 
+export const CLOUD_RUN_LOCAL_BUILD_PLATFORM = "linux/amd64";
+
+export function localDockerBuildArgs(image: string) {
+  return ["build", "--platform", CLOUD_RUN_LOCAL_BUILD_PLATFORM, "-t", image, "."];
+}
+
 export function parseDeployArgs(argv: string[]): DeployArgs {
   const parsed: DeployArgs = {
     build: parseBuildStrategy(process.env.SERVICE_BUILD_STRATEGY || process.env.SERVICE_BUILD),
@@ -87,4 +93,3 @@ function parseBuildStrategy(value: string | undefined): DeployArgs["build"] {
   }
   throw new Error(`Unknown build strategy: ${value}`);
 }
-

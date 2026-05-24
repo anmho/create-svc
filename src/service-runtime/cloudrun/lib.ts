@@ -2,7 +2,7 @@ import { intro, log, outro, spinner } from "@clack/prompts";
 import { join } from "node:path";
 import { config } from "./config";
 import { serviceRoot } from "../runtime";
-import { parseDeployArgs, type DeployArgs } from "./deploy-args";
+import { localDockerBuildArgs, parseDeployArgs, type DeployArgs } from "./deploy-args";
 
 type CommandOptions = {
   allowFailure?: boolean;
@@ -452,7 +452,7 @@ export function imageUrl(tag = imageTag()) {
   return `${artifactImageBase()}:${tag}`;
 }
 
-export { parseDeployArgs };
+export { localDockerBuildArgs, parseDeployArgs };
 
 export function parseCleanupArgs(argv: string[]): CleanupArgs {
   const parsed: CleanupArgs = {
