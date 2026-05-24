@@ -108,7 +108,7 @@ export function buildGcpProjectOptions(
   serviceName: string,
   projectId: string,
   projectName: string,
-  projects: Array<{ projectId: string; name: string }>
+  projects: Array<{ projectId: string; name?: string }>
 ) {
   const servicesProject = projects.find((project) => project.projectId === SERVICES_PROJECT_DEFAULT);
   const remainingProjects = projects.filter((project) => project.projectId !== SERVICES_PROJECT_DEFAULT);
@@ -120,10 +120,10 @@ export function buildGcpProjectOptions(
       projectName: servicesProject?.name ?? SERVICES_PROJECT_NAME_DEFAULT,
     },
     ...remainingProjects.map((project) => ({
-      label: `Use existing project: ${project.name} (${project.projectId})`,
+      label: `Use existing project: ${project.name ?? project.projectId} (${project.projectId})`,
       mode: "use_existing" as const,
       projectId: project.projectId,
-      projectName: project.name,
+      projectName: project.name ?? project.projectId,
     })),
     {
       label: buildCreateProjectLabel(serviceName, projectId),

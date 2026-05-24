@@ -1,6 +1,6 @@
 export type GcpProject = {
   projectId: string;
-  name: string;
+  name?: string;
   lifecycleState?: string;
 };
 
@@ -47,13 +47,13 @@ export function createGcpApi(): GcpApi {
 export async function listAccessibleProjects(api = createGcpApi()): Promise<GcpProject[]> {
   return (await api.listProjects())
     .filter((project) => project.projectId && project.lifecycleState !== "DELETE_REQUESTED")
-    .sort((left, right) => left.name.localeCompare(right.name));
+    .sort((left, right) => projectSortName(left).localeCompare(projectSortName(right)));
 }
 
 export async function listOpenBillingAccounts(api = createGcpApi()): Promise<BillingAccount[]> {
   return (await api.listBillingAccounts())
     .filter((account) => account.name && account.open)
-    .sort((left, right) => left.displayName.localeCompare(right.displayName));
+    .sort((left, right) => accountSortName(left).localeCompare(accountSortName(right)));
 }
 
 export async function createProject(projectId: string, name: string, api = createGcpApi()) {
@@ -77,6 +77,14 @@ function runGcloud(args: string[]) {
   return {
     stdout: result.stdout.toString(),
   };
+}
+
+function projectSortName(project: GcpProject) {
+  return project.name || project.projectId;
+}
+
+function accountSortName(account: BillingAccount) {
+  return account.displayName || account.name;
 }
 
 function parseJson<T>(value: string, label: string): T {
