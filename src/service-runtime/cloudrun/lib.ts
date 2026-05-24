@@ -415,6 +415,32 @@ export function ensureArtifactRepository() {
   ]);
 }
 
+export function artifactImageBase() {
+  return `${config.region}-docker.pkg.dev/${config.project.id}/${config.artifactRepository}/${config.serviceName}`;
+}
+
+export function listArtifactImages() {
+  const result = gcloud(
+    ["artifacts", "docker", "images", "list", artifactImageBase(), "--include-tags", "--project", config.project.id, "--format=json"],
+    { allowFailure: true }
+  );
+  if (!result.success || !result.stdout) {
+    return [];
+  }
+
+  try {
+    return (JSON.parse(result.stdout) as Array<{ package?: string; version?: string }>)
+      .map((image) => (image.package && image.version ? `${image.package}@${image.version}` : ""))
+      .filter(Boolean);
+  } catch {
+    throw new Error(`Unable to parse Artifact Registry images for ${artifactImageBase()}`);
+  }
+}
+
+export function deleteArtifactImage(image: string) {
+  gcloud(["artifacts", "docker", "images", "delete", image, "--delete-tags", "--project", config.project.id, "--quiet"], { allowFailure: true });
+}
+
 export function projectNumber() {
   return gcloud(["projects", "describe", config.project.id, "--format=value(projectNumber)"]).stdout;
 }
@@ -425,7 +451,7 @@ export function imageTag() {
 }
 
 export function imageUrl(tag = imageTag()) {
-  return `${config.region}-docker.pkg.dev/${config.project.id}/${config.artifactRepository}/${config.serviceName}:${tag}`;
+  return `${artifactImageBase()}:${tag}`;
 }
 
 export function parseDeployArgs(argv: string[]): DeployArgs {

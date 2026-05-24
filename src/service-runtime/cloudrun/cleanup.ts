@@ -5,6 +5,7 @@ import { config } from "./config";
 import { deleteBranch, deleteDatabase, listBranches, resolveNeonConfig } from "./neon";
 import {
   assertOwnedResource,
+  deleteArtifactImage,
   deleteProject,
   deleteProductionDomainMapping,
   deleteSecret,
@@ -15,6 +16,7 @@ import {
   describeSecret,
   formatError,
   listCloudRunServices,
+  listArtifactImages,
   listSecrets,
   parseCleanupArgs,
   requireCommand,
@@ -50,6 +52,7 @@ type DestroyPlan = {
   hasProductionDomainMapping: boolean;
   serviceNames: string[];
   secretNames: string[];
+  artifactImages: string[];
   neon?: {
     projectId: string;
     baseBranchId: string;
@@ -88,6 +91,13 @@ export async function cleanup(args = Bun.argv.slice(2)) {
     for (const serviceName of serviceNames) {
       assertOwnedResource(`Cloud Run service ${serviceName}`, describeCloudRunService(serviceName));
       deleteService(serviceName);
+    }
+  });
+
+  const artifactImages = plan.artifactImages;
+  await runStep("Deleting Artifact Registry images", () => {
+    for (const image of artifactImages) {
+      deleteArtifactImage(image);
     }
   });
 
@@ -137,12 +147,14 @@ async function buildDestroyPlan(destroyProject: boolean): Promise<DestroyPlan> {
     hasProductionDomainMapping: false,
     serviceNames: [],
     secretNames: [],
+    artifactImages: [],
   };
 
   planGitHubRepository(plan);
   await planLocalDev(plan);
   planProductionDomainMapping(plan);
   planCloudRunServices(plan);
+  planArtifactImages(plan);
   planSecrets(plan);
   await planNeon(plan);
   await planGrafana(plan);
@@ -233,6 +245,21 @@ function planCloudRunServices(plan: DestroyPlan) {
     }
   } catch (error) {
     plan.blockers.push(`Cloud Run services in ${config.project.id}/${config.region}: ${formatError(error)}`);
+  }
+}
+
+function planArtifactImages(plan: DestroyPlan) {
+  try {
+    plan.artifactImages = listArtifactImages();
+    if (plan.artifactImages.length === 0) {
+      plan.skipped.push({ label: `Artifact Registry images for ${config.serviceName}`, detail: "none matched" });
+      return;
+    }
+    for (const image of plan.artifactImages) {
+      plan.resources.push({ label: `Artifact Registry image ${image}`, detail: `${config.project.id}/${config.region}` });
+    }
+  } catch (error) {
+    plan.blockers.push(`Artifact Registry images for ${config.serviceName}: ${formatError(error)}`);
   }
 }
 
