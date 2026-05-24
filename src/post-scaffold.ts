@@ -38,7 +38,7 @@ export async function runPostScaffoldFlow(config: ScaffoldConfig, cwd: string) {
     for (const command of buildLocalVerificationCommands(config)) {
       runWithRetries(command, { cwd, quiet: true }, 18, 5_000);
     }
-    return { message: "Dependencies installed, service created, service deployed, production verified, and local dev started" };
+    return { message: "Dependencies installed, service created, production verified, and local dev started" };
   }
 
   return { message: "Backend package generated" };
@@ -225,7 +225,6 @@ export function buildPostScaffoldCommands(
   return [
     ...(config.target !== "workers" && config.framework === "connectrpc" ? [{ command: "service", args: ["sdk", "build"] }] : []),
     { command: "service", args: ["create"] },
-    { command: "service", args: ["deploy"] },
   ];
 }
 

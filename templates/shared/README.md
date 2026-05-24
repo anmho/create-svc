@@ -30,6 +30,7 @@ console to create and deploy.
 {{COMMAND_TEST}}
 {{COMMAND_BOOTSTRAP}}
 {{COMMAND_DEPLOY}}
+{{COMMAND_DEV_DOWN}}
 {{COMMAND_AUTH_RESOURCE}}
 {{COMMAND_AUTH_CLIENT}}
 {{COMMAND_DEPLOY_PERSONAL}}
@@ -215,7 +216,8 @@ service create {{SERVICE_NAME}} --yes
 ```
 
 That command scaffolds this package, runs `service create`, deploys the production
-Cloud Run service through `service deploy`, and fails loudly with resumable
+Cloud Run service once, verifies production and local endpoints, starts local dev,
+and fails loudly with resumable
 instructions if a required cloud credential is missing. The generated package can also be run
 manually:
 

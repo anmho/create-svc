@@ -41,7 +41,7 @@ service deploy
 To install from npm:
 
 ```bash
-bun install -g create-svc
+npm install -g create-svc@latest
 ```
 
 For the strict one-command production path:
@@ -51,8 +51,8 @@ service create my-service --yes
 ```
 
 By default, that scaffolds the repo, installs dependencies, runs the generated
-repo's `service create`, and then runs `service deploy`. Pass
-`--no-auto-deploy` for scaffold-only generation.
+repo's `service create`, deploys once, verifies production, starts local dev,
+and verifies local. Pass `--no-auto-deploy` for scaffold-only generation.
 
 `--profile microservice` is accepted as a compatibility no-op. App workspaces live outside this package in private app template repositories.
 
@@ -111,6 +111,7 @@ bun run lint
 bun run test
 service create
 service deploy
+service dev down
 service destroy
 ```
 
@@ -124,10 +125,12 @@ make lint
 make test
 service create
 service deploy
+service dev down
 service destroy
 ```
 
 Language-specific tasks such as local running, linting, formatting, testing, and building stay in package scripts or Make targets. Service lifecycle operations are exposed through the generated `service` CLI.
+`service destroy --force` also stops local dev and runs Docker Compose cleanup for generated Cloud Run services.
 
 After `service create` has provisioned auth, the generated repo can mint a
 client-credentials bearer token for smoke checks:

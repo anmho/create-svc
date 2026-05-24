@@ -1191,7 +1191,7 @@ export function formatScaffoldHelp() {
     "  --billing-account <name>        Billing account resource name",
     "  --quota-project <id>            Billing quota project for gcloud calls",
     "  --region <region>               Cloud Run region",
-    "  --auto-deploy                   Scaffold, run service create, then service deploy (default)",
+    "  --auto-deploy                   Scaffold, run service create, verify prod/local, and start local dev (default)",
     "  --no-auto-deploy                Scaffold only",
     "  --no-git                        Skip default private GitHub repo: anmho/<service_id>",
     "  --yes, -y                       Accept defaults without prompts",

@@ -117,6 +117,85 @@ export function gcloud(args: string[], options: CommandOptions = {}) {
   return run("gcloud", normalized, options);
 }
 
+export async function gcloudStreaming(args: string[], options: CommandOptions = {}) {
+  const normalized = [...args];
+  if (config.project.quotaProjectId && !normalized.includes("--billing-project")) {
+    normalized.push("--billing-project", config.project.quotaProjectId);
+  }
+  return runStreaming("gcloud", normalized, options);
+}
+
+export async function runStreaming(command: string, args: string[], options: CommandOptions = {}): Promise<CommandResult> {
+  const child = Bun.spawn([command, ...args], {
+    cwd: process.cwd(),
+    env: { ...process.env, ...options.env },
+    stdin: options.input === undefined ? undefined : encoder.encode(options.input),
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+
+  const output = {
+    stdout: "",
+    stderr: "",
+    buildUrlPrinted: false,
+  };
+  await Promise.all([
+    captureStream(child.stdout, (chunk) => {
+      output.stdout += chunk;
+      printCloudBuildUrl(chunk, output);
+    }),
+    captureStream(child.stderr, (chunk) => {
+      output.stderr += chunk;
+      printCloudBuildUrl(chunk, output);
+    }),
+  ]);
+  const exitCode = await child.exited;
+  const result: CommandResult = {
+    success: exitCode === 0,
+    stdout: output.stdout.trim(),
+    stderr: output.stderr.trim(),
+    exitCode,
+  };
+
+  if (!result.success && !options.allowFailure) {
+    throw new CommandError(command, args, result);
+  }
+
+  return result;
+}
+
+async function captureStream(stream: ReadableStream<Uint8Array> | null, onChunk: (chunk: string) => void) {
+  if (!stream) {
+    return;
+  }
+  const reader = stream.getReader();
+  const streamDecoder = new TextDecoder();
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    onChunk(streamDecoder.decode(value, { stream: true }));
+  }
+  const remaining = streamDecoder.decode();
+  if (remaining) {
+    onChunk(remaining);
+  }
+}
+
+function printCloudBuildUrl(chunk: string, output: { stdout: string; stderr: string; buildUrlPrinted: boolean }) {
+  if (output.buildUrlPrinted) {
+    return;
+  }
+  const combined = `${output.stdout}\n${output.stderr}\n${chunk}`;
+  const match = combined.match(/https:\/\/console\.cloud\.google\.com\/cloud-build\/[^\s)]+/);
+  if (!match?.[0]) {
+    return;
+  }
+  output.buildUrlPrinted = true;
+  log.step(`Cloud Build logs: ${match[0]}`);
+}
+
 export function gcloudWithRetry(args: string[], options: CommandOptions = {}) {
   let lastError: unknown;
   for (let attempt = 1; attempt <= 12; attempt += 1) {
@@ -187,6 +266,21 @@ export function attachBilling() {
   gcloud(["beta", "billing", "projects", "link", config.project.id, "--billing-account", config.project.billingAccount]);
 }
 
+export function ensureRequiredApis() {
+  const enabled = new Set(
+    gcloud(["services", "list", "--enabled", "--project", config.project.id, "--format=value(config.name)"]).stdout
+      .split("\n")
+      .map((name) => name.trim())
+      .filter(Boolean)
+  );
+  const missing = config.requiredApis.filter((api: string) => !enabled.has(api));
+  if (missing.length === 0) {
+    return "Required GCP APIs are already enabled";
+  }
+  gcloud(["services", "enable", ...missing, "--project", config.project.id]);
+  return `Enabled ${missing.join(", ")}`;
+}
+
 export function ensureServiceAccount(email: string) {
   if (gcloud(["iam", "service-accounts", "describe", email, "--project", config.project.id], { allowFailure: true }).success) {
     return;
@@ -202,7 +296,26 @@ export function deleteServiceAccount(email: string) {
 }
 
 export function ensureProjectRole(member: string, role: string) {
+  if (projectHasRole(member, role)) {
+    return;
+  }
   gcloudWithRetry(["projects", "add-iam-policy-binding", config.project.id, "--member", member, "--role", role]);
+}
+
+function projectHasRole(member: string, role: string) {
+  return gcloud(
+    [
+      "projects",
+      "get-iam-policy",
+      config.project.id,
+      "--flatten=bindings[].members",
+      `--filter=bindings.role=${role} AND bindings.members=${member}`,
+      "--format=value(bindings.role)",
+    ],
+    { allowFailure: true }
+  )
+    .stdout.split("\n")
+    .some((line) => line.trim() === role);
 }
 
 export function ensureServiceAccountRole(serviceAccount: string, member: string, role: string) {

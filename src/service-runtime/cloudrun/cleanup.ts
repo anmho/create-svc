@@ -1,5 +1,6 @@
 import { confirm, isCancel, log } from "@clack/prompts";
 import { deleteAuthResourceServer } from "../authctl";
+import { buildLocalDevCleanupPlan, stopLocalDev } from "../local-dev";
 import { config } from "./config";
 import { deleteBranch, deleteDatabase, listBranches, resolveNeonConfig } from "./neon";
 import {
@@ -70,6 +71,8 @@ export async function cleanup(args = Bun.argv.slice(2)) {
 
   await requireDestroyConfirmation(options.force);
 
+  await runStep("Stopping local dev resources", () => stopLocalDev({ dockerCompose: true, removeVolumes: true }));
+
   if (plan.githubRepository) {
     await runStep(`Deleting GitHub repository ${plan.githubRepository}`, () => deleteGitHubRepository(plan.githubRepository!));
   }
@@ -137,6 +140,7 @@ async function buildDestroyPlan(destroyProject: boolean): Promise<DestroyPlan> {
   };
 
   planGitHubRepository(plan);
+  await planLocalDev(plan);
   planProductionDomainMapping(plan);
   planCloudRunServices(plan);
   planSecrets(plan);
@@ -148,6 +152,16 @@ async function buildDestroyPlan(destroyProject: boolean): Promise<DestroyPlan> {
   }
 
   return plan;
+}
+
+async function planLocalDev(plan: DestroyPlan) {
+  const localDev = await buildLocalDevCleanupPlan({ dockerCompose: true });
+  for (const resource of localDev.resources) {
+    plan.resources.push({ label: resource, detail: "local" });
+  }
+  for (const skipped of localDev.skipped) {
+    plan.skipped.push({ label: skipped, detail: "local" });
+  }
 }
 
 function planGitHubRepository(plan: DestroyPlan) {
