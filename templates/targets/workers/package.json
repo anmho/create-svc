@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "bun run ./scripts/dev.ts wrangler dev",
     "service": "service",
     "migrate": "service migrate",
     "seed": "service seed",
