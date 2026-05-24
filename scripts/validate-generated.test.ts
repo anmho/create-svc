@@ -106,6 +106,33 @@ test("formats authctl command-surface failures with an actionable hint", () => {
   expect(message).toContain("auth registration can upsert resource servers");
 });
 
+test("plans generated workflow and README validation", () => {
+  const plan = planValidation(["--variant", "bun-hono"]);
+  const workflowChecks = plan[0]?.generatedChecks.filter((check) => check.name.includes("deployment"));
+
+  expect(workflowChecks?.map((check) => check.file)).toEqual([
+    ".github/workflows/preview.yml",
+    ".github/workflows/deploy.yml",
+    "README.md",
+  ]);
+  expect(workflowChecks?.[0]?.includes).toContain("service deploy --ci --environment preview --name");
+  expect(workflowChecks?.[0]?.includes).toContain("github.ref_name");
+  expect(workflowChecks?.[0]?.includes).toContain("branches-ignore:");
+  expect(workflowChecks?.[1]?.includes).toContain("branches:");
+  expect(workflowChecks?.[2]?.includes).toContain("GitHub Actions deployment");
+  expect(workflowChecks?.[2]?.includes).toContain("pushes to non-main branches");
+});
+
+test("plans generated workflow validation with service deploy commands", () => {
+  const plan = planValidation(["--variant", "go-chi"]);
+  const workflowChecks = plan[0]?.generatedChecks.filter((check) =>
+    [".github/workflows/preview.yml", ".github/workflows/deploy.yml"].includes(check.file)
+  );
+
+  expect(workflowChecks?.[0]?.includes).toContain("service deploy --ci --environment preview --name");
+  expect(workflowChecks?.[1]?.includes).toContain("service deploy --ci");
+});
+
 test("plans connectrpc introspection checks for the bun connectrpc variant", () => {
   const plan = planValidation(["--variant=bun-connectrpc"]);
 

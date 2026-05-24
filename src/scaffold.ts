@@ -12,6 +12,11 @@ import {
 import { exampleForProfile, type Profile } from "./profiles";
 import type { GitBootstrapConfig } from "./git-bootstrap";
 
+const GENERATED_GITHUB_ACTION_WORKFLOWS = new Set([
+  ".github/workflows/preview.yml",
+  ".github/workflows/deploy.yml",
+]);
+
 export type ScaffoldConfig = {
   directory: string;
   serviceName: string;
@@ -153,10 +158,21 @@ async function collectTemplateFiles(root: string, relative = ""): Promise<string
       files.push(...(await collectTemplateFiles(root, nextRelative)));
       continue;
     }
+    if (shouldSkipTemplateFile(nextRelative)) {
+      continue;
+    }
     files.push(nextRelative);
   }
 
   return files.sort();
+}
+
+function shouldSkipTemplateFile(relativePath: string) {
+  if (!relativePath.startsWith(".github/")) {
+    return false;
+  }
+
+  return !GENERATED_GITHUB_ACTION_WORKFLOWS.has(relativePath);
 }
 
 function buildReplacements(config: ScaffoldConfig) {
@@ -221,6 +237,11 @@ function buildReplacements(config: ScaffoldConfig) {
     COMMAND_DEPLOY: "service deploy",
     COMMAND_OBSERVABILITY_BOOTSTRAP:
       config.runtime === "bun" ? "bun run observability-bootstrap" : "make observability-bootstrap",
+    WORKFLOW_DEPLOY_MAIN_COMMAND: "npm install -g create-svc@latest && service deploy --ci",
+    WORKFLOW_DEPLOY_PREVIEW_COMMAND:
+      "npm install -g create-svc@latest && service deploy --ci --environment preview --name ${{ github.ref_name }}",
+    WORKFLOW_DEPLOY_MAIN_DOC_COMMAND: "service deploy --ci",
+    WORKFLOW_DEPLOY_PREVIEW_DOC_COMMAND: "service deploy --ci --environment preview --name <branch-name>",
     COMMAND_AUTH_RESOURCE: "service auth resource-server",
     COMMAND_AUTH_CLIENT: "service auth client create",
     COMMAND_AUTH_TOKEN: "service auth token",

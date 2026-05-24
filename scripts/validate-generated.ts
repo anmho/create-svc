@@ -176,6 +176,59 @@ const AUTHCTL_RESOURCE_SERVER_COMMAND_STEP: ValidationCommandStep = {
     'Missing authctl command "resource-servers upsert". Generated services must install @anmho/authctl >=0.1.1 so auth registration can upsert resource servers.',
 };
 
+function deploymentGeneratedChecks(runtime: Runtime): GeneratedCheck[] {
+  const mainDeployCommand = "service deploy --ci";
+  const previewDeployCommand = "service deploy --ci --environment preview --name";
+
+  return [
+    {
+      name: "preview deployment workflow",
+      file: ".github/workflows/preview.yml",
+      includes: [
+        "push:",
+        "branches-ignore:",
+        "- main",
+        "id-token: write",
+        "google-github-actions/auth",
+        "GCP_WIF_PROVIDER",
+        "GCP_DEPLOYER_SERVICE_ACCOUNT",
+        previewDeployCommand,
+        "github.ref_name",
+        "NEON_API_KEY",
+      ],
+    },
+    {
+      name: "production deployment workflow",
+      file: ".github/workflows/deploy.yml",
+      includes: [
+        "branches:",
+        "- main",
+        "id-token: write",
+        "google-github-actions/auth",
+        "GCP_WIF_PROVIDER",
+        "GCP_DEPLOYER_SERVICE_ACCOUNT",
+        mainDeployCommand,
+        "NEON_API_KEY",
+      ],
+    },
+    {
+      name: "deployment README documentation",
+      file: "README.md",
+      includes: [
+        "GitHub Actions deployment",
+        ".github/workflows/preview.yml",
+        ".github/workflows/deploy.yml",
+        "GCP_WIF_PROVIDER",
+        "GCP_DEPLOYER_SERVICE_ACCOUNT",
+        "NEON_API_KEY",
+        "Workload Identity Federation",
+        "pushes to non-main branches",
+        mainDeployCommand,
+      ],
+    },
+  ];
+}
+
 export function parseValidationArgs(args: string[]): ValidationOptions {
   let selectedVariant: GeneratedVariant | undefined;
   let selectedProfile: Profile = "microservice";
@@ -382,6 +435,7 @@ function generatedChecksFor(runtime: Runtime): GeneratedCheck[] {
       file: "service.jsonc",
       includes: ['"observability"', "logging.googleapis.com", "monitoring.googleapis.com", "cloudtrace.googleapis.com"],
     },
+    ...deploymentGeneratedChecks(runtime),
   ];
 }
 

@@ -133,11 +133,23 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
     expect(localEnv).toContain("VAULT_CLOUDFLARE_API_TOKEN_PATH=prod/providers/cloudflare");
     expect(localEnv).not.toContain("ATTACHMENT_PUBLIC_BASE_URL=");
 
-    const ciWorkflow = await Bun.file(join(generatedRoot, ".github", "workflows", "ci.yml")).text();
-    expect(ciWorkflow).toContain("bun run dashboards");
-    expect(ciWorkflow).toContain("GCX_ENABLED");
     expect(await Bun.file(join(generatedRoot, "grafana", "waitlist-dashboard.json")).exists()).toBeTrue();
     expect(await Bun.file(join(generatedRoot, "grafana", "alerts.yaml")).exists()).toBeTrue();
+
+    const previewWorkflow = await Bun.file(join(generatedRoot, ".github", "workflows", "preview.yml")).text();
+    expect(previewWorkflow).toContain("push:");
+    expect(previewWorkflow).toContain("branches-ignore:");
+    expect(previewWorkflow).toContain("- main");
+    expect(previewWorkflow).toContain("github.ref_name");
+    expect(previewWorkflow).toContain("service deploy --ci --environment preview --name");
+    expect(previewWorkflow).toContain("NEON_API_KEY");
+
+    const deployWorkflow = await Bun.file(join(generatedRoot, ".github", "workflows", "deploy.yml")).text();
+    expect(deployWorkflow).toContain("branches:");
+    expect(deployWorkflow).toContain("- main");
+    expect(deployWorkflow).toContain("service deploy --ci");
+    expect(deployWorkflow).toContain("bun run dashboards");
+    expect(deployWorkflow).toContain("GCX_ENABLED");
 
     if (variant.runtime === "go") {
       const goMod = await Bun.file(join(generatedRoot, "go.mod")).text();
@@ -253,8 +265,6 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
       expect(readme).toContain("service auth resource-server");
     }
 
-    const deployWorkflow = await Bun.file(join(generatedRoot, ".github", "workflows", "deploy.yml")).text();
-    expect(deployWorkflow).toContain("bun run dashboards");
   }
 }, 30000);
 
@@ -286,9 +296,13 @@ test("scaffolds a backend package cleanly into a nested monorepo-style directory
   expect(readme).toContain("Terraform is optional");
   expect(readme).toContain("waitlist/launch service");
   expect(readme).not.toContain("Neon main, preview, and personal branch provisioning");
-  const ciWorkflow = await Bun.file(join(generatedRoot, ".github", "workflows", "ci.yml")).text();
-  expect(ciWorkflow).toContain("bun run dashboards");
-  expect(readme).not.toContain("repository");
+  expect(readme).toContain("GitHub Actions deployment");
+  expect(readme).toContain(".github/workflows/preview.yml");
+  expect(readme).toContain(".github/workflows/deploy.yml");
+  expect(readme).toContain("pushes to non-main branches");
+  expect(readme).toContain("GCP_WIF_PROVIDER");
+  expect(readme).toContain("GCP_DEPLOYER_SERVICE_ACCOUNT");
+  expect(readme).toContain("NEON_API_KEY");
 
   const packageJson = await Bun.file(join(generatedRoot, "package.json")).text();
   expect(packageJson).toContain('"hono"');
@@ -296,6 +310,8 @@ test("scaffolds a backend package cleanly into a nested monorepo-style directory
   const entrypoint = await Bun.file(join(generatedRoot, "src", "index.ts")).text();
   expect(entrypoint).toContain("/v1/waitlist");
   expect(entrypoint).toContain("/v1/admin/waitlist");
+  expect(await Bun.file(join(generatedRoot, ".github", "workflows", "preview.yml")).exists()).toBeTrue();
+  expect(await Bun.file(join(generatedRoot, ".github", "workflows", "deploy.yml")).exists()).toBeTrue();
 }, 15000);
 
 test("scaffolds the workers target with wrangler lifecycle commands", async () => {
