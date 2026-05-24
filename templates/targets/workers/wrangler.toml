@@ -16,7 +16,7 @@ AUTH_JWKS_URL = "{{AUTH_JWKS_URL}}"
 crons = ["*/15 * * * *"]
 
 [[routes]]
-pattern = "{{API_HOSTNAME}}/*"
+pattern = "{{API_HOSTNAME}}"
 custom_domain = true
 
 [[hyperdrive]]
