@@ -348,13 +348,13 @@ test("scaffolds the workers target with wrangler lifecycle commands", async () =
   expect(await Bun.file(join(generatedRoot, "src", "storage.ts")).exists()).toBeTrue();
   expect(await Bun.file(join(generatedRoot, "scripts", "workers", "cli.ts")).exists()).toBeFalse();
   expect(await Bun.file(join(generatedRoot, "scripts", "cloudrun", "cli.ts")).exists()).toBeFalse();
-  expect(await Bun.file(join(generatedRoot, "scripts", "dev.ts")).exists()).toBeFalse();
-  expect(await Bun.file(join(generatedRoot, "scripts", "ensure-local-db.ts")).exists()).toBeFalse();
-  expect(await Bun.file(join(generatedRoot, "scripts", "local-docker.ts")).exists()).toBeFalse();
-  expect(await Bun.file(join(generatedRoot, "scripts", "wait-for-db.ts")).exists()).toBeFalse();
+  expect(await Bun.file(join(generatedRoot, "scripts", "dev.ts")).exists()).toBeTrue();
+  expect(await Bun.file(join(generatedRoot, "scripts", "ensure-local-db.ts")).exists()).toBeTrue();
+  expect(await Bun.file(join(generatedRoot, "scripts", "local-docker.ts")).exists()).toBeTrue();
+  expect(await Bun.file(join(generatedRoot, "scripts", "wait-for-db.ts")).exists()).toBeTrue();
   expect(await Bun.file(join(generatedRoot, "service.yaml")).exists()).toBeFalse();
   expect(await Bun.file(join(generatedRoot, "Dockerfile")).exists()).toBeFalse();
-  expect(await Bun.file(join(generatedRoot, "docker-compose.yml")).exists()).toBeFalse();
+  expect(await Bun.file(join(generatedRoot, "docker-compose.yml")).exists()).toBeTrue();
   expect(await Bun.file(join(generatedRoot, "src", "db", "repository.ts")).exists()).toBeFalse();
   expect(await Bun.file(join(generatedRoot, "src", "temporal", "worker.ts")).exists()).toBeFalse();
   expect(await Bun.file(join(generatedRoot, "scripts", "codegen.ts")).exists()).toBeFalse();

@@ -90,20 +90,12 @@ function shouldSkipForTarget(target: DeployTarget, templateKind: "shared" | "var
       return false;
     }
 
-    if (relativePath === "Dockerfile" || relativePath === "docker-compose.yml") {
+    if (relativePath === "Dockerfile") {
       return true;
     }
 
     if (templateKind === "shared") {
-      return (
-        relativePath === "service.yaml" ||
-        relativePath === "scripts/dev.ts" ||
-        relativePath === "scripts/ensure-local-db.ts" ||
-        relativePath === "scripts/local-docker.ts" ||
-        relativePath === "scripts/local-env.ts" ||
-        relativePath === "scripts/seed.ts" ||
-        relativePath === "scripts/wait-for-db.ts"
-      );
+      return relativePath === "service.yaml";
     }
 
     return (

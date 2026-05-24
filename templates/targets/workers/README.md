@@ -32,9 +32,10 @@ bun install
 bun run dev
 ```
 
-The Workers target starts with an HTTP waitlist API. Local unit tests use an
-in-memory store. Deployed Workers use the `HYPERDRIVE` binding and create the
-small waitlist/trigger schema on first use.
+The Workers target starts with an HTTP waitlist API. Local dev starts Docker
+Compose Postgres and passes it to Wrangler as the local Hyperdrive connection.
+Local unit tests use an in-memory store. Deployed Workers use the `HYPERDRIVE`
+binding and create the small waitlist/trigger schema on first use.
 
 ## API
 
