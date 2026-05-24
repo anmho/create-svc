@@ -139,12 +139,18 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
     expect(await Bun.file(join(generatedRoot, "grafana", "alerts.yaml")).exists()).toBeTrue();
 
     const previewWorkflow = await Bun.file(join(generatedRoot, ".github", "workflows", "preview.yml")).text();
-    expect(previewWorkflow).toContain("push:");
-    expect(previewWorkflow).toContain("branches-ignore:");
-    expect(previewWorkflow).toContain("- main");
-    expect(previewWorkflow).toContain("github.ref_name");
+    expect(previewWorkflow).toContain("issue_comment:");
+    expect(previewWorkflow).toContain("/deploy preview");
+    expect(previewWorkflow).not.toContain("branches-ignore:");
     expect(previewWorkflow).toContain("service deploy --ci --environment preview --name");
+    expect(previewWorkflow).toContain("steps.pr.outputs.number");
     expect(previewWorkflow).toContain("NEON_API_KEY");
+    expect(previewWorkflow).toContain("CLOUDFLARE_API_TOKEN");
+
+    const previewCleanupWorkflow = await Bun.file(join(generatedRoot, ".github", "workflows", "preview-cleanup.yml")).text();
+    expect(previewCleanupWorkflow).toContain("pull_request:");
+    expect(previewCleanupWorkflow).toContain("types: [closed]");
+    expect(previewCleanupWorkflow).toContain("github.event.pull_request.number");
 
     const deployWorkflow = await Bun.file(join(generatedRoot, ".github", "workflows", "deploy.yml")).text();
     expect(deployWorkflow).toContain("branches:");
@@ -155,6 +161,11 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
     expect(deployWorkflow).toContain("CLOUDFLARE_API_TOKEN");
     expect(deployWorkflow).toContain("bun run dashboards");
     expect(deployWorkflow).toContain("GCX_ENABLED");
+
+    const personalWorkflow = await Bun.file(join(generatedRoot, ".github", "workflows", "personal.yml")).text();
+    expect(personalWorkflow).toContain("workflow_dispatch:");
+    expect(personalWorkflow).toContain("service deploy --ci --environment personal --name");
+    expect(personalWorkflow).toContain("service deploy --ci --destroy --environment personal --name");
 
     if (variant.runtime === "go") {
       const goMod = await Bun.file(join(generatedRoot, "go.mod")).text();
@@ -309,10 +320,11 @@ test("scaffolds a backend package cleanly into a nested monorepo-style directory
   expect(readme).toContain("GitHub Actions deployment");
   expect(readme).toContain(".github/workflows/preview.yml");
   expect(readme).toContain(".github/workflows/deploy.yml");
-  expect(readme).toContain("pushes to non-main branches");
+  expect(readme).toContain("/deploy preview");
   expect(readme).toContain("GCP_WIF_PROVIDER");
   expect(readme).toContain("GCP_DEPLOYER_SERVICE_ACCOUNT");
   expect(readme).toContain("NEON_API_KEY");
+  expect(readme).toContain("CLOUDFLARE_API_TOKEN");
 
   const packageJson = await Bun.file(join(generatedRoot, "package.json")).text();
   expect(packageJson).toContain('"hono"');
@@ -392,6 +404,16 @@ test("scaffolds the workers target with wrangler lifecycle commands", async () =
   expect(await Bun.file(join(generatedRoot, "src", "db", "repository.ts")).exists()).toBeFalse();
   expect(await Bun.file(join(generatedRoot, "src", "temporal", "worker.ts")).exists()).toBeFalse();
   expect(await Bun.file(join(generatedRoot, "scripts", "codegen.ts")).exists()).toBeFalse();
+
+  const previewWorkflow = await Bun.file(join(generatedRoot, ".github", "workflows", "preview.yml")).text();
+  expect(previewWorkflow).toContain("issue_comment:");
+  expect(previewWorkflow).toContain("/deploy preview");
+  expect(previewWorkflow).toContain("service deploy --name dns-api-pr-");
+  expect(previewWorkflow).not.toContain("google-github-actions/auth");
+
+  const previewCleanupWorkflow = await Bun.file(join(generatedRoot, ".github", "workflows", "preview-cleanup.yml")).text();
+  expect(previewCleanupWorkflow).toContain("pull_request:");
+  expect(previewCleanupWorkflow).toContain("wrangler delete --name dns-api-pr-");
 });
 
 test("microservice profile does not generate a website package", async () => {

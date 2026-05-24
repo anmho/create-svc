@@ -30,12 +30,15 @@ jobs:
           workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
           service_account: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
       - uses: google-github-actions/setup-gcloud@v2
+      - run: gcloud components install beta --quiet
       - run: bun install
+      - run: bun install -g create-svc@latest
       - run: |
           if [ "${{ inputs.destroy }}" = "true" ]; then
-            bun run deploy -- --ci --destroy --environment personal --name "${{ inputs.slug }}"
+            service deploy --ci --destroy --environment personal --name "${{ inputs.slug }}"
           else
-            bun run deploy -- --ci --environment personal --name "${{ inputs.slug }}"
+            service deploy --ci --environment personal --name "${{ inputs.slug }}"
           fi
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

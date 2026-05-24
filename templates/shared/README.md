@@ -230,7 +230,8 @@ secrets only when you add a provider adapter. A generic adapter can honor:
 
 The scaffold emits a minimal deployment workflow slice for Cloud Run:
 
-- [.github/workflows/preview.yml](.github/workflows/preview.yml) deploys a preview environment on pushes to non-main branches. It runs `{{WORKFLOW_DEPLOY_PREVIEW_DOC_COMMAND}}`.
+- [.github/workflows/preview.yml](.github/workflows/preview.yml) deploys a preview environment only when a pull request comment contains `/deploy preview`. It runs `{{WORKFLOW_DEPLOY_PREVIEW_DOC_COMMAND}}`.
+- [.github/workflows/preview-cleanup.yml](.github/workflows/preview-cleanup.yml) destroys the preview service and Neon preview branch when the pull request is closed or merged.
 - [.github/workflows/deploy.yml](.github/workflows/deploy.yml) deploys the main production environment on pushes to `main`. It runs `{{WORKFLOW_DEPLOY_MAIN_DOC_COMMAND}}`.
 
 These workflows intentionally assume only GitHub OIDC, Google Cloud Workload Identity Federation, the generated `service` CLI, and Neon.
@@ -244,6 +245,7 @@ Before enabling the workflows, set these GitHub repository variables:
 Set this GitHub repository secret:
 
 - `NEON_API_KEY`: Neon admin API key used to create preview branches and resolve the main database
+- `CLOUDFLARE_API_TOKEN`: Cloudflare API token used to publish Cloud Run custom-domain DNS records
 
 The deployer service account needs enough access in the generated GCP project to run `service deploy`, including Cloud Run, Artifact Registry, Secret Manager, IAM service account usage, and storage operations for this service.
 Run `{{COMMAND_BOOTSTRAP}}` once before relying on the production workflow for a fresh project.

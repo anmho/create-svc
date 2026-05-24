@@ -112,15 +112,17 @@ test("plans generated workflow and README validation", () => {
 
   expect(workflowChecks?.map((check) => check.file)).toEqual([
     ".github/workflows/preview.yml",
+    ".github/workflows/preview-cleanup.yml",
     ".github/workflows/deploy.yml",
     "README.md",
   ]);
   expect(workflowChecks?.[0]?.includes).toContain("service deploy --ci --environment preview --name");
-  expect(workflowChecks?.[0]?.includes).toContain("github.ref_name");
-  expect(workflowChecks?.[0]?.includes).toContain("branches-ignore:");
-  expect(workflowChecks?.[1]?.includes).toContain("branches:");
-  expect(workflowChecks?.[2]?.includes).toContain("GitHub Actions deployment");
-  expect(workflowChecks?.[2]?.includes).toContain("pushes to non-main branches");
+  expect(workflowChecks?.[0]?.includes).toContain("steps.pr.outputs.number");
+  expect(workflowChecks?.[0]?.includes).toContain("issue_comment:");
+  expect(workflowChecks?.[1]?.includes).toContain("pull_request:");
+  expect(workflowChecks?.[2]?.includes).toContain("branches:");
+  expect(workflowChecks?.[3]?.includes).toContain("GitHub Actions deployment");
+  expect(workflowChecks?.[3]?.includes).toContain("/deploy preview");
 });
 
 test("plans generated workflow validation with service deploy commands", () => {
