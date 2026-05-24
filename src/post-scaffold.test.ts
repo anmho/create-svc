@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 import {
   buildDeploymentVerificationCommands,
   buildLocalVerificationCommands,
+  buildLocalPreparationCommands,
   buildPostScaffoldCommands,
   buildPreGitBootstrapCommands,
-  shouldRunLocalMigrate,
 } from "./post-scaffold";
 
 describe("buildPostScaffoldCommands", () => {
@@ -38,10 +38,16 @@ describe("buildPreGitBootstrapCommands", () => {
   });
 });
 
-describe("shouldRunLocalMigrate", () => {
-  test("skips local migrate before Workers dev", () => {
-    expect(shouldRunLocalMigrate({ target: "workers" })).toBe(false);
-    expect(shouldRunLocalMigrate({ target: "cloudrun" })).toBe(true);
+describe("buildLocalPreparationCommands", () => {
+  test("starts local Postgres before migrating Workers dev", () => {
+    expect(buildLocalPreparationCommands({ target: "workers" })).toEqual([
+      { command: "bun", args: ["run", "./scripts/ensure-local-db.ts"] },
+      { command: "bun", args: ["run", "migrate"] },
+    ]);
+  });
+
+  test("runs migrations directly for Cloud Run dev", () => {
+    expect(buildLocalPreparationCommands({ target: "cloudrun" })).toEqual([{ command: "bun", args: ["run", "migrate"] }]);
   });
 });
 

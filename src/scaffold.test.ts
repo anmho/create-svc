@@ -307,7 +307,7 @@ test("scaffolds the workers target with wrangler lifecycle commands", async () =
 
   const packageJson = await Bun.file(join(generatedRoot, "package.json")).text();
   expect(packageJson).toContain('"@anmho/authctl": "0.1.1"');
-  expect(packageJson).toContain('"dev": "wrangler dev"');
+  expect(packageJson).toContain('"dev": "bun run ./scripts/dev.ts wrangler dev"');
   expect(packageJson).toContain('"service": "service"');
   expect(packageJson).toContain('"auth": "service auth"');
   expect(packageJson).toContain('"wrangler"');

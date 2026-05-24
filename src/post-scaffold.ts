@@ -58,8 +58,8 @@ export function runPreGitBootstrapFlow(config: Pick<ScaffoldConfig, "framework">
 }
 
 async function startLocalDevelopment(config: Pick<ScaffoldConfig, "target">, cwd: string) {
-  if (shouldRunLocalMigrate(config)) {
-    run("bun", ["run", "migrate"], { cwd });
+  for (const command of buildLocalPreparationCommands(config)) {
+    run(command.command, command.args, { cwd });
   }
   await mkdir(join(cwd, ".service"), { recursive: true });
   const child = Bun.spawn(["sh", "-c", "exec bun run dev > .service/local-dev.log 2>&1 < /dev/null"], {
@@ -74,8 +74,14 @@ async function startLocalDevelopment(config: Pick<ScaffoldConfig, "target">, cwd
   await Bun.write(join(cwd, ".service", "local-dev.pid"), `${child.pid}\n`);
 }
 
-export function shouldRunLocalMigrate(config: Pick<ScaffoldConfig, "target">) {
-  return config.target !== "workers";
+export function buildLocalPreparationCommands(config: Pick<ScaffoldConfig, "target">): PostScaffoldCommand[] {
+  if (config.target === "workers") {
+    return [
+      { command: "bun", args: ["run", "./scripts/ensure-local-db.ts"] },
+      { command: "bun", args: ["run", "migrate"] },
+    ];
+  }
+  return [{ command: "bun", args: ["run", "migrate"] }];
 }
 
 function runWithRetries(command: PostScaffoldCommand, options: CommandOptions, attempts: number, delayMs: number) {
