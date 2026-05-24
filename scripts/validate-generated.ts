@@ -29,6 +29,7 @@ type VariantDefinition = {
 export type ValidationCommandStep = {
   name: string;
   command: string[];
+  failureHint?: string;
 };
 
 export type SmokeCheck = {
@@ -62,6 +63,7 @@ export type ValidationOptions = {
 type RunCommandOptions = {
   cwd: string;
   env?: Record<string, string>;
+  failureHint?: string;
 };
 
 type ServerProcess = Bun.Subprocess<"ignore", "pipe", "pipe">;
@@ -145,6 +147,12 @@ const VARIANT_DEFINITIONS: Record<GeneratedVariant, VariantDefinition> = {
 };
 
 const SMOKE_REQUEST_TIMEOUT_MS = 2_000;
+const AUTHCTL_RESOURCE_SERVER_COMMAND_STEP: ValidationCommandStep = {
+  name: "verify authctl resource-server command",
+  command: ["bun", "run", "authctl", "resource-servers", "upsert", "--help"],
+  failureHint:
+    'Missing authctl command "resource-servers upsert". Generated services must install @anmho/authctl >=0.1.1 so auth registration can upsert resource servers.',
+};
 
 export function parseValidationArgs(args: string[]): ValidationOptions {
   let selectedVariant: GeneratedVariant | undefined;
@@ -216,10 +224,18 @@ export function planValidation(args: string[] | ValidationOptions): ValidationPl
       serviceName,
       directoryName: name,
       composeProjectName: `create_svc_${composeRunId}_${name}`.replace(/[^a-zA-Z0-9_-]/g, "_"),
-      commandSteps: definition.commandSteps,
+      commandSteps: withAuthctlCommandSurfaceCheck(definition.commandSteps),
       smokeChecks: definition.smokeChecks,
     };
   });
+}
+
+function withAuthctlCommandSurfaceCheck(commandSteps: ValidationCommandStep[]) {
+  const [installStep, ...rest] = commandSteps;
+  if (!installStep) {
+    return [AUTHCTL_RESOURCE_SERVER_COMMAND_STEP];
+  }
+  return [installStep, AUTHCTL_RESOURCE_SERVER_COMMAND_STEP, ...rest];
 }
 
 export async function validateGeneratedApps(args: string[] = Bun.argv.slice(2)) {
@@ -249,7 +265,11 @@ export async function validateGeneratedApps(args: string[] = Bun.argv.slice(2)) 
           if (isDockerComposeUp(step)) {
             startedCompose.value = true;
           }
-          await runCommand(step.command, { cwd: generatedRoot, env: { ...serviceShimEnv(serviceBinDir), ...commandEnv(item, step) } });
+          await runCommand(step.command, {
+            cwd: generatedRoot,
+            env: { ...serviceShimEnv(serviceBinDir), ...commandEnv(item, step) },
+            failureHint: step.failureHint,
+          });
         }
 
         for (const smoke of item.smokeChecks) {
@@ -340,15 +360,7 @@ function createScaffoldConfig(
 async function runCommand(command: string[], options: RunCommandOptions) {
   const result = await runProcess(command, options);
   if (result.exitCode !== 0) {
-    throw new Error(
-      [
-        `command failed: ${command.join(" ")}`,
-        `exit code: ${result.exitCode}`,
-        result.output ? `output:\n${result.output}` : "",
-      ]
-        .filter(Boolean)
-        .join("\n")
-    );
+    throw new Error(formatCommandFailure(command, result.exitCode, result.output, options.failureHint));
   }
 }
 
@@ -363,6 +375,22 @@ async function writeLocalServiceShim(root: string, generatorRoot: string) {
 
 function serviceShimEnv(binDir: string) {
   return { PATH: `${binDir}:${process.env.PATH ?? ""}` };
+}
+
+export function formatCommandFailure(
+  command: string[],
+  exitCode: number,
+  output: string,
+  failureHint?: string
+) {
+  return [
+    `command failed: ${command.join(" ")}`,
+    `exit code: ${exitCode}`,
+    failureHint ? `hint: ${failureHint}` : "",
+    output ? `output:\n${output}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 async function runProcess(command: string[], options: RunCommandOptions) {
