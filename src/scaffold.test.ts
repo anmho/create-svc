@@ -152,6 +152,7 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
     expect(deployWorkflow).toContain("gcloud components install beta --quiet");
     expect(deployWorkflow).toContain("bun install -g create-svc@latest");
     expect(deployWorkflow).toContain("service deploy --ci");
+    expect(deployWorkflow).toContain("CLOUDFLARE_API_TOKEN");
     expect(deployWorkflow).toContain("bun run dashboards");
     expect(deployWorkflow).toContain("GCX_ENABLED");
 
