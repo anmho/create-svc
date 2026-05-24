@@ -7,7 +7,7 @@ import { manualGitHubDeleteCommand } from "../../git-bootstrap";
 import { ensureAuthClient, ensureAuthResourceServer, runAuthCommand, runAuthDoctor } from "../authctl";
 import { stopLocalDev } from "../local-dev";
 import { serviceConfig } from "../runtime";
-import { isLocalDatabaseUrl, resolveCommandPath } from "./lib";
+import { isLocalDatabaseUrl, isMissingDatabaseError, resolveCommandPath } from "./lib";
 
 const config = {
   serviceName: serviceConfig.service_id,
@@ -37,7 +37,7 @@ export async function main(argv = Bun.argv.slice(2)) {
       ensureAuthResourceServer();
       ensureAuthClient();
       const databaseUrl = await resolveDatabaseUrl({ preferRemote: true });
-      await applySchema(databaseUrl);
+      await applySchemaWithRetries(databaseUrl);
       await ensureHyperdrive(databaseUrl);
       run("wrangler", ["deploy"]);
       return `Created https://${config.hostname}`;
@@ -259,8 +259,13 @@ async function deleteHyperdrive() {
 async function resolveDatabaseUrl(options: { preferRemote?: boolean } = {}) {
   const direct = Bun.env.DATABASE_URL?.trim();
   const apiKey = resolveNeonApiKey();
-  if (direct && (!options.preferRemote || !isLocalDatabaseUrl(direct) || !apiKey)) {
-    return direct;
+  if (direct) {
+    if (!options.preferRemote || !isLocalDatabaseUrl(direct)) {
+      return direct;
+    }
+    if (!apiKey) {
+      throw new Error("NEON_API_KEY or readable Vault Neon provider path is required for Workers production create; ignoring local DATABASE_URL");
+    }
   }
 
   if (!apiKey) {
@@ -414,6 +419,23 @@ create index if not exists waitlist_triggers_status_created_idx
   } finally {
     await client.end();
   }
+}
+
+async function applySchemaWithRetries(databaseUrl: string) {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= 10; attempt += 1) {
+    try {
+      await applySchema(databaseUrl);
+      return;
+    } catch (error) {
+      lastError = error;
+      if (!isMissingDatabaseError(error) || attempt === 10) {
+        break;
+      }
+      await Bun.sleep(2_000);
+    }
+  }
+  throw lastError;
 }
 
 async function runDoctor() {

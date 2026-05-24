@@ -3,7 +3,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { mkdtempSync } from "node:fs";
-import { isLocalDatabaseUrl, resolveCommandPath } from "./lib";
+import { isLocalDatabaseUrl, isMissingDatabaseError, resolveCommandPath } from "./lib";
 
 test("resolveCommandPath prefers repo-local bins", async () => {
   const root = mkdtempSync(join(tmpdir(), "create-svc-workers-bin-"));
@@ -26,3 +26,7 @@ test("isLocalDatabaseUrl detects localhost database URLs", () => {
   expect(isLocalDatabaseUrl("not a url")).toBe(false);
 });
 
+test("isMissingDatabaseError detects Neon database propagation failures", () => {
+  expect(isMissingDatabaseError(new Error('database "codex_workers" does not exist'))).toBe(true);
+  expect(isMissingDatabaseError(new Error("password authentication failed"))).toBe(false);
+});
