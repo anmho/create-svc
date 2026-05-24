@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { parseValidationArgs, planValidation } from "./validate-generated";
+import { formatCommandFailure, parseValidationArgs, planValidation } from "./validate-generated";
 
 test("plans every generated service variant by default", () => {
   const plan = planValidation([]);
@@ -28,12 +28,44 @@ test("plans the public commands for the bun hono tracer bullet", () => {
 
   expect(plan[0]?.commandSteps).toEqual([
     { name: "install dependencies", command: ["bun", "install"] },
+    {
+      name: "verify authctl resource-server command",
+      command: ["bun", "run", "authctl", "resource-servers", "upsert", "--help"],
+      failureHint:
+        'Missing authctl command "resource-servers upsert". Generated services must install @anmho/authctl >=0.1.1 so auth registration can upsert resource servers.',
+    },
     { name: "start local postgres", command: ["docker", "compose", "up", "-d"] },
     { name: "run migrations", command: ["bun", "run", "migrate"] },
     { name: "run tests", command: ["bun", "run", "test"] },
     { name: "run lint", command: ["bun", "run", "lint"] },
   ]);
   expect(plan[0]?.smokeChecks).toEqual([{ name: "health endpoint", path: "/healthz" }]);
+});
+
+test("plans authctl command-surface checks for every generated variant", () => {
+  const plan = planValidation([]);
+
+  for (const variant of plan) {
+    expect(variant.commandSteps).toContainEqual({
+      name: "verify authctl resource-server command",
+      command: ["bun", "run", "authctl", "resource-servers", "upsert", "--help"],
+      failureHint:
+        'Missing authctl command "resource-servers upsert". Generated services must install @anmho/authctl >=0.1.1 so auth registration can upsert resource servers.',
+    });
+  }
+});
+
+test("formats authctl command-surface failures with an actionable hint", () => {
+  const message = formatCommandFailure(
+    ["bun", "run", "authctl", "resource-servers", "upsert", "--help"],
+    1,
+    "error: unknown command",
+    'Missing authctl command "resource-servers upsert". Generated services must install @anmho/authctl >=0.1.1 so auth registration can upsert resource servers.'
+  );
+
+  expect(message).toContain('Missing authctl command "resource-servers upsert"');
+  expect(message).toContain("@anmho/authctl >=0.1.1");
+  expect(message).toContain("auth registration can upsert resource servers");
 });
 
 test("plans connectrpc introspection checks for the bun connectrpc variant", () => {
