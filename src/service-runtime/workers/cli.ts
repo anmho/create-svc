@@ -452,7 +452,7 @@ async function runDoctor() {
     if (!text.includes(`name = "${config.serviceName}"`)) {
       throw new Error(`wrangler.toml does not name ${config.serviceName}`);
     }
-    if (!text.includes(`pattern = "${config.hostname}/*"`)) {
+    if (!text.includes(`pattern = "${config.hostname}"`)) {
       throw new Error(`wrangler.toml does not route ${config.hostname}`);
     }
     return "name and custom domain route configured";
