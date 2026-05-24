@@ -285,7 +285,7 @@ async function deleteHyperdrive() {
   if (!id) {
     return;
   }
-  run("wrangler", ["hyperdrive", "delete", id, "--force"], { allowFailure: true });
+  run("wrangler", ["hyperdrive", "delete", id], { allowFailure: true });
 }
 
 async function resolveDatabaseUrl(options: { preferRemote?: boolean } = {}) {
@@ -382,9 +382,9 @@ async function resolveNeonTarget(apiKey: string) {
 }
 
 async function deleteNeonDatabase() {
-  const apiKey = Bun.env.NEON_API_KEY?.trim();
+  const apiKey = resolveNeonApiKey();
   if (!apiKey) {
-    log.step("Skipping Neon database deletion because NEON_API_KEY is not set");
+    log.step("Skipping Neon database deletion because NEON_API_KEY or a readable Vault Neon provider path is not available");
     return;
   }
 
