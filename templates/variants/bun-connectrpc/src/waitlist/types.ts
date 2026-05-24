@@ -19,6 +19,15 @@ export type WaitlistTrigger = {
   processedAt: string | null;
 };
 
+export type WebhookEvent = {
+  id: string;
+  provider: string;
+  externalEventId: string;
+  payload: unknown;
+  headers: Record<string, string>;
+  receivedAt: string;
+};
+
 export type JoinWaitlistInput = {
   email: string;
   name?: string | null;
@@ -42,4 +51,11 @@ export type RecordTriggerInput = {
   type: string;
   entryId?: string | null;
   payloadJson?: string | null;
+};
+
+export type RecordWebhookEventInput = {
+  provider: string;
+  externalEventId: string;
+  payload: unknown;
+  headers: Record<string, string>;
 };

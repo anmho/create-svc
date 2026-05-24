@@ -96,11 +96,21 @@ export function createHandler(service: WaitlistService) {
         try {
           const provider = path.split("/").filter(Boolean)[1] ?? "generic";
           const rawBody = await readRawBody(request);
-          const trigger = await service.recordTrigger({
-            type: `webhook.${provider}`,
-            payloadJson: JSON.stringify({ headers: request.headers, rawBody }),
+          const headers = headersPayload(request.headers);
+          const payload = parseWebhookPayload(rawBody);
+          const result = await service.recordWebhookEvent({
+            provider,
+            externalEventId: webhookEventId(payload, request.headers),
+            payload,
+            headers,
           });
-          respondJson(response, 202, { trigger });
+          if (!result.duplicate) {
+            await service.recordTrigger({
+              type: `webhook.${provider}`,
+              payloadJson: JSON.stringify({ headers, rawBody }),
+            });
+          }
+          respondJson(response, result.duplicate ? 200 : 202, result);
         } catch (error) {
           respondAppError(response, error);
         }
@@ -190,6 +200,39 @@ function readRawBody(request: Parameters<FallbackHandler>[0]) {
     request.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
     request.on("error", reject);
   });
+}
+
+function parseWebhookPayload(rawBody: string) {
+  try {
+    return rawBody ? JSON.parse(rawBody) : {};
+  } catch {
+    return { rawBody };
+  }
+}
+
+function webhookEventId(payload: unknown, headers: Parameters<FallbackHandler>[0]["headers"]) {
+  if (payload && typeof payload === "object" && "id" in payload && typeof payload.id === "string") {
+    return payload.id;
+  }
+  const header = headers["x-webhook-event-id"];
+  if (Array.isArray(header)) {
+    return header[0] ?? crypto.randomUUID();
+  }
+  return header ?? crypto.randomUUID();
+}
+
+function headersPayload(headers: Parameters<FallbackHandler>[0]["headers"]) {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers)) {
+    if (Array.isArray(value)) {
+      out[key] = value.join(", ");
+      continue;
+    }
+    if (typeof value === "string") {
+      out[key] = value;
+    }
+  }
+  return out;
 }
 
 if (import.meta.main) {

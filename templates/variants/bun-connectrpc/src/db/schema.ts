@@ -24,3 +24,16 @@ export const waitlistTriggers = pgTable("waitlist_triggers", {
   createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   processedAt: timestamp("processed_at", { withTimezone: true, mode: "date" }),
 });
+
+export const webhookEvents = pgTable(
+  "webhook_events",
+  {
+    id: text("id").primaryKey(),
+    provider: text("provider").notNull(),
+    externalEventId: text("external_event_id").notNull(),
+    payloadJson: text("payload_json").notNull(),
+    headersJson: text("headers_json").notNull(),
+    receivedAt: timestamp("received_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("webhook_events_provider_external_event_id_key").on(table.provider, table.externalEventId)]
+);

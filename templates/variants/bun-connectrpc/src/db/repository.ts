@@ -1,7 +1,7 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import type { createDb } from "./client";
-import { waitlistEntries, waitlistTriggers } from "./schema";
-import type { WaitlistEntry, WaitlistTrigger } from "../waitlist/types";
+import { waitlistEntries, waitlistTriggers, webhookEvents } from "./schema";
+import type { WaitlistEntry, WaitlistTrigger, WebhookEvent } from "../waitlist/types";
 
 type Database = ReturnType<typeof createDb>;
 type WaitlistEntryRow = typeof waitlistEntries.$inferSelect;
@@ -19,6 +19,14 @@ type CreateTriggerRecord = {
   type: string;
   entryId: string | null;
   payloadJson: string;
+};
+
+type CreateWebhookEventRecord = {
+  id: string;
+  provider: string;
+  externalEventId: string;
+  payload: unknown;
+  headers: Record<string, string>;
 };
 
 export class WaitlistRepository {
@@ -91,6 +99,36 @@ export class WaitlistRepository {
       .returning();
     return toWaitlistTrigger(row);
   }
+
+  async recordWebhookEvent(input: CreateWebhookEventRecord): Promise<{ event: WebhookEvent; duplicate: boolean }> {
+    const [inserted] = await this.db
+      .insert(webhookEvents)
+      .values({
+        id: input.id,
+        provider: input.provider,
+        externalEventId: input.externalEventId,
+        payloadJson: JSON.stringify(input.payload ?? {}),
+        headersJson: JSON.stringify(input.headers),
+        receivedAt: new Date(),
+      })
+      .onConflictDoNothing({
+        target: [webhookEvents.provider, webhookEvents.externalEventId],
+      })
+      .returning();
+    if (inserted) {
+      return { event: toWebhookEvent(inserted), duplicate: false };
+    }
+
+    const [row] = await this.db
+      .select()
+      .from(webhookEvents)
+      .where(and(eq(webhookEvents.provider, input.provider), eq(webhookEvents.externalEventId, input.externalEventId)))
+      .limit(1);
+    if (!row) {
+      throw new Error("webhook event was not inserted and could not be read");
+    }
+    return { event: toWebhookEvent(row), duplicate: true };
+  }
 }
 
 function clampLimit(value: number | null | undefined) {
@@ -122,5 +160,16 @@ function toWaitlistTrigger(row: typeof waitlistTriggers.$inferSelect): WaitlistT
     payloadJson: row.payloadJson,
     createdAt: row.createdAt.toISOString(),
     processedAt: row.processedAt?.toISOString() ?? null,
+  };
+}
+
+function toWebhookEvent(row: typeof webhookEvents.$inferSelect): WebhookEvent {
+  return {
+    id: row.id,
+    provider: row.provider,
+    externalEventId: row.externalEventId,
+    payload: JSON.parse(row.payloadJson),
+    headers: JSON.parse(row.headersJson),
+    receivedAt: row.receivedAt.toISOString(),
   };
 }

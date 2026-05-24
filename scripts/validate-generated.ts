@@ -2,6 +2,7 @@ import { chmod, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import { createServer } from "node:net";
 import { connect as connectHttp2, constants as http2Constants } from "node:http2";
+import { SQL } from "bun";
 import { deriveDefaults, type DeployTarget, type Framework, type GcpProjectMode, type Runtime } from "../src/naming";
 import type { Profile } from "../src/profiles";
 import { scaffoldProject, type ScaffoldConfig } from "../src/scaffold";
@@ -41,7 +42,7 @@ export type GeneratedCheck = {
 
 export type SmokeCheck = {
   name: string;
-  kind?: "http" | "connect-client" | "connect-http" | "hono-rpc-client" | "web" | "ios-expo";
+  kind?: "http" | "connect-client" | "connect-http" | "hono-rpc-client" | "web" | "ios-expo" | "webhook-idempotency";
   path?: string;
   expectStatus?: number;
   protocol?: "http1" | "http2";
@@ -90,7 +91,10 @@ const VARIANT_DEFINITIONS: Record<GeneratedVariant, VariantDefinition> = {
       { name: "run lint", command: ["bun", "run", "lint"] },
     ],
     generatedChecks: generatedChecksFor("bun"),
-    smokeChecks: [{ name: "health endpoint", path: "/healthz" }],
+    smokeChecks: [
+      { name: "health endpoint", path: "/healthz" },
+      { name: "duplicate webhook delivery is idempotent", kind: "webhook-idempotency" },
+    ],
   },
   "bun-connectrpc": {
     name: "bun-connectrpc",
@@ -110,6 +114,7 @@ const VARIANT_DEFINITIONS: Record<GeneratedVariant, VariantDefinition> = {
       { name: "health endpoint", path: "/healthz" },
       { name: "connect json endpoint", kind: "connect-http" },
       { name: "connectrpc introspection", path: "/debug/connectrpc" },
+      { name: "duplicate webhook delivery is idempotent", kind: "webhook-idempotency" },
     ],
   },
   "go-chi": {
@@ -124,7 +129,10 @@ const VARIANT_DEFINITIONS: Record<GeneratedVariant, VariantDefinition> = {
       { name: "run tests", command: ["make", "test"] },
     ],
     generatedChecks: generatedChecksFor("go"),
-    smokeChecks: [{ name: "health endpoint", path: "/healthz" }],
+    smokeChecks: [
+      { name: "health endpoint", path: "/healthz" },
+      { name: "duplicate webhook delivery is idempotent", kind: "webhook-idempotency" },
+    ],
   },
   "go-connectrpc": {
     name: "go-connectrpc",
@@ -142,6 +150,7 @@ const VARIANT_DEFINITIONS: Record<GeneratedVariant, VariantDefinition> = {
     smokeChecks: [
       { name: "health endpoint", path: "/healthz" },
       { name: "typed grpc client", kind: "connect-client" },
+      { name: "duplicate webhook delivery is idempotent", kind: "webhook-idempotency" },
     ],
   },
   "workers-bun-hono": {
@@ -528,6 +537,9 @@ async function runSmokeCheck(item: ValidationPlanItem, cwd: string, smoke: Smoke
       const protocol = item.name === "bun-connectrpc" ? "http2" : "http";
       await waitForHttp(`${protocol}://127.0.0.1:${port}/healthz`, 200, proc);
       await runConnectClientSmoke(item, cwd, port);
+    } else if (smoke.kind === "webhook-idempotency") {
+      await waitForHttp(`http://127.0.0.1:${port}/healthz`, 200, proc);
+      await runWebhookIdempotencySmoke(item, cwd, port, "http");
     } else {
       if (!smoke.path) {
         throw new Error(`Smoke check ${smoke.name} is missing a path`);
@@ -639,6 +651,105 @@ async function runConnectClientSmoke(item: ValidationPlanItem, cwd: string, port
   throw new Error(`No typed client smoke is defined for ${item.name}`);
 }
 
+async function runWebhookIdempotencySmoke(
+  item: ValidationPlanItem,
+  cwd: string,
+  port: number,
+  protocol: "http" | "http2"
+) {
+  const scenario = "duplicate webhook delivery";
+  const provider = "generic";
+  const externalEventId = `evt_${item.name}_${Date.now()}`;
+  const body = JSON.stringify({
+    id: externalEventId,
+    type: "waitlist.signup",
+    email: `validation-${item.name}@example.test`,
+  });
+
+  const first = await requestJson(`${protocol}://127.0.0.1:${port}/webhooks/${provider}`, {
+    method: "POST",
+    body,
+  });
+  if (first.status !== 202) {
+    throw scenarioError(
+      item,
+      scenario,
+      `first delivery returned ${first.status}, expected 202${formatResponseBody(first)}`
+    );
+  }
+  if (first.json?.duplicate !== false) {
+    throw scenarioError(item, scenario, `first delivery duplicate flag was ${String(first.json?.duplicate)}, expected false`);
+  }
+
+  const second = await requestJson(`${protocol}://127.0.0.1:${port}/webhooks/${provider}`, {
+    method: "POST",
+    body,
+  });
+  if (second.status !== 200) {
+    throw scenarioError(
+      item,
+      scenario,
+      `duplicate delivery returned ${second.status}, expected 200${formatResponseBody(second)}`
+    );
+  }
+  if (second.json?.duplicate !== true) {
+    throw scenarioError(item, scenario, `duplicate delivery flag was ${String(second.json?.duplicate)}, expected true`);
+  }
+
+  const firstEventId = first.json?.event?.id;
+  const secondEventId = second.json?.event?.id;
+  if (!firstEventId || !secondEventId || firstEventId !== secondEventId) {
+    throw scenarioError(item, scenario, "duplicate delivery did not return the original webhook event");
+  }
+
+  const storedCount = await countWebhookEvents(cwd, provider, externalEventId);
+  if (storedCount !== 1) {
+    throw scenarioError(
+      item,
+      scenario,
+      `stored webhook event count for ${provider}/${externalEventId} was ${storedCount}, expected 1`
+    );
+  }
+}
+
+async function countWebhookEvents(cwd: string, provider: string, externalEventId: string) {
+  const databaseUrl = await readGeneratedDatabaseUrl(cwd);
+  const sql = new SQL(databaseUrl);
+  try {
+    const rows = await sql<{ count: string | number }[]>`
+      select count(*)::int as count
+      from webhook_events
+      where provider = ${provider}
+        and external_event_id = ${externalEventId}
+    `;
+    return Number(rows[0]?.count ?? 0);
+  } finally {
+    await sql.end();
+  }
+}
+
+async function readGeneratedDatabaseUrl(cwd: string) {
+  const envPath = join(cwd, ".env.local");
+  const env = await Bun.file(envPath).text();
+  const line = env
+    .split("\n")
+    .map((entry) => entry.trim())
+    .find((entry) => entry.startsWith("DATABASE_URL="));
+  const databaseUrl = line?.slice("DATABASE_URL=".length).trim();
+  if (!databaseUrl) {
+    throw new Error(`DATABASE_URL is missing from ${envPath}`);
+  }
+  return databaseUrl;
+}
+
+function scenarioError(item: ValidationPlanItem, scenario: string, message: string) {
+  return new Error(`${item.name} ${scenario}: ${message}`);
+}
+
+function formatResponseBody(response: { text?: string }) {
+  return response.text ? `; response: ${response.text}` : "";
+}
+
 async function waitForHttp(url: string, expectedStatus: number, proc: ServerProcess) {
   const started = Date.now();
   let lastError = "";
@@ -742,6 +853,92 @@ async function requestSmokeStatus(url: string, proc: ServerProcess) {
     });
     request.end();
   });
+}
+
+async function requestJson(
+  url: string,
+  options: {
+    method: "POST";
+    body: string;
+  }
+) {
+  const parsed = new URL(url);
+  if (parsed.protocol !== "http2:") {
+    const response = await fetch(url, {
+      method: options.method,
+      headers: { "Content-Type": "application/json" },
+      body: options.body,
+      signal: AbortSignal.timeout(SMOKE_REQUEST_TIMEOUT_MS),
+    });
+    const text = await response.text();
+    return {
+      status: response.status,
+      text,
+      json: parseJson(text),
+    };
+  }
+
+  return new Promise<{ status: number; text: string; json: any }>((resolveResponse, reject) => {
+    const client = connectHttp2(`http://${parsed.host}`);
+    const timeout = setTimeout(() => {
+      rejectOnce(new Error(`HTTP/2 JSON request timed out after ${SMOKE_REQUEST_TIMEOUT_MS}ms`));
+    }, SMOKE_REQUEST_TIMEOUT_MS);
+    let settled = false;
+    const chunks: string[] = [];
+    const rejectOnce = (error: Error) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timeout);
+      client.destroy(error);
+      reject(error);
+    };
+    const resolveOnce = (status: number) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timeout);
+      request.close();
+      client.close();
+      const text = chunks.join("");
+      resolveResponse({ status, text, json: parseJson(text) });
+    };
+
+    client.on("error", (error) => {
+      rejectOnce(error);
+    });
+
+    let status = 0;
+    const request = client.request({
+      [http2Constants.HTTP2_HEADER_METHOD]: options.method,
+      [http2Constants.HTTP2_HEADER_PATH]: `${parsed.pathname}${parsed.search}`,
+      [http2Constants.HTTP2_HEADER_CONTENT_TYPE]: "application/json",
+      [http2Constants.HTTP2_HEADER_CONTENT_LENGTH]: Buffer.byteLength(options.body),
+    });
+
+    request.setEncoding("utf8");
+    request.on("response", (headers) => {
+      status = Number(headers[http2Constants.HTTP2_HEADER_STATUS] ?? 0);
+    });
+    request.on("data", (chunk) => {
+      chunks.push(String(chunk));
+    });
+    request.on("end", () => {
+      resolveOnce(status);
+    });
+    request.on("error", (error) => rejectOnce(error));
+    request.end(options.body);
+  });
+}
+
+function parseJson(text: string) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
 }
 
 async function readProcessOutput(proc: ServerProcess) {

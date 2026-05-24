@@ -3,8 +3,10 @@ import { WaitlistRepository } from "../db/repository";
 import type {
   JoinWaitlistInput,
   ListWaitlistEntriesInput,
+  RecordWebhookEventInput,
   RecordTriggerInput,
   UpdateWaitlistEntryInput,
+  WebhookEvent,
   WaitlistEntry,
   WaitlistEntryStatus,
 } from "./types";
@@ -27,6 +29,7 @@ export type WaitlistService = {
   updateWaitlistEntry(input: UpdateWaitlistEntryInput): Promise<WaitlistEntry>;
   exportWaitlistEntries(input?: ListWaitlistEntriesInput): Promise<string>;
   recordTrigger(input: RecordTriggerInput): Promise<unknown>;
+  recordWebhookEvent(input: RecordWebhookEventInput): Promise<{ event: WebhookEvent; duplicate: boolean }>;
 };
 
 export class DefaultWaitlistService implements WaitlistService {
@@ -111,6 +114,25 @@ export class DefaultWaitlistService implements WaitlistService {
       type,
       entryId: input.entryId?.trim() || null,
       payloadJson: normalizePayloadJson(input.payloadJson),
+    });
+  }
+
+  async recordWebhookEvent(input: RecordWebhookEventInput) {
+    const provider = input.provider.trim();
+    const externalEventId = input.externalEventId.trim();
+    if (!provider) {
+      throw new AppError(400, "invalid_webhook_provider", "webhook provider is required");
+    }
+    if (!externalEventId) {
+      throw new AppError(400, "invalid_webhook_event_id", "webhook event id is required");
+    }
+
+    return this.repository.recordWebhookEvent({
+      id: crypto.randomUUID(),
+      provider,
+      externalEventId,
+      payload: input.payload ?? {},
+      headers: input.headers,
     });
   }
 }
