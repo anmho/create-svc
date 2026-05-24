@@ -4,6 +4,7 @@ import {
   buildLocalVerificationCommands,
   buildPostScaffoldCommands,
   buildPreGitBootstrapCommands,
+  shouldRunLocalMigrate,
 } from "./post-scaffold";
 
 describe("buildPostScaffoldCommands", () => {
@@ -34,6 +35,13 @@ describe("buildPreGitBootstrapCommands", () => {
   test("does not build SDK artifacts for HTTP or Workers services", () => {
     expect(buildPreGitBootstrapCommands({ framework: "hono" })).toEqual([]);
     expect(buildPreGitBootstrapCommands({ target: "workers", framework: "connectrpc" })).toEqual([]);
+  });
+});
+
+describe("shouldRunLocalMigrate", () => {
+  test("skips local migrate before Workers dev", () => {
+    expect(shouldRunLocalMigrate({ target: "workers" })).toBe(false);
+    expect(shouldRunLocalMigrate({ target: "cloudrun" })).toBe(true);
   });
 });
 
