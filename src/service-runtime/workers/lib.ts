@@ -18,3 +18,7 @@ export function isLocalDatabaseUrl(value: string) {
   }
 }
 
+export function isMissingDatabaseError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /database ".+" does not exist/.test(message);
+}
