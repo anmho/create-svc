@@ -2,18 +2,28 @@ import { expect, test } from "bun:test";
 import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { findGeneratedServiceRoot, generatedDependenciesInstalled, normalizeScaffoldArgs } from "./service";
+import { findGeneratedServiceRoot, formatOutsideServiceCommandError, generatedDependenciesInstalled, normalizeScaffoldArgs } from "./service";
 
-test("normalizeScaffoldArgs treats service create as the scaffold command outside a service repo", () => {
+test("normalizeScaffoldArgs treats explicit scaffold commands as generator commands", () => {
   expect(normalizeScaffoldArgs(["create", "launch-api", "--yes"])).toEqual(["launch-api", "--yes"]);
   expect(normalizeScaffoldArgs(["new", "launch-api"])).toEqual(["launch-api"]);
   expect(normalizeScaffoldArgs(["init", "launch-api"])).toEqual(["launch-api"]);
-  expect(normalizeScaffoldArgs(["launch-api", "--yes"])).toEqual(["launch-api", "--yes"]);
 });
 
 test("normalizeScaffoldArgs maps service help to generator help outside a service repo", () => {
   expect(normalizeScaffoldArgs(["help"])).toEqual(["--help"]);
   expect(normalizeScaffoldArgs(["help", "--verbose"])).toEqual(["--help", "--verbose"]);
+});
+
+test("formatOutsideServiceCommandError rejects repo-local commands outside generated services", () => {
+  expect(formatOutsideServiceCommandError("destroy")).toContain("service destroy must be run inside a generated service repo");
+  expect(formatOutsideServiceCommandError("deploy")).toContain("No service.jsonc was found");
+});
+
+test("formatOutsideServiceCommandError does not treat positional names as scaffold commands", () => {
+  const message = formatOutsideServiceCommandError("launch-api");
+  expect(message).toContain("Unknown command: launch-api");
+  expect(message).toContain("service create <service_id>");
 });
 
 test("findGeneratedServiceRoot detects generated service context from nested directories", async () => {
