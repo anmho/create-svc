@@ -195,7 +195,6 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
       expect(packageJson).toContain('"migrate": "service migrate"');
       expect(packageJson).toContain('"create": "service create"');
       expect(packageJson).toContain('"deploy": "service deploy"');
-      expect(packageJson).toContain('"protect-main": "service protect-main"');
       expect(packageJson).toContain('"destroy": "service destroy"');
 
       const mainGo = await Bun.file(join(generatedRoot, "cmd", "server", "main.go")).text();
@@ -225,8 +224,6 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
       expect(makefile).toContain("bun run ./scripts/ensure-local-db.ts");
       expect(makefile).toContain("bun run ./scripts/wait-for-db.ts");
       expect(makefile).toContain("bun run ./scripts/dev.ts go run ./cmd/server --worker go run ./cmd/worker");
-      expect(makefile).toContain("protect-main:");
-      expect(makefile).toContain("$(SERVICE) protect-main");
       expect(await Bun.file(join(generatedRoot, "atlas.hcl")).exists()).toBeTrue();
       const atlasConfig = await Bun.file(join(generatedRoot, "atlas.hcl")).text();
       expect(atlasConfig).toContain('revisions_schema = "public"');
@@ -244,7 +241,6 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
       expect(packageJson).toContain('"migrate": "service migrate"');
       expect(packageJson).toContain('"create": "service create"');
       expect(packageJson).toContain('"deploy": "service deploy"');
-      expect(packageJson).toContain('"protect-main": "service protect-main"');
       expect(packageJson).toContain('"dashboards": "service dashboards"');
       expect(packageJson).toContain('"observability-bootstrap": "service observability-bootstrap"');
       expect(packageJson).toContain('"auth": "service auth"');
@@ -264,7 +260,6 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
       expect(makefile).toContain("SERVICE := service");
       expect(makefile).toContain("dashboards:");
       expect(makefile).toContain("observability-bootstrap:");
-      expect(makefile).toContain("protect-main:");
       expect(makefile).toContain("auth:");
       expect(makefile).toContain("bun run dev");
       const devScript = await Bun.file(join(generatedRoot, "scripts", "dev.ts")).text();
@@ -300,9 +295,6 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
       expect(readme).toContain("verifies JWT bearer tokens");
       expect(readme).toContain("prod/apps/auth/authctl/cloudflare-access");
       expect(readme).toContain("service auth resource-server");
-      expect(readme).toContain("GitHub main branch protection");
-      expect(readme).toContain("service create");
-      expect(readme).toContain("service protect-main");
     }
 
   }
@@ -337,8 +329,6 @@ test("scaffolds a backend package cleanly into a nested monorepo-style directory
   expect(readme).toContain("waitlist/launch service");
   expect(readme).not.toContain("Neon main, preview, and personal branch provisioning");
   expect(readme).toContain("GitHub Actions deployment");
-  expect(readme).toContain("GitHub main branch protection");
-  expect(readme).toContain("service protect-main");
   expect(readme).toContain(".github/workflows/preview.yml");
   expect(readme).toContain(".github/workflows/deploy.yml");
   expect(readme).toContain("/deploy preview");
@@ -377,7 +367,6 @@ test("scaffolds the workers target with wrangler lifecycle commands", async () =
   expect(packageJson).toContain('"@anmho/authctl": "0.1.1"');
   expect(packageJson).toContain('"dev": "bun run ./scripts/dev.ts wrangler dev --ip 127.0.0.1 --port 8787 --show-interactive-dev-session=false"');
   expect(packageJson).toContain('"service": "service"');
-  expect(packageJson).toContain('"protect-main": "service protect-main"');
   expect(packageJson).toContain('"auth": "service auth"');
   expect(packageJson).toContain('"wrangler"');
   expect(packageJson).toContain('"pg"');
@@ -424,7 +413,6 @@ test("scaffolds the workers target with wrangler lifecycle commands", async () =
   const makefile = await Bun.file(join(generatedRoot, "Makefile")).text();
   expect(makefile).toContain('no generated code for workers');
   expect(makefile).toContain("auth:");
-  expect(makefile).toContain("protect-main:");
   expect(makefile).not.toContain("scripts/codegen.ts");
 
   expect(await Bun.file(join(generatedRoot, "scripts", "authctl.ts")).exists()).toBeFalse();

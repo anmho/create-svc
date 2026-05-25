@@ -110,7 +110,3 @@ export function migrationCommandForRuntime(runtime: string): RuntimeMigrationCom
 
   throw new Error(`migrate is not available for ${runtime}`);
 }
-
-export function cloudRunServiceNamesForDestroy(serviceName: string) {
-  return [serviceName, `${serviceName}-worker`];
-}

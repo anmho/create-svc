@@ -11,7 +11,6 @@
     "test": "make test",
     "create": "service create",
     "deploy": "service deploy",
-    "protect-main": "service protect-main",
     "auth": "service auth",
     "dashboards": "service dashboards",
     "destroy": "service destroy"

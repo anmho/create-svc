@@ -1,15 +1,7 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { formatScaffoldHelp, run as runScaffoldCli } from "./cli";
-import { parseProtectMainArgs, protectMainBranch } from "./github-protection";
 import { parseJsonc } from "./jsonc";
-import {
-  buildServiceDoctorReport,
-  findServiceBinaries,
-  getInstalledServiceVersion,
-  getNpmLatestVersion,
-  packageRootFromModuleUrl,
-} from "./service-diagnostics";
 
 const SCAFFOLD_COMMANDS = new Set(["create", "new", "init"]);
 const GENERATED_SERVICE_COMMANDS = new Set([
@@ -22,17 +14,11 @@ const GENERATED_SERVICE_COMMANDS = new Set([
   "dns",
   "doctor",
   "migrate",
-  "protect-main",
   "sdk",
   "seed",
 ]);
 
 export async function runServiceCommand(argv: string[], cwd = process.cwd()) {
-  if (isVersionCommand(argv)) {
-    console.log(createSvcVersion());
-    return;
-  }
-
   const serviceRoot = findGeneratedServiceRoot(cwd);
   if (serviceRoot) {
     await delegateToGeneratedService(serviceRoot, argv);
@@ -50,39 +36,8 @@ export async function runServiceCommand(argv: string[], cwd = process.cwd()) {
     return;
   }
 
-  if (command === "doctor") {
-    runGlobalServiceDoctor();
-    return;
-  }
-
   console.error(formatOutsideServiceCommandError(command));
   process.exit(1);
-}
-
-function isVersionCommand(argv: string[]) {
-  return argv.length === 1 && (argv[0] === "--version" || argv[0] === "-v" || argv[0] === "version");
-}
-
-export function createSvcVersion() {
-  const packageJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version?: string };
-  return packageJson.version || "unknown";
-}
-
-function runGlobalServiceDoctor() {
-  const latest = getNpmLatestVersion();
-  const report = buildServiceDoctorReport({
-    activeBinaryPath: process.argv[1] || "service",
-    packageRoot: packageRootFromModuleUrl(import.meta.url),
-    packageVersion: createSvcVersion(),
-    latestVersion: latest.version,
-    latestVersionError: latest.error,
-    serviceBinaries: findServiceBinaries(),
-    getBinaryVersion: getInstalledServiceVersion,
-  });
-  console.log(report.text);
-  if (report.exitCode !== 0) {
-    process.exit(report.exitCode);
-  }
 }
 
 export function normalizeScaffoldArgs(argv: string[]) {
@@ -140,25 +95,7 @@ async function delegateToGeneratedService(serviceRoot: string, argv: string[]) {
   process.chdir(serviceRoot);
   process.env.CREATE_SVC_SERVICE_ROOT = serviceRoot;
 
-  const serviceConfig = parseJsonc(await Bun.file(join(serviceRoot, "service.jsonc")).text()) as {
-    service_id?: string;
-    target?: string;
-    git?: {
-      owner?: string;
-      repository?: string;
-    };
-  };
-  if (argv[0] === "protect-main") {
-    const protectionArgs = parseProtectMainArgs(argv.slice(1));
-    const result = protectMainBranch({
-      repo: protectionArgs.repo ?? repoFromServiceConfig(serviceConfig),
-      branch: protectionArgs.branch,
-      cwd: serviceRoot,
-    });
-    console.log(`Protected ${result.repo} ${result.branch} with required checks: ${result.requiredChecks.join(", ")}`);
-    return;
-  }
-
+  const serviceConfig = parseJsonc(await Bun.file(join(serviceRoot, "service.jsonc")).text()) as { target?: string };
   if (serviceConfig.target === "workers") {
     const { main } = await import("./service-runtime/workers/cli");
     await main(argv);
@@ -167,15 +104,6 @@ async function delegateToGeneratedService(serviceRoot: string, argv: string[]) {
 
   const { main } = await import("./service-runtime/cloudrun/cli");
   await main(argv);
-}
-
-function repoFromServiceConfig(serviceConfig: { service_id?: string; git?: { owner?: string; repository?: string } }) {
-  const owner = serviceConfig.git?.owner || "anmho";
-  const repository = serviceConfig.git?.repository || serviceConfig.service_id;
-  if (!repository) {
-    throw new Error("service.jsonc is missing git.repository and service_id; pass --repo owner/name.");
-  }
-  return `${owner}/${repository}`;
 }
 
 export function generatedDependenciesInstalled(serviceRoot: string) {
@@ -204,15 +132,6 @@ function ensureGeneratedDependencies(serviceRoot: string) {
 
 export function generatedServiceCommandHelp(argv: string[]) {
   const [command, ...rest] = argv;
-  if (command === "protect-main" && hasHelpFlag(rest)) {
-    return [
-      "Usage:",
-      "  service protect-main [--repo owner/name] [--branch main]",
-      "",
-      "Reconciles generated service branch protection with required pull request checks.",
-    ].join("\n");
-  }
-
   if (command !== "deploy" || !hasHelpFlag(rest)) {
     return undefined;
   }

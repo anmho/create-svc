@@ -300,21 +300,6 @@ async function runDoctor() {
       const state = JSON.parse(text) as SdkState;
       return formatSdkModeDetail(state, bufModule());
     });
-    await record(results, "SDK remote publish", "warn", async () => {
-      const text = await Bun.file(".service/sdk.json").text();
-      const state = JSON.parse(text) as SdkState;
-      const module = state.module || bufModule();
-      if (state.mode !== "remote") {
-        throw new Error(`SDK is in ${state.mode} mode; run service sdk publish to publish ${module}`);
-      }
-      const authEnv = resolveBufAuthEnv();
-      run("buf", ["registry", "module", "info", module], { env: authEnv });
-      const published = resolvePublishedSdk(authEnv);
-      if (state.remote?.commit && published.commit !== state.remote.commit) {
-        return `remote module readable; latest ${published.commit}, recorded ${state.remote.commit}`;
-      }
-      return `remote module readable at ${module}@${published.commit}`;
-    });
   }
 
   const output = results.map(formatDoctorResult).join("\n");

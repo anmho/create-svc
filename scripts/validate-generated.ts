@@ -164,7 +164,7 @@ const VARIANT_DEFINITIONS: Record<GeneratedVariant, VariantDefinition> = {
       { name: "run tests", command: ["bun", "run", "test"] },
       { name: "run lint", command: ["bun", "run", "lint"] },
     ],
-    generatedChecks: branchProtectionGeneratedChecks("bun"),
+    generatedChecks: [],
     smokeChecks: [],
   },
 };
@@ -442,7 +442,6 @@ function generatedChecksFor(runtime: Runtime): GeneratedCheck[] {
 
   return [
     commandFile,
-    ...branchProtectionGeneratedChecks(runtime),
     {
       name: "observability README contract",
       file: "README.md",
@@ -458,31 +457,6 @@ function generatedChecksFor(runtime: Runtime): GeneratedCheck[] {
       includes: ['"observability"', "logging.googleapis.com", "monitoring.googleapis.com", "cloudtrace.googleapis.com"],
     },
     ...deploymentGeneratedChecks(runtime),
-  ];
-}
-
-function branchProtectionGeneratedChecks(runtime: Runtime): GeneratedCheck[] {
-  return [
-    {
-      name: "branch protection package script",
-      file: "package.json",
-      includes: ['"protect-main": "service protect-main"'],
-    },
-    {
-      name: "branch protection make target",
-      file: "Makefile",
-      includes: ["protect-main:", "$(SERVICE) protect-main"],
-    },
-    {
-      name: "branch protection README contract",
-      file: "README.md",
-      includes: [
-        "service protect-main",
-        "GitHub main branch protection",
-        "service create",
-        "Administration: write",
-      ],
-    },
   ];
 }
 

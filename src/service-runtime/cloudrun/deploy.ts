@@ -24,7 +24,7 @@ import {
   writeRenderedManifest,
   writeRenderedWorkerManifest,
 } from "./lib";
-import { cloudRunServiceNamesForDestroy, migrationCommandForRuntime } from "./deploy-args";
+import { migrationCommandForRuntime } from "./deploy-args";
 
 type DeployOptions = {
   bootstrapResult?: BootstrapResult;
@@ -49,9 +49,7 @@ export async function deploy(args = Bun.argv.slice(2), deployOptions: DeployOpti
       throw new Error("Refusing to destroy the main environment");
     }
 
-    for (const serviceName of cloudRunServiceNamesForDestroy(target.serviceName)) {
-      await runStep(`Deleting Cloud Run service ${serviceName}`, () => deleteService(serviceName));
-    }
+    await runStep(`Deleting Cloud Run service ${target.serviceName}`, () => deleteService(target.serviceName));
     await runStep(`Deleting Neon branch ${target.branchName}`, async () => {
       const branches = await listBranches(neon.projectId);
       const branch = branches.find((candidate: { name: string }) => candidate.name === target.branchName);

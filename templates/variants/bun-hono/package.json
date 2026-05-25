@@ -11,7 +11,6 @@
     "test": "bun test",
     "create": "service create",
     "deploy": "service deploy",
-    "protect-main": "service protect-main",
     "dashboards": "service dashboards",
     "observability-bootstrap": "service observability-bootstrap",
     "auth": "service auth",

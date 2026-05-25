@@ -7,7 +7,6 @@ import {
   formatOutsideServiceCommandError,
   generatedDependenciesInstalled,
   generatedServiceCommandHelp,
-  createSvcVersion,
   normalizeScaffoldArgs,
 } from "./service";
 
@@ -22,15 +21,9 @@ test("normalizeScaffoldArgs maps service help to generator help outside a servic
   expect(normalizeScaffoldArgs(["help", "--verbose"])).toEqual(["--help", "--verbose"]);
 });
 
-test("createSvcVersion reports the package version", async () => {
-  const packageJson = await Bun.file(new URL("../package.json", import.meta.url)).json();
-  expect(createSvcVersion()).toBe(packageJson.version);
-});
-
 test("formatOutsideServiceCommandError rejects repo-local commands outside generated services", () => {
   expect(formatOutsideServiceCommandError("destroy")).toContain("service destroy must be run inside a generated service repo");
   expect(formatOutsideServiceCommandError("deploy")).toContain("No service.jsonc was found");
-  expect(formatOutsideServiceCommandError("protect-main")).toContain("service protect-main must be run inside a generated service repo");
 });
 
 test("formatOutsideServiceCommandError does not treat positional names as scaffold commands", () => {
@@ -66,10 +59,4 @@ test("generatedServiceCommandHelp intercepts deploy help before side effects", (
   expect(generatedServiceCommandHelp(["deploy", "-h"])).toContain("--environment");
   expect(generatedServiceCommandHelp(["deploy"])).toBeUndefined();
   expect(generatedServiceCommandHelp(["destroy", "--help"])).toBeUndefined();
-});
-
-test("generatedServiceCommandHelp intercepts protect-main help before side effects", () => {
-  expect(generatedServiceCommandHelp(["protect-main", "--help"])).toContain("service protect-main");
-  expect(generatedServiceCommandHelp(["protect-main", "-h"])).toContain("--repo owner/name");
-  expect(generatedServiceCommandHelp(["protect-main"])).toBeUndefined();
 });
