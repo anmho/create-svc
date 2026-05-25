@@ -70,7 +70,8 @@
       "cloudflare_path": "prod/providers/cloudflare",
       "grafana_path": "prod/providers/grafana",
       "clerk_m2m_path": "prod/providers/clerk-m2m",
-      "temporal_path": "prod/providers/temporal"
+      "temporal_path": "prod/providers/temporal",
+      "buf_path": "prod/providers/buf"
     }
   },
 
