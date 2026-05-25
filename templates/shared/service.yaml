@@ -36,6 +36,7 @@ ${CONTAINER_COMMAND}
             - name: TEMPORAL_TASK_QUEUE
               value: "${TEMPORAL_TASK_QUEUE}"
 ${TEMPORAL_API_KEY_ENV}
+${TEMPORAL_MTLS_ENV}
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:

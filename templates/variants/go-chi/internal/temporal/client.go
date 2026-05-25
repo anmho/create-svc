@@ -14,12 +14,9 @@ type TriggerDispatcher struct {
 }
 
 func NewTriggerDispatcher(cfg WorkerConfig) (*TriggerDispatcher, error) {
-	options := client.Options{
-		HostPort:  cfg.Address,
-		Namespace: cfg.Namespace,
-	}
-	if cfg.APIKey != "" {
-		options.Credentials = client.NewAPIKeyStaticCredentials(cfg.APIKey)
+	options, err := temporalClientOptions(cfg)
+	if err != nil {
+		return nil, err
 	}
 
 	temporalClient, err := client.Dial(options)

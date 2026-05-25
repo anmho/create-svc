@@ -537,6 +537,7 @@ export async function renderManifest(image: string, target: DeploymentTarget, pr
           "                  key: latest",
         ].join("\n")
       : "",
+    TEMPORAL_MTLS_ENV: renderTemporalMtlsEnv(temporal),
     AUTH_ISSUER: config.auth.issuer,
     AUTH_AUDIENCE: config.auth.audience,
     AUTH_JWKS_URL: config.auth.jwksUrl,
@@ -560,7 +561,32 @@ function readTemporalProviderFields(mount: string, path: string) {
     address: readVaultField(mount, path, ["TEMPORAL_ADDRESS", "address"]),
     namespace: readVaultField(mount, path, ["TEMPORAL_NAMESPACE", "namespace"]),
     apiKey: readVaultField(mount, path, ["TEMPORAL_API_KEY", "api_key"]),
+    tlsCaCert: readVaultField(mount, path, ["TEMPORAL_TLS_CA_CERT", "tls_ca_cert", "ca_cert"]),
+    tlsCert: readVaultField(mount, path, ["TEMPORAL_TLS_CERT", "tls_cert", "client_cert"]),
+    tlsKey: readVaultField(mount, path, ["TEMPORAL_TLS_KEY", "tls_key", "client_key"]),
   };
+}
+
+function renderTemporalMtlsEnv(temporal: ReturnType<typeof resolveTemporalRuntimeConfig>) {
+  const entries = [
+    ["TEMPORAL_TLS_CA_CERT", temporal.tlsCaCertSecretName],
+    ["TEMPORAL_TLS_CERT", temporal.tlsCertSecretName],
+    ["TEMPORAL_TLS_KEY", temporal.tlsKeySecretName],
+  ].filter((entry): entry is [string, string] => Boolean(entry[1]));
+
+  if (entries.length === 0) {
+    return "";
+  }
+
+  return entries
+    .flatMap(([envName, secretName]) => [
+      `            - name: ${envName}`,
+      "              valueFrom:",
+      "                secretKeyRef:",
+      `                  name: ${secretName}`,
+      "                  key: latest",
+    ])
+    .join("\n");
 }
 
 function readVaultField(mount: string, path: string, fields: string[]) {

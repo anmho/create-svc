@@ -36,6 +36,9 @@ func main() {
 			Namespace: cfg.TemporalNamespace,
 			TaskQueue: cfg.TemporalTaskQueue,
 			APIKey:    cfg.TemporalAPIKey,
+			TLSCACert: cfg.TemporalTLSCACert,
+			TLSCert:   cfg.TemporalTLSCert,
+			TLSKey:    cfg.TemporalTLSKey,
 		}
 		dispatcher, err := temporalapp.NewTriggerDispatcher(temporalConfig)
 		if err != nil {

@@ -41,6 +41,9 @@ function matchesSecretResource(name: string) {
   return (
     name === `${config.serviceName}-database-url` ||
     name === config.temporal.apiKeySecretName ||
+    name === config.temporal.tlsCaCertSecretName ||
+    name === config.temporal.tlsCertSecretName ||
+    name === config.temporal.tlsKeySecretName ||
     name.startsWith(`${config.serviceName}-pr-`) ||
     name.startsWith(`${config.serviceName}-dev-`)
   );

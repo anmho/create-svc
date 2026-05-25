@@ -23,6 +23,9 @@ func main() {
 		Namespace: cfg.TemporalNamespace,
 		TaskQueue: cfg.TemporalTaskQueue,
 		APIKey:    cfg.TemporalAPIKey,
+		TLSCACert: cfg.TemporalTLSCACert,
+		TLSCert:   cfg.TemporalTLSCert,
+		TLSKey:    cfg.TemporalTLSKey,
 	})
 	if err != nil {
 		log.Fatal(err)

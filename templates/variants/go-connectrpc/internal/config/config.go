@@ -14,6 +14,9 @@ type Config struct {
 	TemporalNamespace string
 	TemporalTaskQueue string
 	TemporalAPIKey    string
+	TemporalTLSCACert string
+	TemporalTLSCert   string
+	TemporalTLSKey    string
 	AuthEnabled       bool
 	AuthIssuer        string
 	AuthAudience      string
@@ -29,6 +32,9 @@ func Load() (Config, error) {
 		TemporalNamespace: envOrRuntime("TEMPORAL_NAMESPACE", "default"),
 		TemporalTaskQueue: envOr("TEMPORAL_TASK_QUEUE", "{{SERVICE_NAME}}"),
 		TemporalAPIKey:    strings.TrimSpace(os.Getenv("TEMPORAL_API_KEY")),
+		TemporalTLSCACert: strings.TrimSpace(os.Getenv("TEMPORAL_TLS_CA_CERT")),
+		TemporalTLSCert:   strings.TrimSpace(os.Getenv("TEMPORAL_TLS_CERT")),
+		TemporalTLSKey:    strings.TrimSpace(os.Getenv("TEMPORAL_TLS_KEY")),
 		AuthEnabled:       envBool("AUTH_ENABLED"),
 		AuthIssuer:        envOr("AUTH_ISSUER", "{{AUTH_ISSUER}}"),
 		AuthAudience:      envOr("AUTH_AUDIENCE", "{{AUTH_AUDIENCE}}"),
