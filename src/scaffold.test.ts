@@ -62,7 +62,7 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
     expect(serviceConfig).toContain('"kind": "microservice"');
     expect(serviceConfig).toContain(`"runtime": "${variant.runtime}"`);
     expect(serviceConfig).toContain(`"framework": "${variant.framework}"`);
-    expect(serviceConfig).toContain('"module": "buf.build/anmho/dns-api"');
+    expect(serviceConfig).toContain('"module": "buf.build/anmho-services/dns-api"');
     expect(serviceConfig).toContain('"cloudflare_vault_path": "prod/providers/cloudflare"');
     expect(serviceConfig).toContain('"issuer": "https://auth.anmho.com/api/auth"');
     expect(serviceConfig).toContain('"audience": "api://dns-api"');
@@ -204,7 +204,7 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
         expect(mainGo).toContain("NewWaitlistService");
         expect(mainGo).toContain("WaitlistServiceName");
         const bufConfig = await Bun.file(join(generatedRoot, "buf.yaml")).text();
-        expect(bufConfig).toContain("name: buf.build/anmho/dns-api");
+        expect(bufConfig).toContain("name: buf.build/anmho-services/dns-api");
       } else {
         expect(goMod).not.toContain("connectrpc.com/connect");
         expect(mainGo).toContain("NewWaitlistService");

@@ -48,14 +48,14 @@ test("service sdk publish pushes the named Buf module and selects remote SDK mod
       "#!/bin/sh",
       `echo "$@" >> "${bufLog}"`,
       `printf '%s' "$BUF_TOKEN" > "${tokenLog}"`,
-      'if [ "$1 $2 $3 $4" = "registry module info buf.build/anmho/sdk-proof" ]; then',
+      'if [ "$1 $2 $3 $4" = "registry module info buf.build/anmho-services/sdk-proof" ]; then',
       "  exit 1",
       "fi",
-      'if [ "$1 $2 $3 $4" = "registry module create buf.build/anmho/sdk-proof" ] && [ "$5 $6" = "--visibility private" ]; then',
+      'if [ "$1 $2 $3 $4" = "registry module create buf.build/anmho-services/sdk-proof" ] && [ "$5 $6" = "--visibility private" ]; then',
       "  exit 0",
       "fi",
       'if [ "$1 $2 $3 $4" = "registry module commit list" ]; then',
-      '  printf \'{"commits":[{"name":"buf.build/anmho/sdk-proof:commit-123","digest":"b5:abc123","create_time":"2026-05-25T12:00:00Z"}]}\'',
+      '  printf \'{"commits":[{"name":"buf.build/anmho-services/sdk-proof:commit-123","digest":"b5:abc123","create_time":"2026-05-25T12:00:00Z"}]}\'',
       "  exit 0",
       "fi",
       'if [ "$1" = "push" ]; then',
@@ -81,17 +81,17 @@ test("service sdk publish pushes the named Buf module and selects remote SDK mod
   expect(result.stderr.toString()).not.toContain("test-token");
   expect((await readFile(bufLog, "utf8")).trim()).toBe(
     [
-      "registry module info buf.build/anmho/sdk-proof",
-      "registry module create buf.build/anmho/sdk-proof --visibility private",
+      "registry module info buf.build/anmho-services/sdk-proof",
+      "registry module create buf.build/anmho-services/sdk-proof --visibility private",
       "push",
-      "registry module commit list buf.build/anmho/sdk-proof --format json --page-size 1",
+      "registry module commit list buf.build/anmho-services/sdk-proof --format json --page-size 1",
     ].join("\n")
   );
   expect((await readFile(tokenLog, "utf8")).trim()).toBe("test-token");
   const sdkState = JSON.parse(await Bun.file(join(generatedRoot, ".service", "sdk.json")).text());
   expect(sdkState).toMatchObject({
     mode: "remote",
-    module: "buf.build/anmho/sdk-proof",
+    module: "buf.build/anmho-services/sdk-proof",
     localPath: "./gen/waitlist/v1",
     remote: {
       commit: "commit-123",
@@ -100,7 +100,7 @@ test("service sdk publish pushes the named Buf module and selects remote SDK mod
     },
   });
   const bufConfig = await Bun.file(join(generatedRoot, "buf.yaml")).text();
-  expect(bufConfig).toContain("name: buf.build/anmho/sdk-proof");
+  expect(bufConfig).toContain("name: buf.build/anmho-services/sdk-proof");
 });
 
 test("formatSdkModeDetail reports the recorded remote SDK commit", () => {
@@ -108,15 +108,15 @@ test("formatSdkModeDetail reports the recorded remote SDK commit", () => {
     formatSdkModeDetail(
       {
         mode: "remote",
-        module: "buf.build/anmho/sdk-proof",
+        module: "buf.build/anmho-services/sdk-proof",
         remote: {
           commit: "commit-123",
           digest: "b5:abc123",
         },
       },
-      "buf.build/anmho/fallback"
+      "buf.build/anmho-services/fallback"
     )
-  ).toBe("remote: buf.build/anmho/sdk-proof@commit-123 (b5:abc123)");
+  ).toBe("remote: buf.build/anmho-services/sdk-proof@commit-123 (b5:abc123)");
 });
 
 test("service sdk use-remote records the current Buf commit", async () => {
@@ -132,7 +132,7 @@ test("service sdk use-remote records the current Buf commit", async () => {
     [
       "#!/bin/sh",
       'if [ "$1 $2 $3 $4" = "registry module commit list" ]; then',
-      '  printf \'{"commits":[{"name":"buf.build/anmho/sdk-proof:commit-456","digest":"b5:def456"}]}\'',
+      '  printf \'{"commits":[{"name":"buf.build/anmho-services/sdk-proof:commit-456","digest":"b5:def456"}]}\'',
       "fi",
       "exit 0",
       "",
@@ -172,7 +172,7 @@ test("service sdk publish leaves local SDK mode when Buf push fails", async () =
     `${JSON.stringify(
       {
         mode: "local",
-        module: "buf.build/anmho/sdk-proof",
+        module: "buf.build/anmho-services/sdk-proof",
         localPath: "./gen/waitlist/v1",
         updatedAt: "2026-05-25T00:00:00.000Z",
       },

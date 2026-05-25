@@ -47,7 +47,7 @@ export const config = {
     vaultPath: vault.temporal_path || "prod/providers/temporal",
   },
   buf: {
-    module: serviceConfig.buf?.module || `buf.build/anmho/${serviceConfig.service_id}`,
+    module: serviceConfig.buf?.module || `buf.build/anmho-services/${serviceConfig.service_id}`,
     vaultMount: vault.mount || "secret",
     vaultPath: vault.buf_path || "prod/providers/buf",
   },
