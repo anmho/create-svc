@@ -1,9 +1,10 @@
 import { Client, Connection } from "@temporalio/client";
 import type { WaitlistFollowUpInput } from "./activities";
+import { resolveCloudRunTemporalEnv } from "../env";
 import { waitlistFollowUpWorkflow } from "./workflows";
 
 export function temporalClientEnabled() {
-  return (Bun.env.TEMPORAL_ENABLED ?? "").trim().toLowerCase() === "true";
+  return resolveCloudRunTemporalEnv().TEMPORAL_ENABLED;
 }
 
 export async function startWaitlistFollowUpWorkflow(input: WaitlistFollowUpInput) {
@@ -11,10 +12,11 @@ export async function startWaitlistFollowUpWorkflow(input: WaitlistFollowUpInput
     return undefined;
   }
 
-  const address = Bun.env.TEMPORAL_ADDRESS || "localhost:7233";
-  const namespace = Bun.env.TEMPORAL_NAMESPACE || "default";
-  const taskQueue = Bun.env.TEMPORAL_TASK_QUEUE || "{{SERVICE_NAME}}";
-  const apiKey = Bun.env.TEMPORAL_API_KEY?.trim();
+  const env = resolveCloudRunTemporalEnv();
+  const address = env.TEMPORAL_ADDRESS ?? "localhost:7233";
+  const namespace = env.TEMPORAL_NAMESPACE ?? "default";
+  const taskQueue = env.TEMPORAL_TASK_QUEUE;
+  const apiKey = env.TEMPORAL_API_KEY;
   const connection = await Connection.connect({
     address,
     ...(apiKey ? { apiKey } : {}),

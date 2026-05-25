@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { authMiddleware } from "./auth";
+import { resolveCloudRunEnv } from "./env";
 import { AppError, createDefaultWaitlistService, type WaitlistService } from "./waitlist/service";
 import { assertTemporalRuntimeConfig } from "./temporal";
 
@@ -169,9 +170,10 @@ function webhookEventId(payload: unknown, headers: Headers) {
 }
 
 if (import.meta.main) {
+  const env = resolveCloudRunEnv();
   assertTemporalRuntimeConfig();
   Bun.serve({
-    port: Number(Bun.env.PORT ?? 3000),
+    port: env.PORT,
     fetch: createApp(createDefaultWaitlistService()).fetch,
   });
 }

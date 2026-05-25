@@ -78,6 +78,19 @@ test("plans the public commands for the bun hono tracer bullet", () => {
     { name: "health endpoint", path: "/healthz" },
     { name: "duplicate webhook delivery is idempotent", kind: "webhook-idempotency" },
   ]);
+  expect(plan[0]?.generatedChecks).toContainEqual({
+    name: "typed Cloud Run env module",
+    file: "src/env.ts",
+    includes: [
+      'from "@t3-oss/env-core"',
+      "DATABASE_URL",
+      "AUTH_ISSUER",
+      "AUTH_AUDIENCE",
+      "AUTH_JWKS_URL",
+      "TEMPORAL_ADDRESS",
+      "TEMPORAL_NAMESPACE",
+    ],
+  });
 });
 
 test("plans authctl command-surface checks for every generated variant", () => {
@@ -191,6 +204,24 @@ test("plans the workers preset with wrangler package checks", () => {
     { name: "run lint", command: ["bun", "run", "lint"] },
   ]);
   expect(plan[0]?.smokeChecks).toEqual([]);
+  expect(plan[0]?.generatedChecks).toContainEqual({
+    name: "typed Workers env module",
+    file: "src/env.ts",
+    includes: [
+      'from "@t3-oss/env-core"',
+      "AUTH_ISSUER",
+      "AUTH_AUDIENCE",
+      "AUTH_JWKS_URL",
+      "TRIGGER_PROJECT_REF",
+      "TRIGGER_ACCESS_TOKEN",
+      "TRIGGER_SECRET_KEY",
+    ],
+  });
+  expect(plan[0]?.generatedChecks).toContainEqual({
+    name: "Workers env example contract",
+    file: ".env.example",
+    includes: ["TRIGGER_PROJECT_REF=", "TRIGGER_ACCESS_TOKEN=", "TRIGGER_SECRET_KEY="],
+  });
 });
 
 test("parses keep mode and rejects unknown variants", () => {

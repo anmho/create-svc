@@ -164,7 +164,7 @@ const VARIANT_DEFINITIONS: Record<GeneratedVariant, VariantDefinition> = {
       { name: "run tests", command: ["bun", "run", "test"] },
       { name: "run lint", command: ["bun", "run", "lint"] },
     ],
-    generatedChecks: [],
+    generatedChecks: workersGeneratedChecks(),
     smokeChecks: [],
   },
 };
@@ -442,6 +442,7 @@ function generatedChecksFor(runtime: Runtime): GeneratedCheck[] {
 
   return [
     commandFile,
+    ...cloudRunEnvGeneratedChecks(runtime),
     {
       name: "observability README contract",
       file: "README.md",
@@ -457,6 +458,70 @@ function generatedChecksFor(runtime: Runtime): GeneratedCheck[] {
       includes: ['"observability"', "logging.googleapis.com", "monitoring.googleapis.com", "cloudtrace.googleapis.com"],
     },
     ...deploymentGeneratedChecks(runtime),
+  ];
+}
+
+function cloudRunEnvGeneratedChecks(runtime: Runtime): GeneratedCheck[] {
+  if (runtime !== "bun") {
+    return [];
+  }
+
+  return [
+    {
+      name: "typed Cloud Run env module",
+      file: "src/env.ts",
+      includes: [
+        'from "@t3-oss/env-core"',
+        "DATABASE_URL",
+        "AUTH_ISSUER",
+        "AUTH_AUDIENCE",
+        "AUTH_JWKS_URL",
+        "TEMPORAL_ADDRESS",
+        "TEMPORAL_NAMESPACE",
+      ],
+    },
+    {
+      name: "typed Cloud Run env README contract",
+      file: "README.md",
+      includes: [
+        "src/env.ts",
+        "database, auth, and Temporal variables",
+        "Trigger.dev variables",
+        "Workers",
+      ],
+    },
+  ];
+}
+
+function workersGeneratedChecks(): GeneratedCheck[] {
+  return [
+    {
+      name: "typed Workers env module",
+      file: "src/env.ts",
+      includes: [
+        'from "@t3-oss/env-core"',
+        "AUTH_ISSUER",
+        "AUTH_AUDIENCE",
+        "AUTH_JWKS_URL",
+        "TRIGGER_PROJECT_REF",
+        "TRIGGER_ACCESS_TOKEN",
+        "TRIGGER_SECRET_KEY",
+      ],
+    },
+    {
+      name: "typed Workers env README contract",
+      file: "README.md",
+      includes: [
+        "src/env.ts",
+        "auth and Trigger.dev variables",
+        "not require any Temporal variables",
+      ],
+    },
+    {
+      name: "Workers env example contract",
+      file: ".env.example",
+      includes: ["TRIGGER_PROJECT_REF=", "TRIGGER_ACCESS_TOKEN=", "TRIGGER_SECRET_KEY="],
+    },
   ];
 }
 

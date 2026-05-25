@@ -1,3 +1,5 @@
+import { resolveCloudRunAuthEnv } from "./env";
+
 type AuthConfig = {
   enabled: boolean;
   issuer: string;
@@ -55,11 +57,12 @@ export function authMiddleware(getConfig = authConfigFromEnv) {
 }
 
 export function authConfigFromEnv(): AuthConfig {
+  const env = resolveCloudRunAuthEnv();
   return {
-    enabled: truthy(Bun.env.AUTH_ENABLED),
-    issuer: Bun.env.AUTH_ISSUER ?? "",
-    audience: Bun.env.AUTH_AUDIENCE ?? "",
-    jwksUrl: Bun.env.AUTH_JWKS_URL ?? "",
+    enabled: env.AUTH_ENABLED,
+    issuer: env.AUTH_ISSUER ?? "",
+    audience: env.AUTH_AUDIENCE ?? "",
+    jwksUrl: env.AUTH_JWKS_URL ?? "",
   };
 }
 

@@ -1,3 +1,5 @@
+import { resolveCloudRunTemporalEnv } from "./env";
+
 export type TemporalRuntimeConfig = {
   enabled: boolean;
   address: string;
@@ -8,14 +10,13 @@ export type TemporalRuntimeConfig = {
 type Env = Record<string, string | undefined>;
 
 export function resolveTemporalRuntimeConfig(env: Env = Bun.env): TemporalRuntimeConfig {
-  const enabled = readBoolean(env.TEMPORAL_ENABLED, true);
-  const cloudRun = isCloudRun(env);
+  const parsed = resolveCloudRunTemporalEnv(env);
 
   return {
-    enabled,
-    address: readString(env.TEMPORAL_ADDRESS, cloudRun ? "" : "localhost:7233"),
-    namespace: readString(env.TEMPORAL_NAMESPACE, cloudRun ? "" : "default"),
-    taskQueue: readString(env.TEMPORAL_TASK_QUEUE, "{{SERVICE_NAME}}"),
+    enabled: parsed.TEMPORAL_ENABLED,
+    address: parsed.TEMPORAL_ADDRESS ?? "",
+    namespace: parsed.TEMPORAL_NAMESPACE ?? "",
+    taskQueue: parsed.TEMPORAL_TASK_QUEUE,
   };
 }
 
@@ -36,21 +37,4 @@ export function assertTemporalRuntimeConfig(config = resolveTemporalRuntimeConfi
   }
 
   return config;
-}
-
-function readBoolean(value: string | undefined, fallback: boolean) {
-  const normalized = value?.trim().toLowerCase();
-  if (!normalized) {
-    return fallback;
-  }
-  return !["0", "false", "no", "off"].includes(normalized);
-}
-
-function readString(value: string | undefined, fallback: string) {
-  const normalized = value?.trim();
-  return normalized || fallback;
-}
-
-function isCloudRun(env: Env) {
-  return Boolean(env.K_SERVICE?.trim());
 }

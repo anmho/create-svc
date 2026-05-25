@@ -4,6 +4,7 @@ import type { ServiceImpl } from "@connectrpc/connect";
 import { createServer } from "node:http";
 import { WaitlistService as WaitlistRpcService } from "../gen/protos/waitlist/v1/waitlist_pb.js";
 import { withServiceAuth } from "./auth";
+import { resolveCloudRunEnv } from "./env";
 import { AppError, createDefaultWaitlistService, type WaitlistService } from "./waitlist/service";
 import { assertTemporalRuntimeConfig } from "./temporal";
 import type { WaitlistEntry, WaitlistTrigger } from "./waitlist/types";
@@ -236,8 +237,9 @@ function headersPayload(headers: Parameters<FallbackHandler>[0]["headers"]) {
 }
 
 if (import.meta.main) {
+  const env = resolveCloudRunEnv();
   assertTemporalRuntimeConfig();
-  const port = Number(Bun.env.PORT ?? 8080);
+  const port = env.PORT;
   const server = createServer(withServiceAuth(createHandler(createDefaultWaitlistService())));
   server.listen(port);
 }

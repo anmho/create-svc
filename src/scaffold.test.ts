@@ -120,6 +120,7 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
     expect(envExample).toContain("CLOUDFLARE_ACCESS_SERVICE_TOKEN_CLIENT_ID=");
     expect(envExample).toContain("VAULT_AUTHCTL_ACCESS_PATH=prod/apps/auth/authctl/cloudflare-access");
     expect(envExample).toContain("TEMPORAL_API_KEY=");
+    expect(envExample).not.toContain("TRIGGER_SECRET_KEY=");
     expect(envExample).toContain("The base waitlist service does not require");
     expect(envExample).not.toContain("ATTACHMENT_BUCKET=");
     expect(envExample).not.toContain("CLERK_SECRET_KEY=");
@@ -223,7 +224,9 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
     } else {
       const packageJson = await Bun.file(join(generatedRoot, "package.json")).text();
       expect(packageJson).toContain('"@anmho/authctl": "0.1.1"');
+      expect(packageJson).toContain('"@t3-oss/env-core"');
       expect(packageJson).toContain("@temporalio/worker");
+      expect(packageJson).toContain('"zod"');
       expect(packageJson).toContain('"dev": "bun run ./scripts/dev.ts bun run ./src/index.ts --worker bun run ./src/worker.ts"');
       expect(packageJson).toContain('"gen": "bun run ./scripts/codegen.ts"');
       expect(packageJson).toContain('"service": "service"');
@@ -244,6 +247,16 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
       expect(serviceConfig).toContain("logging.googleapis.com");
       const authScript = await Bun.file(join(generatedRoot, "src", "auth.ts")).text();
       expect(authScript).toContain('"Ed25519"');
+      const envModule = await Bun.file(join(generatedRoot, "src", "env.ts")).text();
+      expect(envModule).toContain('from "@t3-oss/env-core"');
+      expect(envModule).toContain("DATABASE_URL");
+      expect(envModule).toContain("AUTH_ISSUER");
+      expect(envModule).toContain("AUTH_AUDIENCE");
+      expect(envModule).toContain("AUTH_JWKS_URL");
+      expect(envModule).toContain("TEMPORAL_ENABLED");
+      expect(envModule).toContain("TEMPORAL_ADDRESS");
+      expect(envModule).toContain("TEMPORAL_NAMESPACE");
+      expect(envModule).not.toContain("TRIGGER_SECRET_KEY");
 
       const makefile = await Bun.file(join(generatedRoot, "Makefile")).text();
       expect(makefile).toContain("SERVICE := service");
@@ -351,16 +364,18 @@ test("scaffolds the workers target with wrangler lifecycle commands", async () =
 
   const packageJson = await Bun.file(join(generatedRoot, "package.json")).text();
   expect(packageJson).toContain('"@anmho/authctl": "0.1.1"');
+  expect(packageJson).toContain('"@t3-oss/env-core"');
   expect(packageJson).toContain('"dev": "bun run ./scripts/dev.ts wrangler dev --ip 127.0.0.1 --port 8787 --show-interactive-dev-session=false"');
   expect(packageJson).toContain('"service": "service"');
   expect(packageJson).toContain('"auth": "service auth"');
   expect(packageJson).toContain('"wrangler"');
   expect(packageJson).toContain('"pg"');
+  expect(packageJson).toContain('"zod"');
   expect(packageJson).toContain('"@trigger.dev/sdk"');
   expect(packageJson).toContain('"trigger.dev"');
-  expect(packageJson).toContain('"trigger": "trigger"');
-  expect(packageJson).toContain('"trigger:dev": "trigger dev"');
-  expect(packageJson).toContain('"trigger:deploy": "trigger deploy"');
+  expect(packageJson).toContain('"trigger": "trigger.dev"');
+  expect(packageJson).toContain('"trigger:dev": "trigger.dev dev"');
+  expect(packageJson).toContain('"trigger:deploy": "trigger.dev deploy"');
 
   const wranglerConfig = await Bun.file(join(generatedRoot, "wrangler.toml")).text();
   expect(wranglerConfig).toContain('name = "dns-api"');
@@ -373,9 +388,26 @@ test("scaffolds the workers target with wrangler lifecycle commands", async () =
   expect(wranglerConfig).toContain('TRIGGER_API_URL = "https://api.trigger.dev"');
   expect(wranglerConfig).not.toContain("[triggers]");
   expect(wranglerConfig).not.toContain("crons");
+  const envExample = await Bun.file(join(generatedRoot, ".env.example")).text();
+  expect(envExample).toContain("TRIGGER_PROJECT_REF=");
+  expect(envExample).toContain("TRIGGER_ACCESS_TOKEN=");
+  expect(envExample).toContain("TRIGGER_SECRET_KEY=");
+  expect(envExample).not.toContain("TEMPORAL_ADDRESS");
+  const localEnv = await Bun.file(join(generatedRoot, ".env.local")).text();
+  expect(localEnv).toContain(`DATABASE_URL=postgres://postgres:postgres@127.0.0.1:${deriveLocalPostgresPort("dns-api")}/dns_api?sslmode=disable`);
+  expect(localEnv).not.toContain("TEMPORAL_ADDRESS");
   const authSource = await Bun.file(join(generatedRoot, "src", "auth.ts")).text();
   expect(authSource).toContain('alg === "EdDSA"');
   expect(authSource).toContain('name: "Ed25519"');
+  const envModule = await Bun.file(join(generatedRoot, "src", "env.ts")).text();
+  expect(envModule).toContain('from "@t3-oss/env-core"');
+  expect(envModule).toContain("AUTH_ISSUER");
+  expect(envModule).toContain("AUTH_AUDIENCE");
+  expect(envModule).toContain("AUTH_JWKS_URL");
+  expect(envModule).toContain("TRIGGER_PROJECT_REF");
+  expect(envModule).toContain("TRIGGER_ACCESS_TOKEN");
+  expect(envModule).toContain("TRIGGER_SECRET_KEY");
+  expect(envModule).not.toContain("TEMPORAL_ADDRESS");
 
   const entrypoint = await Bun.file(join(generatedRoot, "src", "index.ts")).text();
   expect(entrypoint).toContain("/v1/waitlist");
@@ -417,6 +449,7 @@ test("scaffolds the workers target with wrangler lifecycle commands", async () =
   expect(await Bun.file(join(generatedRoot, "Dockerfile")).exists()).toBeFalse();
   expect(await Bun.file(join(generatedRoot, "docker-compose.yml")).exists()).toBeTrue();
   expect(await Bun.file(join(generatedRoot, "src", "db", "repository.ts")).exists()).toBeFalse();
+  expect(await Bun.file(join(generatedRoot, "src", "temporal.ts")).exists()).toBeFalse();
   expect(await Bun.file(join(generatedRoot, "src", "temporal", "worker.ts")).exists()).toBeFalse();
   expect(await Bun.file(join(generatedRoot, "src", "worker.ts")).exists()).toBeFalse();
   expect(await Bun.file(join(generatedRoot, "scripts", "codegen.ts")).exists()).toBeFalse();

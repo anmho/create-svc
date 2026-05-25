@@ -1,4 +1,5 @@
 import type { WaitlistTrigger } from "./storage";
+import { resolveWorkersTriggerEnv } from "./env";
 
 export type TriggerRun = {
   id: string;
@@ -60,16 +61,21 @@ export function createTriggerDevDispatcher(): TriggerDispatcher {
 }
 
 function triggerConfigFromEnv(env: TriggerEnv = {}) {
-  const secretKey = env.TRIGGER_SECRET_KEY?.trim();
-  if (!secretKey) {
-    throw new TriggerDispatchError("trigger_dev_not_configured", "TRIGGER_SECRET_KEY is required to dispatch Trigger.dev tasks");
-  }
+  const parsed = resolveTriggerEnv(env);
 
   return {
-    secretKey,
-    taskId: env.TRIGGER_TASK_ID?.trim() || "{{SERVICE_ID}}-waitlist-follow-up",
-    apiUrl: (env.TRIGGER_API_URL?.trim() || "https://api.trigger.dev").replace(/\/$/, ""),
+    secretKey: parsed.TRIGGER_SECRET_KEY,
+    taskId: parsed.TRIGGER_TASK_ID,
+    apiUrl: parsed.TRIGGER_API_URL.replace(/\/$/, ""),
   };
+}
+
+function resolveTriggerEnv(env: TriggerEnv = {}) {
+  try {
+    return resolveWorkersTriggerEnv(env);
+  } catch (error) {
+    throw new TriggerDispatchError("trigger_dev_not_configured", error instanceof Error ? error.message : String(error));
+  }
 }
 
 function parsePayload(value: string) {
