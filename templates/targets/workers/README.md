@@ -39,6 +39,10 @@ Compose Postgres and passes it to Wrangler as the local Hyperdrive connection.
 Local unit tests use an in-memory store. Deployed Workers use the `HYPERDRIVE`
 binding and create the small waitlist/trigger schema on first use.
 
+The generated Worker validates runtime bindings through [src/env.ts](src/env.ts).
+The Workers schema models auth and Trigger.dev variables and intentionally does
+not require any Temporal variables.
+
 ## API
 
 - `GET /healthz`
@@ -67,11 +71,12 @@ export TRIGGER_SECRET_KEY=<secret key>
 
 `service create` and `service deploy` deploy the Trigger.dev task before the
 Worker deploy and fail clearly if these values are missing.
+The same values are modeled by [src/env.ts](src/env.ts) so missing Trigger.dev
+configuration fails before provisioning starts.
 GitHub Actions deploys require matching repository secrets:
 `TRIGGER_PROJECT_REF`, `TRIGGER_ACCESS_TOKEN`, and `TRIGGER_SECRET_KEY`.
 
-The Trigger.dev CLI is installed in this generated package as a dev dependency
-from the `trigger.dev` npm package.
+The Trigger.dev CLI is installed in this generated package as a dev dependency.
 Use `bun run trigger -- <args>` for ad-hoc commands, `bun run trigger:dev` for
 local task development, and `bun run trigger:deploy` when you want to deploy
 tasks directly without running the full service deploy.

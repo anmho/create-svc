@@ -107,12 +107,13 @@ function shouldSkipForTarget(target: DeployTarget, templateKind: "shared" | "var
     }
 
     if (templateKind === "shared") {
-      return relativePath === "service.yaml";
+      return relativePath === "service.yaml" || relativePath === ".env.example";
     }
 
     return (
       relativePath.startsWith("src/db/") ||
       relativePath.startsWith("src/temporal/") ||
+      relativePath === "src/temporal.ts" ||
       relativePath === "src/worker.ts" ||
       relativePath.startsWith("src/waitlist/") ||
       relativePath.startsWith("test/") ||
@@ -317,17 +318,24 @@ async function writeLocalEnvFile(targetDir: string, replacements: Record<string,
     return;
   }
 
+  const temporalLines =
+    replacements.TARGET === "workers"
+      ? []
+      : [
+          "TEMPORAL_ENABLED={{TEMPORAL_ENABLED}}",
+          "TEMPORAL_ADDRESS={{TEMPORAL_ADDRESS}}",
+          "TEMPORAL_NAMESPACE={{TEMPORAL_NAMESPACE}}",
+          "TEMPORAL_TASK_QUEUE={{TEMPORAL_TASK_QUEUE}}",
+          "",
+        ];
+
   const rendered = renderTemplate(
     [
       "# Generated local development defaults for create-service.",
       "# This file is user-owned after scaffold and is gitignored.",
       "",
       "DATABASE_URL=postgres://{{LOCAL_DATABASE_USER}}:{{LOCAL_DATABASE_PASSWORD}}@127.0.0.1:{{LOCAL_DATABASE_PORT}}/{{LOCAL_DATABASE_NAME}}?sslmode=disable",
-      "TEMPORAL_ENABLED={{TEMPORAL_ENABLED}}",
-      "TEMPORAL_ADDRESS={{TEMPORAL_ADDRESS}}",
-      "TEMPORAL_NAMESPACE={{TEMPORAL_NAMESPACE}}",
-      "TEMPORAL_TASK_QUEUE={{TEMPORAL_TASK_QUEUE}}",
-      "",
+      ...temporalLines,
       "",
       "VAULT_SECRET_MOUNT=secret",
       "VAULT_AUTHCTL_ACCESS_PATH=prod/apps/auth/authctl/cloudflare-access",

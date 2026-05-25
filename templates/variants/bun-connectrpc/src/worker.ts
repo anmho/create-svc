@@ -1,6 +1,8 @@
 import { assertTemporalRuntimeConfig } from "./temporal";
+import { resolveCloudRunEnv } from "./env";
 import { startTemporalWorker } from "./temporal/worker";
 
+const env = resolveCloudRunEnv();
 assertTemporalRuntimeConfig();
 const temporalWorker = await startTemporalWorker();
 if (!temporalWorker) {
@@ -10,7 +12,7 @@ if (!temporalWorker) {
 console.log(`Temporal worker polling ${temporalWorker.taskQueue}`);
 
 Bun.serve({
-  port: Number(Bun.env.PORT ?? 8080),
+  port: env.PORT,
   fetch: (request) => {
     const path = new URL(request.url).pathname;
     if (path === "/healthz" || path === "/readyz") {

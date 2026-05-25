@@ -52,7 +52,9 @@
   "dependencies": {
     "@clack/prompts": "^1.4.0",
     "@neondatabase/api-client": "^2.7.1",
+    "@t3-oss/env-core": "^0.13.8",
     "pg": "^8.16.3",
-    "picocolors": "^1.1.1"
+    "picocolors": "^1.1.1",
+    "zod": "^4.1.13"
   }
 }

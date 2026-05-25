@@ -8,7 +8,7 @@ import { deleteAuthResourceServer, ensureAuthClient, ensureAuthResourceServer, r
 import { stopLocalDev } from "../local-dev";
 import { runParallelTasks, type ParallelTask } from "../parallel-tasks";
 import { serviceConfig } from "../runtime";
-import { isLocalDatabaseUrl, isMissingDatabaseError, resolveCommandPath } from "./lib";
+import { isLocalDatabaseUrl, isMissingDatabaseError, resolveCommandPath, resolveWorkersProvisioningEnv } from "./lib";
 
 const config = {
   serviceName: serviceConfig.service_id,
@@ -523,7 +523,7 @@ async function runDoctor() {
     ensureTriggerDevConfig();
     return `${config.triggerDev.waitlistTaskId} configured`;
   });
-  await record(results, "Trigger.dev CLI", "warn", () => checkCommand("trigger"));
+  await record(results, "Trigger.dev CLI", "warn", () => checkCommand("trigger.dev"));
   await record(results, "deployed health", "warn", async () => {
     const response = await fetch(`https://${config.hostname}/healthz`, { signal: AbortSignal.timeout(5_000) });
     if (!response.ok) {
@@ -541,33 +541,16 @@ async function runDoctor() {
 }
 
 function ensureTriggerDevConfig() {
-  const missing = [];
-  if (!process.env[config.triggerDev.projectRefEnv]?.trim()) {
-    missing.push(config.triggerDev.projectRefEnv);
+  try {
+    resolveWorkersProvisioningEnv(process.env, config.triggerDev);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`${message}\n${config.triggerDev.projectRefEnv}, ${config.triggerDev.accessTokenEnv}, and ${config.triggerDev.secretKeyEnv} are required for Workers Trigger.dev task deployment and dispatch`);
   }
-  if (!process.env[config.triggerDev.accessTokenEnv]?.trim()) {
-    missing.push(config.triggerDev.accessTokenEnv);
-  }
-  if (!process.env[config.triggerDev.secretKeyEnv]?.trim()) {
-    missing.push(config.triggerDev.secretKeyEnv);
-  }
-  if (missing.length > 0) {
-    throw new Error(`${formatList(missing)} required for Workers Trigger.dev task deployment and dispatch`);
-  }
-}
-
-function formatList(values: string[]) {
-  if (values.length <= 1) {
-    return values[0] ?? "";
-  }
-  if (values.length === 2) {
-    return values.join(" and ");
-  }
-  return `${values.slice(0, -1).join(", ")}, and ${values.at(-1)}`;
 }
 
 function deployTriggerDevTasks() {
-  run("trigger", ["deploy", "--project-ref", process.env[config.triggerDev.projectRefEnv]?.trim() || ""]);
+  run("trigger.dev", ["deploy", "--project-ref", process.env[config.triggerDev.projectRefEnv]?.trim() || ""]);
 }
 
 function publishTriggerDevSecret() {

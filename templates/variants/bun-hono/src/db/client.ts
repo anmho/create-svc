@@ -1,12 +1,9 @@
 import { SQL } from "bun";
 import { drizzle } from "drizzle-orm/bun-sql";
+import { resolveCloudRunEnv } from "../env";
 
 export function requireDatabaseUrl() {
-  const databaseUrl = Bun.env.DATABASE_URL?.trim();
-  if (!databaseUrl) {
-    throw new Error("DATABASE_URL is required");
-  }
-  return databaseUrl;
+  return resolveCloudRunEnv().DATABASE_URL;
 }
 
 export function createDb(databaseUrl = requireDatabaseUrl()) {

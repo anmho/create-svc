@@ -1,3 +1,5 @@
+import { resolveWorkersRuntimeEnv } from "./env";
+
 type AuthConfig = {
   enabled: boolean;
   issuer: string;
@@ -58,11 +60,12 @@ export function authMiddleware() {
 }
 
 function authConfigFromEnv(env: AuthEnv): AuthConfig {
+  const parsed = resolveWorkersRuntimeEnv(env);
   return {
-    enabled: truthy(env.AUTH_ENABLED),
-    issuer: env.AUTH_ISSUER ?? "",
-    audience: env.AUTH_AUDIENCE ?? "",
-    jwksUrl: env.AUTH_JWKS_URL ?? "",
+    enabled: parsed.AUTH_ENABLED,
+    issuer: parsed.AUTH_ISSUER ?? "",
+    audience: parsed.AUTH_AUDIENCE ?? "",
+    jwksUrl: parsed.AUTH_JWKS_URL ?? "",
   };
 }
 

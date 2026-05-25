@@ -57,6 +57,12 @@ Local runtime uses:
 - `{{COMMAND_MIGRATE}}` and `{{COMMAND_DEV}}`, which open Docker Desktop if needed, wait for Docker readiness, and start Docker Compose Postgres
 - `TEMPORAL_ENABLED=true` by default with `localhost:7233` and `default`; set `TEMPORAL_ENABLED=false` when you are not running a local Temporal server
 
+The generated Bun runtime validates Cloud Run environment variables through
+[src/env.ts](src/env.ts) before startup or first use. The Cloud Run schema
+models database, auth, and Temporal variables; it intentionally does not model
+Trigger.dev variables because Trigger.dev is only required by the Workers
+target.
+
 No cloud credentials are required for local HTTP development after Docker and Postgres are running.
 
 ## Temporal
@@ -97,6 +103,12 @@ TEMPORAL_ENABLED=false {{COMMAND_DEPLOY}}
 When Cloud Run starts with Temporal enabled but without address or namespace
 values, the generated runtime fails during startup with an explicit
 configuration error instead of silently running a broken worker.
+
+Cloud Run required runtime variables:
+
+- `DATABASE_URL`
+- `AUTH_ENABLED`; when `true`, also set `AUTH_ISSUER`, `AUTH_AUDIENCE`, and `AUTH_JWKS_URL`
+- `TEMPORAL_ENABLED`; when `true`, Cloud Run requires `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`, and `TEMPORAL_TASK_QUEUE`
 
 ## Remote provisioning
 

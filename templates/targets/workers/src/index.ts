@@ -1,21 +1,11 @@
 import { Hono } from "hono";
 import { authMiddleware } from "./auth";
+import type { WorkersBindings } from "./env";
 import { createStorage } from "./storage";
 import { createTriggerDevDispatcher, TriggerDispatchError, type TriggerDispatcher } from "./trigger";
 
-type Env = {
-  HYPERDRIVE?: Hyperdrive;
-  AUTH_ENABLED?: string;
-  AUTH_ISSUER?: string;
-  AUTH_AUDIENCE?: string;
-  AUTH_JWKS_URL?: string;
-  TRIGGER_SECRET_KEY?: string;
-  TRIGGER_TASK_ID?: string;
-  TRIGGER_API_URL?: string;
-};
-
 export function createApp(options: { triggerDispatcher?: TriggerDispatcher } = {}) {
-  const app = new Hono<{ Bindings: Env }>();
+  const app = new Hono<{ Bindings: WorkersBindings }>();
   const triggerDispatcher = options.triggerDispatcher ?? createTriggerDevDispatcher();
 
   app.get("/healthz", (context) => context.json({ status: "ok" }));
