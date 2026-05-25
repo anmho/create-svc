@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { mkdir } from "node:fs/promises";
+import { mkdir, readdir } from "node:fs/promises";
 import { ensureAuthClient, ensureAuthResourceServer, runAuthCommand, runAuthDoctor } from "../authctl";
 import { stopLocalDev } from "../local-dev";
 import { bootstrap, prepareGcpProject } from "./bootstrap";
@@ -272,16 +272,16 @@ async function runDoctor() {
       if (!(await Bun.file("./buf.yaml").exists())) {
         throw new Error("missing buf.yaml");
       }
-      if (!(await Bun.file("./protos/waitlist/v1/waitlist.proto").exists())) {
-        throw new Error("missing waitlist proto");
+      const protoFiles = await findFiles("./protos", ".proto");
+      if (protoFiles.length === 0) {
+        throw new Error("missing ConnectRPC proto");
       }
-      return "waitlist proto present";
+      return `${protoFiles.length} proto file(s) present`;
     });
     await record(results, "Buf CLI", "warn", () => checkCommand("buf"));
     await record(results, "generated SDK artifacts", "warn", async () => {
-      const bunGen = await Bun.file("./gen/protos/waitlist/v1/waitlist_pb.ts").exists();
-      const goGen = await Bun.file("./gen/waitlist/v1/waitlist.pb.go").exists();
-      if (!bunGen && !goGen) {
+      const artifacts = await findGeneratedSdkArtifacts();
+      if (artifacts.length === 0) {
         throw new Error("generated SDK artifacts are missing; run service sdk build");
       }
       return "local generated artifacts present";
@@ -371,16 +371,15 @@ async function runSdk(args: string[]) {
 }
 
 async function assertLocalSdkArtifacts() {
-  const bunArtifacts = await Bun.file("./gen/protos/waitlist/v1/waitlist_pb.ts").exists();
-  const goArtifacts = await Bun.file("./gen/waitlist/v1/waitlist.pb.go").exists();
-  if (!bunArtifacts && !goArtifacts) {
+  const artifacts = await findGeneratedSdkArtifacts();
+  if (artifacts.length === 0) {
     throw new Error("Local SDK artifacts are missing. Run `service sdk build` first.");
   }
 }
 
 async function writeSdkMode(mode: "local" | "remote") {
   await mkdir(".service", { recursive: true });
-  const localPath = config.runtime === "bun" ? "./gen/protos/waitlist/v1" : "./gen/waitlist/v1";
+  const localPath = await resolveLocalSdkPath();
   await Bun.write(
     ".service/sdk.json",
     `${JSON.stringify(
@@ -398,6 +397,40 @@ async function writeSdkMode(mode: "local" | "remote") {
 
 function bufModule() {
   return `buf.build/anmho/${config.serviceName}`;
+}
+
+async function resolveLocalSdkPath() {
+  const artifacts = await findGeneratedSdkArtifacts();
+  if (artifacts.length === 0) {
+    return config.runtime === "bun" ? "./gen/protos" : "./gen";
+  }
+  const artifact = artifacts[0] || "./gen";
+  return artifact.split("/").slice(0, -1).join("/") || "./gen";
+}
+
+async function findGeneratedSdkArtifacts() {
+  const suffixes = config.runtime === "bun" ? ["_pb.ts", "_pb.js"] : [".pb.go"];
+  const files = await findFiles("./gen");
+  return files.filter((file) => suffixes.some((suffix) => file.endsWith(suffix)));
+}
+
+async function findFiles(root: string, suffix = ""): Promise<string[]> {
+  let entries;
+  try {
+    entries = await readdir(root, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const files: string[] = [];
+  for (const entry of entries) {
+    const path = `${root}/${entry.name}`;
+    if (entry.isDirectory()) {
+      files.push(...(await findFiles(path, suffix)));
+    } else if (!suffix || path.endsWith(suffix)) {
+      files.push(path);
+    }
+  }
+  return files;
 }
 
 if (import.meta.main) {
