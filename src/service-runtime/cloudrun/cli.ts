@@ -295,11 +295,17 @@ async function runDoctor() {
     });
     await record(results, "SDK mode", "warn", async () => {
       const text = await Bun.file(".service/sdk.json").text();
-      const state = JSON.parse(text) as { mode?: string; module?: string };
+      const state = JSON.parse(text) as { mode?: string; module?: string; remote?: { commit?: string; digest?: string } };
       if (state.mode !== "local" && state.mode !== "remote") {
         throw new Error("SDK mode must be local or remote");
       }
-      return `${state.mode}: ${state.module || bufModule()}`;
+      const module = state.module || bufModule();
+      if (state.mode === "remote") {
+        const version = state.remote?.commit ? `@${state.remote.commit}` : "without recorded commit";
+        const digest = state.remote?.digest ? ` (${state.remote.digest})` : "";
+        return `${state.mode}: ${module}${version}${digest}`;
+      }
+      return `${state.mode}: ${module}`;
     });
   }
 
@@ -350,8 +356,9 @@ async function runSdk(args: string[]) {
   if (subcommand === "publish") {
     requireCommand("buf");
     run("buf", ["push"]);
-    await writeSdkMode("remote");
-    return "Schema pushed to Buf Schema Registry and recorded for consumers";
+    const published = resolvePublishedSdk();
+    await writeSdkMode("remote", published);
+    return `Schema pushed to Buf Schema Registry and recorded for consumers: ${published.commit}`;
   }
 
   if (subcommand === "build") {
@@ -371,8 +378,10 @@ async function runSdk(args: string[]) {
   }
 
   if (subcommand === "use-remote") {
-    await writeSdkMode("remote");
-    return `Remote Buf SDK recorded for consumers: ${bufModule()}`;
+    requireCommand("buf");
+    const published = resolvePublishedSdk();
+    await writeSdkMode("remote", published);
+    return `Remote Buf SDK recorded for consumers: ${bufModule()}@${published.commit}`;
   }
 
   throw new Error("Usage: service sdk <build|publish|use-local|use-remote>");
@@ -385,7 +394,40 @@ async function assertLocalSdkArtifacts() {
   }
 }
 
-async function writeSdkMode(mode: "local" | "remote") {
+type PublishedSdk = {
+  commit: string;
+  digest?: string;
+  createTime?: string;
+};
+
+function resolvePublishedSdk(): PublishedSdk {
+  const module = bufModule();
+  const result = run("buf", ["registry", "module", "commit", "list", module, "--format", "json", "--page-size", "1"]);
+  const parsed = JSON.parse(result.stdout) as {
+    commits?: Array<Record<string, unknown>>;
+    commit?: Record<string, unknown>;
+  };
+  const commit = parsed.commits?.[0] ?? parsed.commit;
+  if (!commit) {
+    throw new Error(`Could not resolve the published Buf commit for ${module}`);
+  }
+  const name = stringField(commit, "name") ?? stringField(commit, "commit") ?? stringField(commit, "id");
+  if (!name) {
+    throw new Error(`Buf commit response for ${module} did not include a commit identifier`);
+  }
+  return {
+    commit: name.includes(":") ? name.slice(name.lastIndexOf(":") + 1) : name,
+    digest: stringField(commit, "digest"),
+    createTime: stringField(commit, "create_time") ?? stringField(commit, "createTime"),
+  };
+}
+
+function stringField(source: Record<string, unknown>, key: string) {
+  const value = source[key];
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+async function writeSdkMode(mode: "local" | "remote", published?: PublishedSdk) {
   await mkdir(".service", { recursive: true });
   const localPath = await resolveLocalSdkPath();
   await Bun.write(
@@ -395,6 +437,15 @@ async function writeSdkMode(mode: "local" | "remote") {
         mode,
         module: bufModule(),
         localPath,
+        ...(published
+          ? {
+              remote: {
+                commit: published.commit,
+                digest: published.digest,
+                createTime: published.createTime,
+              },
+            }
+          : {}),
         updatedAt: new Date().toISOString(),
       },
       null,
