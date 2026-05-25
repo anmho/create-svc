@@ -457,6 +457,14 @@ function generatedChecksFor(runtime: Runtime): GeneratedCheck[] {
       file: "service.jsonc",
       includes: ['"observability"', "logging.googleapis.com", "monitoring.googleapis.com", "cloudtrace.googleapis.com"],
     },
+    {
+      name: "ci workflow",
+      file: ".github/workflows/ci.yml",
+      includes:
+        runtime === "go"
+          ? ["bufbuild/buf-setup-action@v1", 'version: "1.60.0"', "bun run lint", "bun run test"]
+          : ["bun run lint", "bun run test"],
+    },
     ...deploymentGeneratedChecks(runtime),
   ];
 }

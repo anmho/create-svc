@@ -18,8 +18,10 @@ jobs:
           go-version: "1.25"
       - if: ${{ '{{RUNTIME}}' == 'go' }}
         uses: ariga/setup-atlas@v0
-      - if: ${{ '{{RUNTIME}}' == 'go' }}
-        run: go install github.com/bufbuild/buf/cmd/buf@latest
+      - if: ${{ '{{RUNTIME}}' == 'go' && '{{FRAMEWORK}}' == 'connectrpc' }}
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          version: "1.60.0"
       - run: bun install
       - run: bun run lint
       - run: bun run test

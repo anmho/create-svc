@@ -138,6 +138,17 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
     expect(await Bun.file(join(generatedRoot, "grafana", "waitlist-dashboard.json")).exists()).toBeTrue();
     expect(await Bun.file(join(generatedRoot, "grafana", "alerts.yaml")).exists()).toBeTrue();
 
+    const ciWorkflow = await Bun.file(join(generatedRoot, ".github", "workflows", "ci.yml")).text();
+    expect(ciWorkflow).not.toContain("go install github.com/bufbuild/buf/cmd/buf@latest");
+    if (variant.runtime === "go" && variant.framework === "connectrpc") {
+      expect(ciWorkflow).toContain("bufbuild/buf-setup-action@v1");
+      expect(ciWorkflow).toContain('version: "1.60.0"');
+      expect(ciWorkflow).toContain("'connectrpc' == 'connectrpc'");
+    }
+    if (variant.runtime === "go" && variant.framework === "chi") {
+      expect(ciWorkflow).toContain("'chi' == 'connectrpc'");
+    }
+
     const previewWorkflow = await Bun.file(join(generatedRoot, ".github", "workflows", "preview.yml")).text();
     expect(previewWorkflow).toContain("issue_comment:");
     expect(previewWorkflow).toContain("/deploy preview");
