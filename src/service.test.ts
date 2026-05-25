@@ -7,6 +7,7 @@ import {
   formatOutsideServiceCommandError,
   generatedDependenciesInstalled,
   generatedServiceCommandHelp,
+  createSvcVersion,
   normalizeScaffoldArgs,
 } from "./service";
 
@@ -19,6 +20,11 @@ test("normalizeScaffoldArgs treats explicit scaffold commands as generator comma
 test("normalizeScaffoldArgs maps service help to generator help outside a service repo", () => {
   expect(normalizeScaffoldArgs(["help"])).toEqual(["--help"]);
   expect(normalizeScaffoldArgs(["help", "--verbose"])).toEqual(["--help", "--verbose"]);
+});
+
+test("createSvcVersion reports the package version", async () => {
+  const packageJson = await Bun.file(new URL("../package.json", import.meta.url)).json();
+  expect(createSvcVersion()).toBe(packageJson.version);
 });
 
 test("formatOutsideServiceCommandError rejects repo-local commands outside generated services", () => {
