@@ -3,10 +3,12 @@
   "private": true,
   "type": "module",
   "bin": {
+    "service": "./scripts/service.ts",
     "svc-cloudrun": "./scripts/cloudrun/cli.ts"
   },
   "scripts": {
     "dev": "bun run ./src/index.ts",
+    "dev:down": "bun run ./scripts/service.ts dev down",
     "migrate": "bun run ./scripts/migrate.ts",
     "gen": "bun run ./scripts/codegen.ts",
     "lint": "bunx tsc --noEmit",

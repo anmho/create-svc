@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "bin": {
+    "service": "./scripts/service.ts",
     "svc-cloudrun": "./scripts/cloudrun/cli.ts"
   },
   "dependencies": {
