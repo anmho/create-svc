@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -106,7 +108,17 @@ func OpenDatabase(ctx context.Context, databaseURL string) (*sqlx.DB, error) {
 	if strings.TrimSpace(databaseURL) == "" {
 		return nil, errors.New("DATABASE_URL is required")
 	}
-	return sqlx.ConnectContext(ctx, "pgx", databaseURL)
+	cfg, err := pgx.ParseConfig(databaseURL)
+	if err != nil {
+		return nil, err
+	}
+	cfg.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
+	db := sqlx.NewDb(stdlib.OpenDB(*cfg), "pgx")
+	if err := db.PingContext(ctx); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	return db, nil
 }
 
 func NewWaitlistService(db *sqlx.DB) *WaitlistService {
