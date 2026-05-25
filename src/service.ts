@@ -3,6 +3,13 @@ import { dirname, join } from "node:path";
 import { formatScaffoldHelp, run as runScaffoldCli } from "./cli";
 import { parseProtectMainArgs, protectMainBranch } from "./github-protection";
 import { parseJsonc } from "./jsonc";
+import {
+  buildServiceDoctorReport,
+  findServiceBinaries,
+  getInstalledServiceVersion,
+  getNpmLatestVersion,
+  packageRootFromModuleUrl,
+} from "./service-diagnostics";
 
 const SCAFFOLD_COMMANDS = new Set(["create", "new", "init"]);
 const GENERATED_SERVICE_COMMANDS = new Set([
@@ -43,6 +50,11 @@ export async function runServiceCommand(argv: string[], cwd = process.cwd()) {
     return;
   }
 
+  if (command === "doctor") {
+    runGlobalServiceDoctor();
+    return;
+  }
+
   console.error(formatOutsideServiceCommandError(command));
   process.exit(1);
 }
@@ -54,6 +66,23 @@ function isVersionCommand(argv: string[]) {
 export function createSvcVersion() {
   const packageJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version?: string };
   return packageJson.version || "unknown";
+}
+
+function runGlobalServiceDoctor() {
+  const latest = getNpmLatestVersion();
+  const report = buildServiceDoctorReport({
+    activeBinaryPath: process.argv[1] || "service",
+    packageRoot: packageRootFromModuleUrl(import.meta.url),
+    packageVersion: createSvcVersion(),
+    latestVersion: latest.version,
+    latestVersionError: latest.error,
+    serviceBinaries: findServiceBinaries(),
+    getBinaryVersion: getInstalledServiceVersion,
+  });
+  console.log(report.text);
+  if (report.exitCode !== 0) {
+    process.exit(report.exitCode);
+  }
 }
 
 export function normalizeScaffoldArgs(argv: string[]) {
