@@ -22,9 +22,7 @@ gen:
 
 lint:
 	go vet ./...
-	@bun run ./scripts/ensure-local-db.ts
-	@bun run ./scripts/wait-for-db.ts
-	@$(WITH_ENV) $(ATLAS) migrate lint --env local --latest 1
+	$(ATLAS) migrate validate --env local
 
 test:
 	bun test ./test
