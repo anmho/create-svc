@@ -194,6 +194,8 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
         expect(goMod).toContain("connectrpc.com/connect");
         expect(mainGo).toContain("NewWaitlistService");
         expect(mainGo).toContain("WaitlistServiceName");
+        const bufConfig = await Bun.file(join(generatedRoot, "buf.yaml")).text();
+        expect(bufConfig).toContain("name: buf.build/anmho/dns-api");
       } else {
         expect(goMod).not.toContain("connectrpc.com/connect");
         expect(mainGo).toContain("NewWaitlistService");

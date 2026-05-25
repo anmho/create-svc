@@ -350,6 +350,7 @@ async function runSdk(args: string[]) {
   if (subcommand === "publish") {
     requireCommand("buf");
     run("buf", ["push"]);
+    await writeSdkMode("remote");
     return "Schema pushed to Buf Schema Registry";
   }
 
