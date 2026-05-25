@@ -351,7 +351,7 @@ async function runSdk(args: string[]) {
     requireCommand("buf");
     run("buf", ["push"]);
     await writeSdkMode("remote");
-    return "Schema pushed to Buf Schema Registry";
+    return "Schema pushed to Buf Schema Registry and recorded for consumers";
   }
 
   if (subcommand === "build") {
@@ -361,18 +361,18 @@ async function runSdk(args: string[]) {
       run("make", ["gen"]);
     }
     await writeSdkMode("local");
-    return "Local SDK artifacts generated and selected";
+    return "Local SDK artifacts generated and recorded";
   }
 
   if (subcommand === "use-local") {
     await assertLocalSdkArtifacts();
     await writeSdkMode("local");
-    return "Local SDK artifacts selected";
+    return "Local SDK artifacts recorded";
   }
 
   if (subcommand === "use-remote") {
     await writeSdkMode("remote");
-    return `Remote Buf SDK selected: ${bufModule()}`;
+    return `Remote Buf SDK recorded for consumers: ${bufModule()}`;
   }
 
   throw new Error("Usage: service sdk <build|publish|use-local|use-remote>");

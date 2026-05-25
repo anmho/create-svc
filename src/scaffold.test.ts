@@ -327,6 +327,9 @@ test("scaffolds a backend package cleanly into a nested monorepo-style directory
   expect(readme).toContain("GCP_DEPLOYER_SERVICE_ACCOUNT");
   expect(readme).toContain("NEON_API_KEY");
   expect(readme).toContain("CLOUDFLARE_API_TOKEN");
+  expect(readme).toContain("ConnectRPC service builds import the generated bindings checked into this repo");
+  expect(readme).toContain("does not rewrite this");
+  expect(readme).toContain("service's Go imports away from local generated packages");
 
   const packageJson = await Bun.file(join(generatedRoot, "package.json")).text();
   expect(packageJson).toContain('"hono"');

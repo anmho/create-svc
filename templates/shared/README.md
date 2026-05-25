@@ -258,6 +258,18 @@ secrets only when you add a provider adapter. A generic adapter can honor:
 
 - `WEBHOOK_<PROVIDER>_SECRET`
 
+## ConnectRPC SDK publishing
+
+ConnectRPC service builds import the generated bindings checked into this repo
+under `gen/`. That keeps the API and worker images self-contained and does not
+change when SDK metadata changes.
+
+Use `service sdk build` after editing protobufs to regenerate local
+bindings for this service. Use `service sdk publish` to push the
+schema to the Buf Schema Registry for external consumers. A successful publish
+records the remote module in `.service/sdk.json`; it does not rewrite this
+service's Go imports away from local generated packages.
+
 ## GitHub Actions deployment
 
 The scaffold emits a minimal deployment workflow slice for Cloud Run:
