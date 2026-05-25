@@ -146,6 +146,9 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
     expect(previewWorkflow).toContain("steps.pr.outputs.number");
     expect(previewWorkflow).toContain("NEON_API_KEY");
     expect(previewWorkflow).toContain("CLOUDFLARE_API_TOKEN");
+    if (variant.runtime === "go") {
+      expect(previewWorkflow).toContain("ariga/setup-atlas");
+    }
 
     const previewCleanupWorkflow = await Bun.file(join(generatedRoot, ".github", "workflows", "preview-cleanup.yml")).text();
     expect(previewCleanupWorkflow).toContain("pull_request:");
@@ -155,6 +158,9 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
     const deployWorkflow = await Bun.file(join(generatedRoot, ".github", "workflows", "deploy.yml")).text();
     expect(deployWorkflow).toContain("branches:");
     expect(deployWorkflow).toContain("- main");
+    if (variant.runtime === "go") {
+      expect(deployWorkflow).toContain("ariga/setup-atlas");
+    }
     expect(deployWorkflow).toContain("gcloud components install beta --quiet");
     expect(deployWorkflow).toContain("bun install -g create-svc@latest");
     expect(deployWorkflow).toContain("service deploy --ci");
@@ -166,6 +172,9 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
     expect(personalWorkflow).toContain("workflow_dispatch:");
     expect(personalWorkflow).toContain("service deploy --ci --environment personal --name");
     expect(personalWorkflow).toContain("service deploy --ci --destroy --environment personal --name");
+    if (variant.runtime === "go") {
+      expect(personalWorkflow).toContain("ariga/setup-atlas");
+    }
 
     if (variant.runtime === "go") {
       const goMod = await Bun.file(join(generatedRoot, "go.mod")).text();
