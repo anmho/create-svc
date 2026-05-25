@@ -209,7 +209,7 @@ export function generatedServiceCommandHelp(argv: string[]) {
       "Usage:",
       "  service protect-main [--repo owner/name] [--branch main]",
       "",
-      "Reconciles generated service branch protection with required test and deploy checks.",
+      "Reconciles generated service branch protection with required pull request checks.",
     ].join("\n");
   }
 

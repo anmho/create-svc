@@ -41,7 +41,7 @@ export type BranchProtectionRequest = {
 };
 
 const DEFAULT_BRANCH = "main";
-const DEFAULT_REQUIRED_CHECKS = ["test", "deploy"];
+const DEFAULT_REQUIRED_CHECKS = ["test"];
 const decoder = new TextDecoder();
 const encoder = new TextEncoder();
 
