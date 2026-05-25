@@ -14,6 +14,7 @@ export const config = {
   region: cloudrun.region,
   artifactRepository: cloudrun.artifact_repository,
   runtimeServiceAccount: cloudrun.service_account,
+  workerMinInstances: Number(cloudrun.worker_min_instances ?? 0),
   project: {
     mode: cloudrun.project_mode,
     id: cloudrun.project_id,

@@ -107,6 +107,7 @@
     "region": "{{REGION}}",
     "artifact_repository": "cloud-run",
     "service_account": "{{RUNTIME_SERVICE_ACCOUNT}}",
+    "worker_min_instances": 0,
     "required_apis": [
       "run.googleapis.com",
       "artifactregistry.googleapis.com",

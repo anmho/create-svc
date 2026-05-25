@@ -458,6 +458,16 @@ function generatedChecksFor(runtime: Runtime): GeneratedCheck[] {
       includes: ['"observability"', "logging.googleapis.com", "monitoring.googleapis.com", "cloudtrace.googleapis.com"],
     },
     {
+      name: "cloud run worker min scale config",
+      file: "service.jsonc",
+      includes: ['"worker_min_instances": 0'],
+    },
+    {
+      name: "cloud run min scale manifest",
+      file: "service.yaml",
+      includes: ['autoscaling.knative.dev/minScale: "${SERVICE_MIN_SCALE}"'],
+    },
+    {
       name: "ci workflow",
       file: ".github/workflows/ci.yml",
       includes:

@@ -71,6 +71,7 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
     expect(serviceConfig).toContain('"project_mode": "create_new"');
     expect(serviceConfig).toContain('"quota_project_id": "anmho-infra-prod"');
     expect(serviceConfig).toContain('"artifact_repository": "cloud-run"');
+    expect(serviceConfig).toContain('"worker_min_instances": 0');
     expect(serviceConfig).not.toContain("cloudbuild.googleapis.com");
     expect(serviceConfig).toContain('"jwks_url": "https://auth.anmho.com/api/auth/jwks"');
     expect(serviceConfig).toContain('"git": {');
@@ -97,6 +98,7 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
     expect(manifest).toContain("${AUTH_AUDIENCE}");
     expect(manifest).toContain("managed_by: create-service");
     expect(manifest).toContain("service_id: ${SERVICE_ID}");
+    expect(manifest).toContain('autoscaling.knative.dev/minScale: "${SERVICE_MIN_SCALE}"');
     expect(manifest).not.toContain("CLERK_SECRET_KEY");
     expect(manifest).not.toContain("STRIPE_SECRET_KEY");
     expect(manifest).not.toContain("REVENUECAT_API_KEY");

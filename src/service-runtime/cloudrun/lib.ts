@@ -518,6 +518,7 @@ export async function renderManifest(image: string, target: DeploymentTarget, pr
     SERVICE_ID: config.serviceName,
     SERVICE_ROLE: process,
     SERVICE_INGRESS: process === "worker" ? "internal" : "all",
+    SERVICE_MIN_SCALE: process === "worker" ? String(config.workerMinInstances) : "0",
     CONTAINER_COMMAND: renderContainerCommand(process),
     RUNTIME_SERVICE_ACCOUNT: config.runtimeServiceAccount,
     IMAGE_URL: image,
