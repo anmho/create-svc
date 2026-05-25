@@ -48,11 +48,17 @@ test("service sdk publish pushes the named Buf module and selects remote SDK mod
       "#!/bin/sh",
       `echo "$@" >> "${bufLog}"`,
       `printf '%s' "$BUF_TOKEN" > "${tokenLog}"`,
+      'if [ "$1 $2 $3 $4" = "registry module info buf.build/anmho/sdk-proof" ]; then',
+      "  exit 1",
+      "fi",
+      'if [ "$1 $2 $3 $4" = "registry module create buf.build/anmho/sdk-proof" ] && [ "$5 $6" = "--visibility private" ]; then',
+      "  exit 0",
+      "fi",
       'if [ "$1 $2 $3 $4" = "registry module commit list" ]; then',
       '  printf \'{"commits":[{"name":"buf.build/anmho/sdk-proof:commit-123","digest":"b5:abc123","create_time":"2026-05-25T12:00:00Z"}]}\'',
       "  exit 0",
       "fi",
-      'if [ "$1 $2 $3 $4" = "push --create --create-visibility private" ]; then',
+      'if [ "$1" = "push" ]; then',
       "  exit 0",
       "fi",
       "echo unexpected buf command: $@ >&2",
@@ -75,7 +81,9 @@ test("service sdk publish pushes the named Buf module and selects remote SDK mod
   expect(result.stderr.toString()).not.toContain("test-token");
   expect((await readFile(bufLog, "utf8")).trim()).toBe(
     [
-      "push --create --create-visibility private",
+      "registry module info buf.build/anmho/sdk-proof",
+      "registry module create buf.build/anmho/sdk-proof --visibility private",
+      "push",
       "registry module commit list buf.build/anmho/sdk-proof --format json --page-size 1",
     ].join("\n")
   );
