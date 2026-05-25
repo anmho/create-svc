@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { mkdir, readdir } from "node:fs/promises";
+import { mkdir, readdir, stat } from "node:fs/promises";
 import { ensureAuthClient, ensureAuthResourceServer, runAuthCommand, runAuthDoctor } from "../authctl";
 import { stopLocalDev } from "../local-dev";
 import { bootstrap, prepareGcpProject } from "./bootstrap";
@@ -259,7 +259,7 @@ async function runDoctor() {
     return "gcx available";
   });
   await record(results, "dashboard artifacts", "warn", async () => {
-    if (!(await Bun.file("./grafana").exists()) && !(await Bun.file("./dashboards").exists())) {
+    if (!(await directoryExists("./grafana")) && !(await directoryExists("./dashboards"))) {
       throw new Error("no grafana/ or dashboards/ directory found");
     }
     return "dashboard directory found";
@@ -439,6 +439,14 @@ async function findFiles(root: string, suffix = ""): Promise<string[]> {
     }
   }
   return files;
+}
+
+async function directoryExists(path: string) {
+  try {
+    return (await stat(path)).isDirectory();
+  } catch {
+    return false;
+  }
 }
 
 if (import.meta.main) {
