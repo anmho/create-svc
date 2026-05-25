@@ -199,10 +199,19 @@ function formatCompletionSummary(config: ScaffoldConfig, targetDir: string, gitR
     `  Auth issuer: https://auth.anmho.com/api/auth`,
     `  Auth resource: api://${config.serviceName}`,
     `  Auth token URL: https://auth.anmho.com/api/auth/oauth2/token`,
-    `  Temporal: disabled by default`,
-    `  Temporal address: localhost:7233`,
-    `  Temporal task queue: ${config.serviceName}`,
-    `  Temporal API key secret: ${config.serviceName}-temporal-api-key`,
+    ...(config.target === "workers"
+      ? [
+          `  Trigger.dev task: ${config.serviceName}-waitlist-follow-up`,
+          `  Trigger.dev project env: TRIGGER_PROJECT_REF`,
+          `  Trigger.dev deploy env: TRIGGER_ACCESS_TOKEN`,
+          `  Trigger.dev secret env: TRIGGER_SECRET_KEY`,
+        ]
+      : [
+          `  Temporal: enabled by default`,
+          `  Temporal address: localhost:7233`,
+          `  Temporal task queue: ${config.serviceName}`,
+          `  Temporal API key secret: ${config.serviceName}-temporal-api-key`,
+        ]),
     config.runtime === "go" ? `  Go module: ${config.modulePath}` : undefined,
     "",
     config.autoDeploy ? "Verified production after deploy:" : "After deploy, verify production with:",
@@ -1218,11 +1227,13 @@ function printHelp() {
 export function formatScaffoldHelp() {
   return [
     "Usage:",
+    "  service new <service_id> [options]",
     "  service create <service_id> [options]",
     "",
     "Examples:",
-    "  service create waitlist-api --target cloudrun --runtime bun --framework hono",
-    "  service create waitlist-api --auto-deploy",
+    "  service new waitlist-api --target cloudrun --runtime bun --framework hono",
+    "  service new waitlist-api --auto-deploy",
+    "  service create waitlist-api --yes",
     "",
     "Options:",
     "  --dir <path>                    Output directory; defaults to ./<service_id>",

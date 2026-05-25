@@ -58,7 +58,7 @@ export function formatOutsideServiceCommandError(command: string) {
       "",
       "No service.jsonc was found in this directory or its parents.",
       "To create a new service, run:",
-      "  service create <service_id>",
+      "  service new <service_id>",
     ].join("\n");
   }
 

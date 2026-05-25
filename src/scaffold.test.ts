@@ -212,7 +212,7 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
       expect(makefile).toContain("$(ATLAS) migrate lint --env local --latest 1");
       expect(makefile).toContain("bun run ./scripts/ensure-local-db.ts");
       expect(makefile).toContain("bun run ./scripts/wait-for-db.ts");
-      expect(makefile).toContain("bun run ./scripts/dev.ts go run ./cmd/server");
+      expect(makefile).toContain("bun run ./scripts/dev.ts go run ./cmd/server --worker go run ./cmd/worker");
       expect(await Bun.file(join(generatedRoot, "atlas.hcl")).exists()).toBeTrue();
       const atlasConfig = await Bun.file(join(generatedRoot, "atlas.hcl")).text();
       expect(atlasConfig).toContain('revisions_schema = "public"');
@@ -224,7 +224,7 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
       const packageJson = await Bun.file(join(generatedRoot, "package.json")).text();
       expect(packageJson).toContain('"@anmho/authctl": "0.1.1"');
       expect(packageJson).toContain("@temporalio/worker");
-      expect(packageJson).toContain('"dev": "bun run ./scripts/dev.ts bun run ./src/index.ts"');
+      expect(packageJson).toContain('"dev": "bun run ./scripts/dev.ts bun run ./src/index.ts --worker bun run ./src/worker.ts"');
       expect(packageJson).toContain('"gen": "bun run ./scripts/codegen.ts"');
       expect(packageJson).toContain('"service": "service"');
       expect(packageJson).toContain('"migrate": "service migrate"');
@@ -356,6 +356,11 @@ test("scaffolds the workers target with wrangler lifecycle commands", async () =
   expect(packageJson).toContain('"auth": "service auth"');
   expect(packageJson).toContain('"wrangler"');
   expect(packageJson).toContain('"pg"');
+  expect(packageJson).toContain('"@trigger.dev/sdk"');
+  expect(packageJson).toContain('"trigger.dev"');
+  expect(packageJson).toContain('"trigger": "trigger"');
+  expect(packageJson).toContain('"trigger:dev": "trigger dev"');
+  expect(packageJson).toContain('"trigger:deploy": "trigger deploy"');
 
   const wranglerConfig = await Bun.file(join(generatedRoot, "wrangler.toml")).text();
   expect(wranglerConfig).toContain('name = "dns-api"');
@@ -364,6 +369,8 @@ test("scaffolds the workers target with wrangler lifecycle commands", async () =
   expect(wranglerConfig).toContain('binding = "HYPERDRIVE"');
   expect(wranglerConfig).toContain('AUTH_ENABLED = "true"');
   expect(wranglerConfig).toContain('AUTH_AUDIENCE = "api://dns-api"');
+  expect(wranglerConfig).toContain('TRIGGER_TASK_ID = "dns-api-waitlist-follow-up"');
+  expect(wranglerConfig).toContain('TRIGGER_API_URL = "https://api.trigger.dev"');
   expect(wranglerConfig).not.toContain("[triggers]");
   expect(wranglerConfig).not.toContain("crons");
   const authSource = await Bun.file(join(generatedRoot, "src", "auth.ts")).text();
@@ -375,15 +382,20 @@ test("scaffolds the workers target with wrangler lifecycle commands", async () =
   expect(entrypoint).toContain("/v1/admin/waitlist");
   expect(entrypoint).toContain('app.use("/v1/*", authMiddleware())');
   expect(entrypoint).toContain("createStorage(context.env)");
-  expect(entrypoint).toContain("scheduled");
+  expect(entrypoint).toContain("dispatchWaitlistFollowUp");
+  expect(entrypoint).not.toContain("scheduled");
   const readme = await Bun.file(join(generatedRoot, "README.md")).text();
   expect(readme).toContain("Cloudflare Workers");
   expect(readme).toContain("Hyperdrive binding for Neon-backed Postgres persistence");
+  expect(readme).toContain("Trigger.dev task dispatch");
   expect(readme).not.toContain("Cloud Run");
   const serviceConfig = await Bun.file(join(generatedRoot, "service.jsonc")).text();
   expect(serviceConfig).toContain('"target": "workers"');
   expect(serviceConfig).toContain('"hostname": "api.dns-api.anmho.com"');
   expect(serviceConfig).toContain('"database_name": "dns_api"');
+  expect(serviceConfig).toContain('"trigger_dev"');
+  expect(serviceConfig).toContain('"access_token_env": "TRIGGER_ACCESS_TOKEN"');
+  expect(serviceConfig).toContain('"waitlist_task_id": "dns-api-waitlist-follow-up"');
   const makefile = await Bun.file(join(generatedRoot, "Makefile")).text();
   expect(makefile).toContain('no generated code for workers');
   expect(makefile).toContain("auth:");
@@ -392,6 +404,9 @@ test("scaffolds the workers target with wrangler lifecycle commands", async () =
   expect(await Bun.file(join(generatedRoot, "scripts", "authctl.ts")).exists()).toBeFalse();
   expect(await Bun.file(join(generatedRoot, "src", "auth.ts")).exists()).toBeTrue();
   expect(await Bun.file(join(generatedRoot, "src", "storage.ts")).exists()).toBeTrue();
+  expect(await Bun.file(join(generatedRoot, "src", "trigger.ts")).exists()).toBeTrue();
+  expect(await Bun.file(join(generatedRoot, "trigger.config.ts")).exists()).toBeTrue();
+  expect(await Bun.file(join(generatedRoot, "trigger", "waitlist-follow-up.ts")).exists()).toBeTrue();
   expect(await Bun.file(join(generatedRoot, "scripts", "workers", "cli.ts")).exists()).toBeFalse();
   expect(await Bun.file(join(generatedRoot, "scripts", "cloudrun", "cli.ts")).exists()).toBeFalse();
   expect(await Bun.file(join(generatedRoot, "scripts", "dev.ts")).exists()).toBeTrue();
@@ -403,6 +418,7 @@ test("scaffolds the workers target with wrangler lifecycle commands", async () =
   expect(await Bun.file(join(generatedRoot, "docker-compose.yml")).exists()).toBeTrue();
   expect(await Bun.file(join(generatedRoot, "src", "db", "repository.ts")).exists()).toBeFalse();
   expect(await Bun.file(join(generatedRoot, "src", "temporal", "worker.ts")).exists()).toBeFalse();
+  expect(await Bun.file(join(generatedRoot, "src", "worker.ts")).exists()).toBeFalse();
   expect(await Bun.file(join(generatedRoot, "scripts", "codegen.ts")).exists()).toBeFalse();
 
   const previewWorkflow = await Bun.file(join(generatedRoot, ".github", "workflows", "preview.yml")).text();

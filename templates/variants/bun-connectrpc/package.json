@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun run ./scripts/dev.ts bun run ./src/index.ts",
+    "dev": "bun run ./scripts/dev.ts bun run ./src/index.ts --worker bun run ./src/worker.ts",
     "service": "service",
     "migrate": "service migrate",
     "gen": "bun run ./scripts/codegen.ts",

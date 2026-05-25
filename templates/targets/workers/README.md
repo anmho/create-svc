@@ -8,6 +8,7 @@ This `{{PROFILE}}` profile targets `{{RUNTIME}} + {{FRAMEWORK}}` on Cloudflare W
 - a lightweight waitlist/launch API
 - the `service` CLI for create, deploy, doctor, dashboards, DNS, and destroy
 - a Hyperdrive binding for Neon-backed Postgres persistence
+- Trigger.dev task dispatch for background trigger execution
 - a production API origin at `https://{{API_HOSTNAME}}`
 
 ## Commands
@@ -17,6 +18,8 @@ wrangler dev
 bun run test
 bun run lint
 bun run migrate
+bun run trigger -- --help
+bun run trigger:dev
 service create
 service deploy
 bun run dashboards
@@ -47,6 +50,31 @@ binding and create the small waitlist/trigger schema on first use.
 - `POST /v1/triggers/waitlist`
 - `POST /webhooks/:provider`
 - `GET /webhooks/:provider/health`
+
+## Trigger.dev
+
+Cloudflare Workers services use Trigger.dev for background work. The Worker is
+the API surface; it records trigger rows and dispatches the generated
+`{{SERVICE_ID}}-waitlist-follow-up` task.
+
+Required production configuration:
+
+```bash
+export TRIGGER_PROJECT_REF=<project ref>
+export TRIGGER_ACCESS_TOKEN=<personal access token>
+export TRIGGER_SECRET_KEY=<secret key>
+```
+
+`service create` and `service deploy` deploy the Trigger.dev task before the
+Worker deploy and fail clearly if these values are missing.
+GitHub Actions deploys require matching repository secrets:
+`TRIGGER_PROJECT_REF`, `TRIGGER_ACCESS_TOKEN`, and `TRIGGER_SECRET_KEY`.
+
+The Trigger.dev CLI is installed in this generated package as a dev dependency
+from the `trigger.dev` npm package.
+Use `bun run trigger -- <args>` for ad-hoc commands, `bun run trigger:dev` for
+local task development, and `bun run trigger:deploy` when you want to deploy
+tasks directly without running the full service deploy.
 
 ## Production
 

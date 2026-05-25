@@ -31,17 +31,18 @@ func main() {
 
 	service := app.NewWaitlistService(db)
 	if cfg.TemporalEnabled {
-		stopTemporal, err := temporalapp.StartWorker(temporalapp.WorkerConfig{
+		temporalConfig := temporalapp.WorkerConfig{
 			Address:   cfg.TemporalAddress,
 			Namespace: cfg.TemporalNamespace,
 			TaskQueue: cfg.TemporalTaskQueue,
 			APIKey:    cfg.TemporalAPIKey,
-		})
+		}
+		dispatcher, err := temporalapp.NewTriggerDispatcher(temporalConfig)
 		if err != nil {
 			log.Fatal(err)
 		}
-		defer stopTemporal()
-		log.Printf("Temporal worker polling %s", cfg.TemporalTaskQueue)
+		defer dispatcher.Close()
+		service.SetTriggerDispatcher(dispatcher)
 	}
 
 	router := chi.NewRouter()

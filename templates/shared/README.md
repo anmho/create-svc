@@ -55,9 +55,48 @@ Local runtime uses:
 
 - `DATABASE_URL` from `.env.local`, pointed at Docker Compose Postgres
 - `{{COMMAND_MIGRATE}}` and `{{COMMAND_DEV}}`, which open Docker Desktop if needed, wait for Docker readiness, and start Docker Compose Postgres
-- `TEMPORAL_ENABLED=false` by default; set Temporal env vars locally only when you want to run against a real Temporal server
+- `TEMPORAL_ENABLED=true` by default with `localhost:7233` and `default`; set `TEMPORAL_ENABLED=false` when you are not running a local Temporal server
 
 No cloud credentials are required for local HTTP development after Docker and Postgres are running.
+
+## Temporal
+
+Temporal is enabled by default for generated services.
+
+Local development uses these generated defaults:
+
+- `TEMPORAL_ENABLED=true`
+- `TEMPORAL_ADDRESS=localhost:7233`
+- `TEMPORAL_NAMESPACE=default`
+- `TEMPORAL_TASK_QUEUE={{TEMPORAL_TASK_QUEUE}}`
+
+The generated app deploys a Cloud Run API service and, when Temporal is enabled,
+a separate Cloud Run worker service named `{{SERVICE_ID}}-worker`.
+When `POST /v1/triggers/waitlist` or the ConnectRPC `RecordTrigger` method
+creates a trigger, the API service starts `waitlistFollowUpWorkflow` /
+`WaitlistFollowUpWorkflow` asynchronously on the service task queue. The API
+request only waits for the trigger record; workflow completion happens through
+Temporal and is polled by the worker service.
+Local `{{COMMAND_DEV}}` starts the API process and the worker process together.
+
+Production and preview deploys render `TEMPORAL_ENABLED=true` into the Cloud Run
+manifest unless you override it. For Temporal Cloud, replace the local defaults
+with real connection settings before the worker can run:
+
+- `TEMPORAL_ADDRESS`
+- `TEMPORAL_NAMESPACE`
+- any TLS certificate/key or API-key settings used by your worker code
+
+If a service does not need Temporal, opt out with:
+
+```bash
+TEMPORAL_ENABLED=false {{COMMAND_DEV}}
+TEMPORAL_ENABLED=false {{COMMAND_DEPLOY}}
+```
+
+When Cloud Run starts with Temporal enabled but without address or namespace
+values, the generated runtime fails during startup with an explicit
+configuration error instead of silently running a broken worker.
 
 ## Remote provisioning
 
@@ -158,14 +197,7 @@ Optional remote-only Vault overrides for Neon admin key lookup:
 
 The generator only stores application-facing connection material in Secret Manager. Neon admin credentials stay local to create and deploy.
 
-## Temporal
-
-Cloud Run variants include an in-process Temporal worker in the service process.
-Production Temporal is enabled when you set `TEMPORAL_ENABLED=true`, or when
-`TEMPORAL_ADDRESS`, `TEMPORAL_API_KEY`, or `TEMPORAL_API_KEY_SECRET` is present
-during deploy rendering.
-
-For Temporal Cloud, provide:
+For production Temporal Cloud, provide:
 
 ```bash
 TEMPORAL_ENABLED=true

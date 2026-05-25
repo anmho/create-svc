@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { authMiddleware } from "./auth";
 import { createStorage } from "./storage";
+import { createTriggerDevDispatcher, TriggerDispatchError, type TriggerDispatcher } from "./trigger";
 
 type Env = {
   HYPERDRIVE?: Hyperdrive;
@@ -8,10 +9,14 @@ type Env = {
   AUTH_ISSUER?: string;
   AUTH_AUDIENCE?: string;
   AUTH_JWKS_URL?: string;
+  TRIGGER_SECRET_KEY?: string;
+  TRIGGER_TASK_ID?: string;
+  TRIGGER_API_URL?: string;
 };
 
-export function createApp() {
+export function createApp(options: { triggerDispatcher?: TriggerDispatcher } = {}) {
   const app = new Hono<{ Bindings: Env }>();
+  const triggerDispatcher = options.triggerDispatcher ?? createTriggerDevDispatcher();
 
   app.get("/healthz", (context) => context.json({ status: "ok" }));
   app.get("/readyz", (context) => context.json({ status: "ok" }));
@@ -104,26 +109,36 @@ export function createApp() {
   });
 
   app.post("/v1/triggers/waitlist", async (context) => {
-    const body = await context.req.json().catch(() => ({}));
-    const trigger = await createStorage(context.env).recordTrigger({
-      type: String(body.type ?? "manual"),
-      entryId: body.entry_id ?? body.entryId ?? null,
-      payload: body,
-    });
-    return context.json({ trigger }, 202);
+    try {
+      const body = await context.req.json().catch(() => ({}));
+      const trigger = await createStorage(context.env).recordTrigger({
+        type: String(body.type ?? "manual"),
+        entryId: body.entry_id ?? body.entryId ?? null,
+        payload: body,
+      });
+      const run = await triggerDispatcher.dispatchWaitlistFollowUp(trigger, context.env);
+      return context.json({ trigger, trigger_dev_run_id: run.id }, 202);
+    } catch (error) {
+      return writeError(context, error);
+    }
   });
 
   app.post("/webhooks/:provider", async (context) => {
-    const rawBody = await context.req.text();
-    const trigger = await createStorage(context.env).recordTrigger({
-      type: `webhook.${context.req.param("provider")}`,
-      entryId: null,
-      payload: {
-        headers: Object.fromEntries(context.req.raw.headers),
-        rawBody,
-      },
-    });
-    return context.json({ trigger }, 202);
+    try {
+      const rawBody = await context.req.text();
+      const trigger = await createStorage(context.env).recordTrigger({
+        type: `webhook.${context.req.param("provider")}`,
+        entryId: null,
+        payload: {
+          headers: Object.fromEntries(context.req.raw.headers),
+          rawBody,
+        },
+      });
+      const run = await triggerDispatcher.dispatchWaitlistFollowUp(trigger, context.env);
+      return context.json({ trigger, trigger_dev_run_id: run.id }, 202);
+    } catch (error) {
+      return writeError(context, error);
+    }
   });
 
   app.get("/webhooks/:provider/health", (context) => context.json({ status: "ok", provider: context.req.param("provider") }));
@@ -152,6 +167,9 @@ function normalizeStatus(value: string) {
 function writeError(context: any, error: unknown) {
   if (error instanceof ValidationError) {
     return context.json({ error: error.message, code: error.code }, 400);
+  }
+  if (error instanceof TriggerDispatchError) {
+    return context.json({ error: error.message, code: error.code }, 500);
   }
   console.error(error);
   return context.json({ error: "internal server error", code: "internal" }, 500);
@@ -188,11 +206,4 @@ function csvCell(value: string) {
 
 export default {
   fetch: app.fetch,
-  async scheduled(_event: ScheduledEvent, env: Env, context: ExecutionContext) {
-    context.waitUntil(
-      createStorage(env).claimQueuedTriggers(10).then((triggers) => {
-        console.log("processed waitlist triggers", triggers.length);
-      })
-    );
-  },
 };

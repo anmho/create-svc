@@ -5,7 +5,7 @@ import { createServer } from "node:http";
 import { WaitlistService as WaitlistRpcService } from "../gen/protos/waitlist/v1/waitlist_pb.js";
 import { withServiceAuth } from "./auth";
 import { AppError, createDefaultWaitlistService, type WaitlistService } from "./waitlist/service";
-import { startTemporalWorker } from "./temporal/worker";
+import { assertTemporalRuntimeConfig } from "./temporal";
 import type { WaitlistEntry, WaitlistTrigger } from "./waitlist/types";
 
 type RpcService = ServiceImpl<typeof WaitlistRpcService>;
@@ -236,11 +236,7 @@ function headersPayload(headers: Parameters<FallbackHandler>[0]["headers"]) {
 }
 
 if (import.meta.main) {
-  const temporalWorker = await startTemporalWorker();
-  if (temporalWorker) {
-    console.log(`Temporal worker polling ${temporalWorker.taskQueue}`);
-  }
-
+  assertTemporalRuntimeConfig();
   const port = Number(Bun.env.PORT ?? 8080);
   const server = createServer(withServiceAuth(createHandler(createDefaultWaitlistService())));
   server.listen(port);

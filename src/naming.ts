@@ -81,7 +81,7 @@ export function compactDatabaseName(serviceName: string) {
 export function deriveLocalPostgresPort(serviceName: string) {
   const normalized = slugify(serviceName) || "my-service";
   const hash = Number.parseInt(shortHash(normalized).slice(0, 4), 16);
-  return String(55000 + (hash % 1000));
+  return String(15432 + (hash % 1000));
 }
 
 export function deriveDefaults(serviceName: string) {

@@ -29,7 +29,12 @@ import {
 } from "./lib";
 
 function matchesServiceResource(name: string) {
-  return name === config.serviceName || name.startsWith(`${config.serviceName}-pr-`) || name.startsWith(`${config.serviceName}-dev-`);
+  return (
+    name === config.serviceName ||
+    name === `${config.serviceName}-worker` ||
+    name.startsWith(`${config.serviceName}-pr-`) ||
+    name.startsWith(`${config.serviceName}-dev-`)
+  );
 }
 
 function matchesSecretResource(name: string) {

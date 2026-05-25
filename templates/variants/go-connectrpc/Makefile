@@ -5,7 +5,7 @@ WITH_ENV := set -a; [ ! -f .env.local ] || . ./.env.local; set +a;
 ATLAS ?= atlas
 
 dev:
-	@bun run ./scripts/dev.ts go run ./cmd/server
+	@bun run ./scripts/dev.ts go run ./cmd/server --worker go run ./cmd/worker
 
 migrate:
 	@bun run ./scripts/ensure-local-db.ts

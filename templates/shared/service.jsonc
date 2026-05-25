@@ -53,7 +53,7 @@
   },
 
   "temporal": {
-    "enabled": false,
+    "enabled": true,
     "address": "localhost:7233",
     "namespace": "default",
     "task_queue": "{{SERVICE_ID}}",
@@ -117,6 +117,12 @@
   "workers": {
     "script_name": "{{SERVICE_ID}}",
     "hyperdrive_binding": "HYPERDRIVE",
-    "cron": "*/15 * * * *"
+    "trigger_dev": {
+      "project_ref_env": "TRIGGER_PROJECT_REF",
+      "access_token_env": "TRIGGER_ACCESS_TOKEN",
+      "secret_key_env": "TRIGGER_SECRET_KEY",
+      "api_url": "https://api.trigger.dev",
+      "waitlist_task_id": "{{SERVICE_ID}}-waitlist-follow-up"
+    }
   }
 }

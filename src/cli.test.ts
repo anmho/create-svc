@@ -72,6 +72,7 @@ test("formatScaffoldHelp is compact and starts at usage", () => {
   expect(help.startsWith("Usage:\n")).toBeTrue();
   expect(help).not.toContain("\n\n\n");
   expect(help).not.toContain("│");
+  expect(help).toContain("service new <service_id> [options]");
   expect(help).toContain("service create <service_id> [options]");
   expect(help).toContain("--dir <path>");
 });

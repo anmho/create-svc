@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { authMiddleware } from "./auth";
 import { AppError, createDefaultWaitlistService, type WaitlistService } from "./waitlist/service";
-import { startTemporalWorker } from "./temporal/worker";
+import { assertTemporalRuntimeConfig } from "./temporal";
 
 export function createApp(service: WaitlistService) {
   const app = new Hono();
@@ -169,11 +169,7 @@ function webhookEventId(payload: unknown, headers: Headers) {
 }
 
 if (import.meta.main) {
-  const temporalWorker = await startTemporalWorker();
-  if (temporalWorker) {
-    console.log(`Temporal worker polling ${temporalWorker.taskQueue}`);
-  }
-
+  assertTemporalRuntimeConfig();
   Bun.serve({
     port: Number(Bun.env.PORT ?? 3000),
     fetch: createApp(createDefaultWaitlistService()).fetch,

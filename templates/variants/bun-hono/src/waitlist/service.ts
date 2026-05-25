@@ -1,5 +1,6 @@
 import { createDb } from "../db/client";
 import { WaitlistRepository } from "../db/repository";
+import { startWaitlistFollowUpWorkflow } from "../temporal/client";
 import type {
   JoinWaitlistInput,
   ListWaitlistEntriesInput,
@@ -109,12 +110,20 @@ export class DefaultWaitlistService implements WaitlistService {
       await this.getWaitlistEntry(input.entryId);
     }
 
-    return this.repository.createTrigger({
+    const trigger = await this.repository.createTrigger({
       id: crypto.randomUUID(),
       type,
       entryId: input.entryId?.trim() || null,
       payload: input.payload ?? {},
     });
+
+    startWaitlistFollowUpWorkflow({
+      triggerId: trigger.id,
+      email: trigger.payload && typeof trigger.payload === "object" && "email" in trigger.payload ? String(trigger.payload.email) : undefined,
+      type: trigger.type,
+    }).catch((error) => console.error("failed to start waitlist follow-up workflow", error));
+
+    return trigger;
   }
 
   async recordWebhookEvent(input: RecordWebhookEventInput) {
