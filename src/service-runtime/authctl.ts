@@ -54,6 +54,10 @@ export function defaultAuthResourceServerArgs() {
 export function runAuthCommand(args: string[]) {
   const [subject, action, ...rest] = args;
 
+  if (!subject || subject === "--help" || subject === "-h" || subject === "help") {
+    return formatAuthHelp();
+  }
+
   if (!subject || subject === "doctor") {
     const result = runAuthDoctor();
     if (!result.hasAuthctl) {
@@ -104,10 +108,38 @@ export function runAuthCommand(args: string[]) {
   }
 
   if (subject === "token") {
+    if (action === "--help" || action === "-h" || action === "help") {
+      return formatAuthTokenHelp();
+    }
     return mintAuthToken(parseTokenOptions([action, ...rest].filter(Boolean) as string[]));
   }
 
   throw new Error("Usage: service auth <doctor|resource-server|client|token> [args]");
+}
+
+function formatAuthHelp() {
+  return [
+    "Usage: service auth <doctor|resource-server|client|token> [args]",
+    "",
+    "Commands:",
+    "  doctor           Check authctl availability",
+    "  resource-server  Manage this service auth resource server",
+    "  client           Create or manage service client credentials",
+    "  token            Mint a bearer token for protected API checks",
+  ].join("\n");
+}
+
+function formatAuthTokenHelp() {
+  return [
+    "Usage: service auth token [options]",
+    "",
+    "Options:",
+    "  --scope <scope>      Request an additional or replacement scope; repeatable",
+    "  --resource <uri>     Token resource; defaults to this service audience",
+    "  --audience <value>   Optional audience parameter",
+    "  --json               Print the full token response",
+    "  --help, -h           Show this message",
+  ].join("\n");
 }
 
 export function ensureAuthResourceServer() {
