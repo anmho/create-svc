@@ -451,7 +451,7 @@ async function writeSdkMode(mode: "local" | "remote", published?: PublishedSdk) 
 }
 
 function bufModule() {
-  return config.buf.module || `buf.build/anmho/${config.serviceName}`;
+  return config.buf.module || `buf.build/anmho-services/${config.serviceName}`;
 }
 
 function ensureBufModule(authEnv: Record<string, string>) {

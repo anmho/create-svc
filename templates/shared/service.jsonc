@@ -86,7 +86,7 @@
   },
 
   "buf": {
-    "module": "buf.build/anmho/{{SERVICE_ID}}"
+    "module": "buf.build/anmho-services/{{SERVICE_ID}}"
   },
 
   "observability": {

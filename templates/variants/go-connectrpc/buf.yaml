@@ -1,7 +1,7 @@
 version: v2
 modules:
   - path: protos
-    name: buf.build/anmho/{{SERVICE_ID}}
+    name: buf.build/anmho-services/{{SERVICE_ID}}
 lint:
   use:
     - STANDARD
