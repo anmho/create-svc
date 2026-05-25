@@ -231,11 +231,11 @@ async function runDoctor() {
     return `${config.domain.hostname} -> ${target.serviceName}`;
   });
   await record(results, "deployment health", "fail", async () => {
-    const response = await fetchWithTimeout(`${serviceOrigin(target)}/healthz`, 5_000);
+    const response = await fetchWithTimeout(`${serviceOrigin(target)}/readyz`, 5_000);
     if (!response.ok) {
-      throw new Error(`GET /healthz returned ${response.status}`);
+      throw new Error(`GET /readyz returned ${response.status}`);
     }
-    return "GET /healthz ok";
+    return "GET /readyz ok";
   });
   await record(results, "migration assets", "fail", async () => {
     if (!(await Bun.file("./migrations/0000_init.sql").exists())) {
