@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { formatScaffoldHelp, run as runScaffoldCli } from "./cli";
+import { parseProtectMainArgs, protectMainBranch } from "./github-protection";
 import { parseJsonc } from "./jsonc";
 
 const SCAFFOLD_COMMANDS = new Set(["create", "new", "init"]);
@@ -14,6 +15,7 @@ const GENERATED_SERVICE_COMMANDS = new Set([
   "dns",
   "doctor",
   "migrate",
+  "protect-main",
   "sdk",
   "seed",
 ]);
@@ -109,6 +111,25 @@ async function delegateToGeneratedService(serviceRoot: string, argv: string[]) {
   process.chdir(serviceRoot);
   process.env.CREATE_SVC_SERVICE_ROOT = serviceRoot;
 
+  const serviceConfig = parseJsonc(await Bun.file(join(serviceRoot, "service.jsonc")).text()) as {
+    service_id?: string;
+    target?: string;
+    git?: {
+      owner?: string;
+      repository?: string;
+    };
+  };
+  if (argv[0] === "protect-main") {
+    const protectionArgs = parseProtectMainArgs(argv.slice(1));
+    const result = protectMainBranch({
+      repo: protectionArgs.repo ?? repoFromServiceConfig(serviceConfig),
+      branch: protectionArgs.branch,
+      cwd: serviceRoot,
+    });
+    console.log(`Protected ${result.repo} ${result.branch} with required checks: ${result.requiredChecks.join(", ")}`);
+    return;
+  }
+
   if (argv[0] === "sdk") {
     const { intro, outro } = await import("@clack/prompts");
     const { runConnectSdk } = await import("./service-runtime/connect-sdk");
@@ -118,7 +139,6 @@ async function delegateToGeneratedService(serviceRoot: string, argv: string[]) {
     return;
   }
 
-  const serviceConfig = parseJsonc(await Bun.file(join(serviceRoot, "service.jsonc")).text()) as { target?: string };
   if (serviceConfig.target === "workers") {
     const { main } = await import("./service-runtime/workers/cli");
     await main(argv);
@@ -127,6 +147,15 @@ async function delegateToGeneratedService(serviceRoot: string, argv: string[]) {
 
   const { main } = await import("./service-runtime/cloudrun/cli");
   await main(argv);
+}
+
+function repoFromServiceConfig(serviceConfig: { service_id?: string; git?: { owner?: string; repository?: string } }) {
+  const owner = serviceConfig.git?.owner || "anmho";
+  const repository = serviceConfig.git?.repository || serviceConfig.service_id;
+  if (!repository) {
+    throw new Error("service.jsonc is missing git.repository and service_id; pass --repo owner/name.");
+  }
+  return `${owner}/${repository}`;
 }
 
 export function generatedDependenciesInstalled(serviceRoot: string) {
@@ -155,6 +184,15 @@ function ensureGeneratedDependencies(serviceRoot: string) {
 
 export function generatedServiceCommandHelp(argv: string[]) {
   const [command, ...rest] = argv;
+  if (command === "protect-main" && hasHelpFlag(rest)) {
+    return [
+      "Usage:",
+      "  service protect-main [--repo owner/name] [--branch main]",
+      "",
+      "Reconciles generated service branch protection with required test and deploy checks.",
+    ].join("\n");
+  }
+
   if (command !== "deploy" || !hasHelpFlag(rest)) {
     return undefined;
   }

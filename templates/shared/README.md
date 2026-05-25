@@ -31,6 +31,7 @@ console to create and deploy.
 {{COMMAND_TEST}}
 {{COMMAND_BOOTSTRAP}}
 {{COMMAND_DEPLOY}}
+{{COMMAND_PROTECT_MAIN}}
 {{COMMAND_DEV_DOWN}}
 {{COMMAND_AUTH_RESOURCE}}
 {{COMMAND_AUTH_CLIENT}}
@@ -144,6 +145,16 @@ gcloud auth application-default login
 ```
 
 The generated backend scripts still use `gcloud` as the primary control plane even when ADC is present.
+
+## GitHub main branch protection
+
+Generated repositories include GitHub Actions workflows for CI and production deploys. `service create` reconciles `main` branch protection after creating and pushing the GitHub repository. To rerun reconciliation for an existing generated repo:
+
+```bash
+{{COMMAND_PROTECT_MAIN}}
+```
+
+The protection requires the generated `test` and `deploy` status checks, pull requests, stale-review dismissal, conversation resolution, and admin enforcement. If GitHub permissions are missing, rerun the command with a token that has repo admin access or fine-grained `Administration: write`.
 
 Go variants use Atlas for migrations:
 
