@@ -144,10 +144,6 @@ function waitForExit(pid: number, timeoutMs: number) {
 }
 
 function findServicePortProcesses(root: string, ports: number[], pidFromFile?: number): PortProcess[] {
-  if (!Bun.which("lsof")) {
-    return [];
-  }
-
   const resolvedRoot = realpath(root);
   const rootWithSlash = resolvedRoot.endsWith("/") ? resolvedRoot : `${resolvedRoot}/`;
   const seen = new Set<string>();
@@ -180,6 +176,21 @@ function realpath(path: string) {
 }
 
 function listeningPids(port: number) {
+  const pids = new Set<number>();
+  for (const pid of listeningPidsFromLsof(port)) {
+    pids.add(pid);
+  }
+  for (const pid of listeningPidsFromFuser(port)) {
+    pids.add(pid);
+  }
+  return [...pids];
+}
+
+function listeningPidsFromLsof(port: number) {
+  if (!Bun.which("lsof")) {
+    return [];
+  }
+
   const result = Bun.spawnSync(["lsof", "-nP", `-iTCP:${port}`, "-sTCP:LISTEN", "-Fp"], {
     stdout: "pipe",
     stderr: "pipe",
@@ -191,6 +202,26 @@ function listeningPids(port: number) {
     .decode(result.stdout)
     .split("\n")
     .map((line) => (line.startsWith("p") ? Number.parseInt(line.slice(1), 10) : undefined))
+    .filter((pid): pid is number => Boolean(pid && Number.isFinite(pid)));
+}
+
+function listeningPidsFromFuser(port: number) {
+  if (process.platform !== "linux" || !Bun.which("fuser")) {
+    return [];
+  }
+
+  const result = Bun.spawnSync(["fuser", "-n", "tcp", String(port)], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (!result.success) {
+    return [];
+  }
+  return decoder
+    .decode(result.stdout)
+    .trim()
+    .split(/\s+/)
+    .map((value) => Number.parseInt(value, 10))
     .filter((pid): pid is number => Boolean(pid && Number.isFinite(pid)));
 }
 

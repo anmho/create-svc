@@ -31,7 +31,7 @@ describe("local dev cleanup", () => {
   });
 
   test("stops service-owned listeners when the pid file is missing", async () => {
-    if (!Bun.which("lsof")) {
+    if (!Bun.which("lsof") && !(process.platform === "linux" && Bun.which("fuser"))) {
       return;
     }
 
@@ -126,6 +126,10 @@ async function isReachable(port: number) {
 }
 
 function listenerHasPid(port: number, pid: number) {
+  if (!Bun.which("lsof")) {
+    return false;
+  }
+
   const result = Bun.spawnSync(["lsof", "-nP", `-iTCP:${port}`, "-sTCP:LISTEN", "-Fp"], {
     stdout: "pipe",
     stderr: "pipe",
