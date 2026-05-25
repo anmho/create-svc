@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { config } from "./config";
 import { serviceRoot } from "../runtime";
 import { localDockerBuildArgs, parseDeployArgs, type DeployArgs } from "./deploy-args";
+import { resolveTemporalRuntimeConfigValues } from "./temporal-config";
 
 type CommandOptions = {
   allowFailure?: boolean;
@@ -551,22 +552,38 @@ export async function renderManifest(image: string, target: DeploymentTarget, pr
 }
 
 export function resolveTemporalRuntimeConfig() {
-  const enabledOverride = process.env.TEMPORAL_ENABLED?.trim();
-  const address = process.env.TEMPORAL_ADDRESS?.trim() || config.temporal.address;
-  const namespace = process.env.TEMPORAL_NAMESPACE?.trim() || config.temporal.namespace;
-  const taskQueue = process.env.TEMPORAL_TASK_QUEUE?.trim() || config.temporal.taskQueue;
-  const apiKeySecretName = process.env.TEMPORAL_API_KEY_SECRET?.trim() || (process.env.TEMPORAL_API_KEY?.trim() ? config.temporal.apiKeySecretName : "");
-  const enabled = enabledOverride
-    ? ["1", "true", "yes", "on"].includes(enabledOverride.toLowerCase())
-    : config.temporal.enabled;
+  return resolveTemporalRuntimeConfigValues(config.temporal, process.env, readTemporalProviderFields);
+}
 
+function readTemporalProviderFields(mount: string, path: string) {
   return {
-    enabled,
-    address,
-    namespace,
-    taskQueue,
-    apiKeySecretName,
+    address: readVaultField(mount, path, ["TEMPORAL_ADDRESS", "address"]),
+    namespace: readVaultField(mount, path, ["TEMPORAL_NAMESPACE", "namespace"]),
+    apiKey: readVaultField(mount, path, ["TEMPORAL_API_KEY", "api_key"]),
   };
+}
+
+function readVaultField(mount: string, path: string, fields: string[]) {
+  const vault = Bun.which("vault");
+  if (!vault || !path) {
+    return "";
+  }
+
+  for (const field of fields) {
+    const result = Bun.spawnSync([vault, "kv", "get", `-mount=${mount}`, `-field=${field}`, path], {
+      cwd: process.cwd(),
+      env: process.env,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (result.success && result.stdout) {
+      const value = decoder.decode(result.stdout).trim();
+      if (value) {
+        return value;
+      }
+    }
+  }
+  return "";
 }
 
 export async function writeRenderedManifest(image: string, target: DeploymentTarget) {

@@ -3,6 +3,7 @@ import { serviceConfig } from "../runtime";
 const cloudrun = serviceConfig.cloudrun;
 const dns = serviceConfig.dns;
 const neon = serviceConfig.neon;
+const vault = serviceConfig.providers?.vault ?? {};
 
 export const config = {
   serviceName: serviceConfig.service_id,
@@ -39,6 +40,8 @@ export const config = {
     namespace: serviceConfig.temporal.namespace,
     taskQueue: serviceConfig.temporal.task_queue,
     apiKeySecretName: serviceConfig.temporal.api_key_secret_name,
+    vaultMount: vault.mount || "secret",
+    vaultPath: vault.temporal_path || "prod/providers/temporal",
   },
   neon: {
     projectId: neon.project_id,
