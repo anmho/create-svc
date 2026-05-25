@@ -348,9 +348,9 @@ async function runSdk(args: string[]) {
   const [subcommand] = args;
   if (subcommand === "publish") {
     requireCommand("buf");
-    ensureBufAuth();
-    run("buf", ["push"]);
-    const published = resolvePublishedSdk();
+    const authEnv = resolveBufAuthEnv();
+    run("buf", ["push", "--create", "--create-visibility", "private"], { env: authEnv });
+    const published = resolvePublishedSdk(authEnv);
     await writeSdkMode("remote", published);
     return `Schema pushed to Buf Schema Registry and recorded for consumers: ${published.commit}`;
   }
@@ -373,8 +373,8 @@ async function runSdk(args: string[]) {
 
   if (subcommand === "use-remote") {
     requireCommand("buf");
-    ensureBufAuth();
-    const published = resolvePublishedSdk();
+    const authEnv = resolveBufAuthEnv();
+    const published = resolvePublishedSdk(authEnv);
     await writeSdkMode("remote", published);
     return `Remote Buf SDK recorded for consumers: ${bufModule()}@${published.commit}`;
   }
@@ -395,9 +395,9 @@ type PublishedSdk = {
   createTime?: string;
 };
 
-function resolvePublishedSdk(): PublishedSdk {
+function resolvePublishedSdk(authEnv: Record<string, string> = {}): PublishedSdk {
   const module = bufModule();
-  const result = run("buf", ["registry", "module", "commit", "list", module, "--format", "json", "--page-size", "1"]);
+  const result = run("buf", ["registry", "module", "commit", "list", module, "--format", "json", "--page-size", "1"], { env: authEnv });
   const parsed = JSON.parse(result.stdout) as {
     commits?: Array<Record<string, unknown>>;
     commit?: Record<string, unknown>;
@@ -453,14 +453,14 @@ function bufModule() {
   return config.buf.module || `buf.build/anmho/${config.serviceName}`;
 }
 
-function ensureBufAuth() {
+function resolveBufAuthEnv(): Record<string, string> {
   const token =
     process.env.BUF_TOKEN?.trim() ||
     readVaultField(config.buf.vaultMount, config.buf.vaultPath, ["BUF_TOKEN", "buf.api_token", "buf_token", "api_token", "token"]);
   if (!token) {
-    return;
+    return {};
   }
-  run("buf", ["registry", "login", "buf.build", "--token-stdin"], { input: `${token}\n` });
+  return { BUF_TOKEN: token };
 }
 
 async function resolveLocalSdkPath() {
