@@ -349,7 +349,8 @@ async function runSdk(args: string[]) {
   if (subcommand === "publish") {
     requireCommand("buf");
     const authEnv = resolveBufAuthEnv();
-    run("buf", ["push", "--create", "--create-visibility", "private"], { env: authEnv });
+    ensureBufModule(authEnv);
+    run("buf", ["push"], { env: authEnv });
     const published = resolvePublishedSdk(authEnv);
     await writeSdkMode("remote", published);
     return `Schema pushed to Buf Schema Registry and recorded for consumers: ${published.commit}`;
@@ -451,6 +452,15 @@ async function writeSdkMode(mode: "local" | "remote", published?: PublishedSdk) 
 
 function bufModule() {
   return config.buf.module || `buf.build/anmho/${config.serviceName}`;
+}
+
+function ensureBufModule(authEnv: Record<string, string>) {
+  const module = bufModule();
+  const existing = run("buf", ["registry", "module", "info", module], { env: authEnv, allowFailure: true });
+  if (existing.success) {
+    return;
+  }
+  run("buf", ["registry", "module", "create", module, "--visibility", "private"], { env: authEnv });
 }
 
 function resolveBufAuthEnv(): Record<string, string> {
