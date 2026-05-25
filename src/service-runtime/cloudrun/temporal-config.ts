@@ -75,6 +75,13 @@ export function resolveTemporalRuntimeConfigValues(
     env.TEMPORAL_TLS_CERT_SECRET?.trim() || (tlsCert ? config.tlsCertSecretName || `${config.taskQueue}-temporal-client-cert` : "");
   const tlsKeySecretName =
     env.TEMPORAL_TLS_KEY_SECRET?.trim() || (tlsKey ? config.tlsKeySecretName || `${config.taskQueue}-temporal-client-key` : "");
+  const configuredTLSSecretNames = Boolean(config.tlsCaCertSecretName && config.tlsCertSecretName && config.tlsKeySecretName);
+  const shouldRenderTLSSecretNames = Boolean(tlsCaCert || (!apiKey && configuredTLSSecretNames));
+  const resolvedTLSSecretNames = {
+    ca: shouldRenderTLSSecretNames ? tlsCaCertSecretName || config.tlsCaCertSecretName || "" : "",
+    cert: shouldRenderTLSSecretNames ? tlsCertSecretName || config.tlsCertSecretName || "" : "",
+    key: shouldRenderTLSSecretNames ? tlsKeySecretName || config.tlsKeySecretName || "" : "",
+  };
 
   if (isLocalTemporalAddress(address)) {
     throw new Error(
@@ -95,7 +102,7 @@ export function resolveTemporalRuntimeConfigValues(
       `Temporal mTLS is partially configured; set TEMPORAL_TLS_CA_CERT, TEMPORAL_TLS_CERT, and TEMPORAL_TLS_KEY together in env or Vault at ${config.vaultMount}/${config.vaultPath}`
     );
   }
-  if (!apiKey && !tlsCaCert) {
+  if (!apiKey && !apiKeySecretName && !tlsCaCert && !configuredTLSSecretNames) {
     throw new Error(
       `Temporal is enabled but no credentials were found; set TEMPORAL_API_KEY or TEMPORAL_TLS_CA_CERT/TEMPORAL_TLS_CERT/TEMPORAL_TLS_KEY in env or Vault at ${config.vaultMount}/${config.vaultPath}`
     );
@@ -108,9 +115,9 @@ export function resolveTemporalRuntimeConfigValues(
     taskQueue,
     apiKeySecretName,
     apiKey,
-    tlsCaCertSecretName,
-    tlsCertSecretName,
-    tlsKeySecretName,
+    tlsCaCertSecretName: resolvedTLSSecretNames.ca,
+    tlsCertSecretName: resolvedTLSSecretNames.cert,
+    tlsKeySecretName: resolvedTLSSecretNames.key,
     tlsCaCert,
     tlsCert,
     tlsKey,

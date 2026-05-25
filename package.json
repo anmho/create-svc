@@ -1,6 +1,6 @@
 {
   "name": "create-svc",
-  "version": "0.1.70",
+  "version": "0.1.71",
   "description": "Local microservice bootstrap CLI for Cloud Run and Workers services with Neon-backed data.",
   "module": "index.ts",
   "type": "module",

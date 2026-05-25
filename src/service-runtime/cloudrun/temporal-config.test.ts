@@ -62,6 +62,28 @@ test("resolveTemporalRuntimeConfigValues reads self-hosted mTLS config from Vaul
   });
 });
 
+test("resolveTemporalRuntimeConfigValues renders configured mTLS secret names without raw credentials", () => {
+  const resolved = resolveTemporalRuntimeConfigValues(
+    { ...baseConfig, address: "temporal-grpc.anmho.com:7233" },
+    {},
+    () => ({
+      namespace: "default",
+    })
+  );
+
+  expect(resolved).toMatchObject({
+    enabled: true,
+    address: "temporal-grpc.anmho.com:7233",
+    namespace: "default",
+    tlsCaCertSecretName: "orders-temporal-ca-cert",
+    tlsCertSecretName: "orders-temporal-client-cert",
+    tlsKeySecretName: "orders-temporal-client-key",
+    tlsCaCert: "",
+    tlsCert: "",
+    tlsKey: "",
+  });
+});
+
 test("resolveTemporalRuntimeConfigValues prefers explicit environment overrides", () => {
   const resolved = resolveTemporalRuntimeConfigValues(
     baseConfig,
