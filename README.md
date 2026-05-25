@@ -17,6 +17,36 @@ Local provisioning intentionally prefers known-good CLIs over SDK-heavy orchestr
 
 npm: <https://www.npmjs.com/package/create-svc>
 
+## Install and update
+
+For an installed CLI, use npm as the canonical owner:
+
+```bash
+npm install -g create-svc@latest
+```
+
+That installs the `service`, `create-svc`, and `create-service` commands from the same package. Check the binary that is actually running:
+
+```bash
+service --version
+service doctor
+```
+
+`service doctor` reports the active binary path, package root, installed package version, npm latest version, and any other `service` binaries on `PATH`. If a stale Homebrew or manually copied binary is shadowing npm, remove that stale binary and reinstall npm latest:
+
+```bash
+which -a service
+rm "/opt/homebrew/bin/service"
+npm install -g create-svc@latest
+```
+
+If the stale binary came from a global npm install you no longer want, remove and reinstall it through npm instead:
+
+```bash
+npm uninstall -g create-svc
+npm install -g create-svc@latest
+```
+
 ## Usage
 
 ```bash
