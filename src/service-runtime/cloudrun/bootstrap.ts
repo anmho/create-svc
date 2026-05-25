@@ -79,18 +79,31 @@ export async function prepareGcpProject() {
 
 function publishTemporalSecrets() {
   const temporal = resolveTemporalRuntimeConfig();
-  if (!temporal.apiKey || !temporal.apiKeySecretName) {
-    return "No Temporal API key configured";
+  const secrets = [
+    { name: temporal.apiKeySecretName, value: temporal.apiKey },
+    { name: temporal.tlsCaCertSecretName, value: temporal.tlsCaCert },
+    { name: temporal.tlsCertSecretName, value: temporal.tlsCert },
+    { name: temporal.tlsKeySecretName, value: temporal.tlsKey },
+  ].filter((secret) => secret.name && secret.value);
+
+  if (secrets.length === 0) {
+    return "No Temporal credentials configured";
   }
 
-  addSecretVersion(temporal.apiKeySecretName, temporal.apiKey);
-  ensureSecretAccessor(temporal.apiKeySecretName, `serviceAccount:${config.runtimeServiceAccount}`);
-  return temporal.apiKeySecretName;
+  for (const secret of secrets) {
+    addSecretVersion(secret.name, secret.value);
+    ensureSecretAccessor(secret.name, `serviceAccount:${config.runtimeServiceAccount}`);
+  }
+  return secrets.map((secret) => secret.name).join(", ");
 }
 
 function shouldPublishTemporalSecrets() {
   const temporal = resolveTemporalRuntimeConfig();
-  return Boolean(temporal.enabled && temporal.apiKey && temporal.apiKeySecretName);
+  return Boolean(
+    temporal.enabled &&
+      ((temporal.apiKey && temporal.apiKeySecretName) ||
+        (temporal.tlsCaCert && temporal.tlsCaCertSecretName && temporal.tlsCert && temporal.tlsCertSecretName && temporal.tlsKey && temporal.tlsKeySecretName))
+  );
 }
 
 if (import.meta.main) {

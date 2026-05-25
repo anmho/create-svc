@@ -7,6 +7,9 @@ const baseConfig = {
   namespace: "default",
   taskQueue: "orders",
   apiKeySecretName: "orders-temporal-api-key",
+  tlsCaCertSecretName: "orders-temporal-ca-cert",
+  tlsCertSecretName: "orders-temporal-client-cert",
+  tlsKeySecretName: "orders-temporal-client-key",
   vaultMount: "secret",
   vaultPath: "prod/providers/temporal",
 };
@@ -25,6 +28,37 @@ test("resolveTemporalRuntimeConfigValues reads production Temporal config from V
     taskQueue: "orders",
     apiKeySecretName: "orders-temporal-api-key",
     apiKey: "secret-key",
+    tlsCaCertSecretName: "",
+    tlsCertSecretName: "",
+    tlsKeySecretName: "",
+    tlsCaCert: "",
+    tlsCert: "",
+    tlsKey: "",
+  });
+});
+
+test("resolveTemporalRuntimeConfigValues reads self-hosted mTLS config from Vault fields", () => {
+  const resolved = resolveTemporalRuntimeConfigValues(baseConfig, {}, () => ({
+    address: "temporal-grpc.anmho.com:7233",
+    namespace: "default",
+    tlsCaCert: "ca-pem",
+    tlsCert: "cert-pem",
+    tlsKey: "key-pem",
+  }));
+
+  expect(resolved).toMatchObject({
+    enabled: true,
+    address: "temporal-grpc.anmho.com:7233",
+    namespace: "default",
+    taskQueue: "orders",
+    apiKey: "",
+    apiKeySecretName: "",
+    tlsCaCertSecretName: "orders-temporal-ca-cert",
+    tlsCertSecretName: "orders-temporal-client-cert",
+    tlsKeySecretName: "orders-temporal-client-key",
+    tlsCaCert: "ca-pem",
+    tlsCert: "cert-pem",
+    tlsKey: "key-pem",
   });
 });
 
@@ -52,6 +86,15 @@ test("resolveTemporalRuntimeConfigValues prefers explicit environment overrides"
   expect(resolved.apiKeySecretName).toBe("env-secret-name");
 });
 
+test("resolveTemporalRuntimeConfigValues rejects partial mTLS config", () => {
+  expect(() =>
+    resolveTemporalRuntimeConfigValues({ ...baseConfig, address: "temporal-grpc.anmho.com:7233" }, {}, () => ({
+      namespace: "default",
+      tlsCaCert: "ca-pem",
+    }))
+  ).toThrow("Temporal mTLS is partially configured");
+});
+
 test("resolveTemporalRuntimeConfigValues fails clearly when enabled Temporal resolves to localhost", () => {
   expect(() => resolveTemporalRuntimeConfigValues(baseConfig, {}, () => ({}))).toThrow(
     "Temporal is enabled for this Cloud Run service, but the resolved Temporal address is local"
@@ -63,4 +106,5 @@ test("resolveTemporalRuntimeConfigValues allows explicit Temporal disable", () =
 
   expect(resolved.enabled).toBeFalse();
   expect(resolved.apiKeySecretName).toBe("");
+  expect(resolved.tlsCaCertSecretName).toBe("");
 });

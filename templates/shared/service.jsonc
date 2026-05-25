@@ -57,7 +57,10 @@
     "address": "localhost:7233",
     "namespace": "default",
     "task_queue": "{{SERVICE_ID}}",
-    "api_key_secret_name": "{{SERVICE_ID}}-temporal-api-key"
+    "api_key_secret_name": "{{SERVICE_ID}}-temporal-api-key",
+    "tls_ca_cert_secret_name": "{{SERVICE_ID}}-temporal-ca-cert",
+    "tls_cert_secret_name": "{{SERVICE_ID}}-temporal-client-cert",
+    "tls_key_secret_name": "{{SERVICE_ID}}-temporal-client-key"
   },
 
   "providers": {
