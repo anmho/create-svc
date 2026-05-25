@@ -589,7 +589,7 @@ function renderTemporalMtlsEnv(temporal: ReturnType<typeof resolveTemporalRuntim
     .join("\n");
 }
 
-function readVaultField(mount: string, path: string, fields: string[]) {
+export function readVaultField(mount: string, path: string, fields: string[]) {
   const vault = Bun.which("vault");
   if (!vault || !path) {
     return "";

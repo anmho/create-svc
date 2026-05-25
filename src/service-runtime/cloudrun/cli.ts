@@ -17,6 +17,7 @@ import {
   formatError,
   gcloud,
   ensureProductionDomainMapping,
+  readVaultField,
   requireCommand,
   requireGcloudAuth,
   resolveDeploymentTarget,
@@ -347,6 +348,7 @@ async function runSdk(args: string[]) {
   const [subcommand] = args;
   if (subcommand === "publish") {
     requireCommand("buf");
+    ensureBufAuth();
     run("buf", ["push"]);
     const published = resolvePublishedSdk();
     await writeSdkMode("remote", published);
@@ -371,6 +373,7 @@ async function runSdk(args: string[]) {
 
   if (subcommand === "use-remote") {
     requireCommand("buf");
+    ensureBufAuth();
     const published = resolvePublishedSdk();
     await writeSdkMode("remote", published);
     return `Remote Buf SDK recorded for consumers: ${bufModule()}@${published.commit}`;
@@ -447,7 +450,17 @@ async function writeSdkMode(mode: "local" | "remote", published?: PublishedSdk) 
 }
 
 function bufModule() {
-  return `buf.build/anmho/${config.serviceName}`;
+  return config.buf.module || `buf.build/anmho/${config.serviceName}`;
+}
+
+function ensureBufAuth() {
+  const token =
+    process.env.BUF_TOKEN?.trim() ||
+    readVaultField(config.buf.vaultMount, config.buf.vaultPath, ["BUF_TOKEN", "buf.api_token", "buf_token", "api_token", "token"]);
+  if (!token) {
+    return;
+  }
+  run("buf", ["registry", "login", "buf.build", "--token-stdin"], { input: `${token}\n` });
 }
 
 async function resolveLocalSdkPath() {

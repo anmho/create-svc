@@ -37,6 +37,7 @@ test("service sdk publish pushes the named Buf module and selects remote SDK mod
   const generatedRoot = join(root, "sdk-proof");
   const fakeBin = join(root, "bin");
   const bufLog = join(root, "buf.log");
+  const tokenLog = join(root, "buf-token.log");
 
   await scaffoldProject(baseConfig(generatedRoot));
   await mkdir(join(generatedRoot, "node_modules"));
@@ -46,10 +47,19 @@ test("service sdk publish pushes the named Buf module and selects remote SDK mod
     [
       "#!/bin/sh",
       `echo "$@" >> "${bufLog}"`,
+      'if [ "$1 $2 $3 $4" = "registry login buf.build --token-stdin" ]; then',
+      `  cat > "${tokenLog}"`,
+      "  exit 0",
+      "fi",
       'if [ "$1 $2 $3 $4" = "registry module commit list" ]; then',
       '  printf \'{"commits":[{"name":"buf.build/anmho/sdk-proof:commit-123","digest":"b5:abc123","create_time":"2026-05-25T12:00:00Z"}]}\'',
+      "  exit 0",
       "fi",
-      "exit 0",
+      'if [ "$1" = "push" ]; then',
+      "  exit 0",
+      "fi",
+      "echo unexpected buf command: $@ >&2",
+      "exit 1",
       "",
     ].join("\n")
   );
@@ -57,16 +67,19 @@ test("service sdk publish pushes the named Buf module and selects remote SDK mod
 
   const result = Bun.spawnSync(["bun", join(import.meta.dir, "..", "..", "..", "index.ts"), "sdk", "publish"], {
     cwd: generatedRoot,
-    env: { ...process.env, PATH: `${fakeBin}:${process.env.PATH ?? ""}` },
+    env: { ...process.env, BUF_TOKEN: "test-token", PATH: `${fakeBin}:${process.env.PATH ?? ""}` },
     stdout: "pipe",
     stderr: "pipe",
   });
 
   expect(result.success, [result.stdout.toString(), result.stderr.toString()].join("\n")).toBeTrue();
   expect(result.stdout.toString()).toContain("recorded for consumers");
+  expect(result.stdout.toString()).not.toContain("test-token");
+  expect(result.stderr.toString()).not.toContain("test-token");
   expect((await readFile(bufLog, "utf8")).trim()).toBe(
-    ["push", "registry module commit list buf.build/anmho/sdk-proof --format json --page-size 1"].join("\n")
+    ["registry login buf.build --token-stdin", "push", "registry module commit list buf.build/anmho/sdk-proof --format json --page-size 1"].join("\n")
   );
+  expect((await readFile(tokenLog, "utf8")).trim()).toBe("test-token");
   const sdkState = JSON.parse(await Bun.file(join(generatedRoot, ".service", "sdk.json")).text());
   expect(sdkState).toMatchObject({
     mode: "remote",

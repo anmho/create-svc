@@ -46,6 +46,11 @@ export const config = {
     vaultMount: vault.mount || "secret",
     vaultPath: vault.temporal_path || "prod/providers/temporal",
   },
+  buf: {
+    module: serviceConfig.buf?.module || `buf.build/anmho/${serviceConfig.service_id}`,
+    vaultMount: vault.mount || "secret",
+    vaultPath: vault.buf_path || "prod/providers/buf",
+  },
   neon: {
     projectId: neon.project_id,
     baseBranchId: neon.base_branch_id,
