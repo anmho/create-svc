@@ -154,7 +154,7 @@ Generated repositories include GitHub Actions workflows for CI and production de
 {{COMMAND_PROTECT_MAIN}}
 ```
 
-The protection requires the generated `test` and `deploy` status checks, pull requests, stale-review dismissal, conversation resolution, and admin enforcement. If GitHub permissions are missing, rerun the command with a token that has repo admin access or fine-grained `Administration: write`.
+The protection requires the generated pull request `test` status check, pull requests, stale-review dismissal, conversation resolution, and admin enforcement. If GitHub permissions are missing, rerun the command with a token that has repo admin access or fine-grained `Administration: write`.
 
 Go variants use Atlas for migrations:
 

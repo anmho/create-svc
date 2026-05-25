@@ -7,10 +7,10 @@ import {
 } from "../src/github-protection";
 
 test("builds the GitHub branch protection request for generated services", () => {
-  expect(buildBranchProtectionRequest(["test", "deploy"])).toEqual({
+  expect(buildBranchProtectionRequest()).toEqual({
     required_status_checks: {
       strict: true,
-      contexts: ["test", "deploy"],
+      contexts: ["test"],
     },
     enforce_admins: true,
     required_pull_request_reviews: {
@@ -41,7 +41,7 @@ test("sends the expected GitHub API request to reconcile main protection", async
     {
       command: "gh",
       args: ["api", "--method", "PUT", "/repos/anmho/dns-api/branches/main/protection", "--input", "-"],
-      input: `${JSON.stringify(buildBranchProtectionRequest(["test", "deploy"]))}\n`,
+      input: `${JSON.stringify(buildBranchProtectionRequest())}\n`,
     },
   ]);
 });
