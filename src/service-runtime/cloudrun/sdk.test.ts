@@ -3,6 +3,7 @@ import { chmod, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { scaffoldProject, type ScaffoldConfig } from "../../scaffold";
+import { formatSdkModeDetail } from "./sdk-state";
 
 function baseConfig(directory: string): ScaffoldConfig {
   return {
@@ -81,41 +82,20 @@ test("service sdk publish pushes the named Buf module and selects remote SDK mod
   expect(bufConfig).toContain("name: buf.build/anmho/sdk-proof");
 });
 
-test("service doctor reports the recorded remote SDK commit even when cloud checks fail", async () => {
-  const root = await mkdtemp(join(tmpdir(), "create-svc-sdk-"));
-  const generatedRoot = join(root, "sdk-proof");
-
-  await scaffoldProject(baseConfig(generatedRoot));
-  await mkdir(join(generatedRoot, "node_modules"));
-  await mkdir(join(generatedRoot, ".service"));
-  await Bun.write(
-    join(generatedRoot, ".service", "sdk.json"),
-    `${JSON.stringify(
+test("formatSdkModeDetail reports the recorded remote SDK commit", () => {
+  expect(
+    formatSdkModeDetail(
       {
         mode: "remote",
         module: "buf.build/anmho/sdk-proof",
-        localPath: "./gen/waitlist/v1",
         remote: {
           commit: "commit-123",
           digest: "b5:abc123",
         },
-        updatedAt: "2026-05-25T00:00:00.000Z",
       },
-      null,
-      2
-    )}\n`
-  );
-
-  const result = Bun.spawnSync(["bun", join(import.meta.dir, "..", "..", "..", "index.ts"), "doctor"], {
-    cwd: generatedRoot,
-    env: { ...process.env },
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-
-  expect([result.stdout.toString(), result.stderr.toString()].join("\n")).toContain(
-    "SDK mode: remote: buf.build/anmho/sdk-proof@commit-123 (b5:abc123)"
-  );
+      "buf.build/anmho/fallback"
+    )
+  ).toBe("remote: buf.build/anmho/sdk-proof@commit-123 (b5:abc123)");
 });
 
 test("service sdk use-remote records the current Buf commit", async () => {

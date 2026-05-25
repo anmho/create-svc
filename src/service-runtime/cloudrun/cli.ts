@@ -8,6 +8,7 @@ import { cleanup } from "./cleanup";
 import { deploy } from "./deploy";
 import { observabilityBootstrap } from "./observability";
 import { config } from "./config";
+import { formatSdkModeDetail, type SdkState } from "./sdk-state";
 import {
   accessSecretVersion,
   assertProductionDomainAvailable,
@@ -295,17 +296,8 @@ async function runDoctor() {
     });
     await record(results, "SDK mode", "warn", async () => {
       const text = await Bun.file(".service/sdk.json").text();
-      const state = JSON.parse(text) as { mode?: string; module?: string; remote?: { commit?: string; digest?: string } };
-      if (state.mode !== "local" && state.mode !== "remote") {
-        throw new Error("SDK mode must be local or remote");
-      }
-      const module = state.module || bufModule();
-      if (state.mode === "remote") {
-        const version = state.remote?.commit ? `@${state.remote.commit}` : "without recorded commit";
-        const digest = state.remote?.digest ? ` (${state.remote.digest})` : "";
-        return `${state.mode}: ${module}${version}${digest}`;
-      }
-      return `${state.mode}: ${module}`;
+      const state = JSON.parse(text) as SdkState;
+      return formatSdkModeDetail(state, bufModule());
     });
   }
 
