@@ -195,6 +195,13 @@ function listeningPids(port: number) {
 }
 
 function processCwd(pid: number) {
+  if (process.platform === "linux") {
+    const procCwd = realpath(`/proc/${pid}/cwd`);
+    if (procCwd !== `/proc/${pid}/cwd`) {
+      return procCwd;
+    }
+  }
+
   const result = Bun.spawnSync(["lsof", "-a", "-p", String(pid), "-d", "cwd", "-Fn"], {
     stdout: "pipe",
     stderr: "pipe",
