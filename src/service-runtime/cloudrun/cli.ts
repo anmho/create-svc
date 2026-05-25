@@ -42,7 +42,6 @@ export async function main(argv = Bun.argv.slice(2)) {
       await runStep("Provisioning auth client", () => ensureAuthClient());
       const bootstrapResult = await bootstrap({ skipProjectSetup: true });
       const databaseUrl = bootstrapResult.databaseUrl;
-      await runStep("Applying production migrations", () => runLanguageTask("migrate", { DATABASE_URL: databaseUrl }));
       const origin = await deploy(["--ci"], { bootstrapResult });
       await runOptionalBunScript("seed", { DATABASE_URL: databaseUrl });
       return `Created ${origin}`;
@@ -51,6 +50,10 @@ export async function main(argv = Bun.argv.slice(2)) {
   }
 
   if (command === "deploy") {
+    if (hasHelpFlag(rest)) {
+      console.log(formatHelp());
+      return;
+    }
     await runMain("Deploy", () => deploy(rest));
     return;
   }
@@ -116,6 +119,10 @@ export async function main(argv = Bun.argv.slice(2)) {
   }
 
   throw new Error(`Unknown command: ${command}\n\n${formatHelp()}`);
+}
+
+function hasHelpFlag(args: string[]) {
+  return args.includes("--help") || args.includes("-h") || args.includes("help");
 }
 
 function formatHelp() {

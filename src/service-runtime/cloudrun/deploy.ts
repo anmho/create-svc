@@ -17,12 +17,14 @@ import {
   requireCommand,
   resolveTemporalRuntimeConfig,
   resolveDeploymentTarget,
+  run,
   runMain,
   runStep,
   serviceOrigin,
   writeRenderedManifest,
   writeRenderedWorkerManifest,
 } from "./lib";
+import { migrationCommandForRuntime } from "./deploy-args";
 
 type DeployOptions = {
   bootstrapResult?: BootstrapResult;
@@ -40,6 +42,7 @@ export async function deploy(args = Bun.argv.slice(2), deployOptions: DeployOpti
       ? bootstrapResult.target
       : resolveDeploymentTarget(options.environment, options.name);
   const neon = bootstrapResult?.neon ?? (await runStep("Resolving Neon defaults", () => resolveNeonConfig()));
+  let databaseUrl = bootstrapResult?.databaseUrl;
 
   if (options.destroy) {
     if (options.environment === "main") {
@@ -73,10 +76,17 @@ export async function deploy(args = Bun.argv.slice(2), deployOptions: DeployOpti
     await runStep("Publishing environment database secret", async () => {
       await ensureDatabase(neon.projectId, branchId, neon.databaseName);
       const connectionUri = await getConnectionUri(neon.projectId, branchId, neon.databaseName, neon.roleName);
+      databaseUrl = connectionUri;
       addSecretVersion(target.databaseSecretName, connectionUri);
       ensureSecretAccessor(target.databaseSecretName, `serviceAccount:${config.runtimeServiceAccount}`);
     });
   }
+  if (!databaseUrl) {
+    throw new Error(`Could not resolve database URL for ${target.serviceName}`);
+  }
+  const resolvedDatabaseUrl = databaseUrl;
+  await runStep("Applying database migrations", () => runMigration(resolvedDatabaseUrl));
+
   const image = imageUrl();
   if (options.build === "cloudbuild") {
     await runStep("Building container image in Cloud Build", () =>
@@ -126,6 +136,12 @@ export async function deploy(args = Bun.argv.slice(2), deployOptions: DeployOpti
   }
 
   return serviceOrigin(target);
+}
+
+function runMigration(databaseUrl: string) {
+  const task = migrationCommandForRuntime(config.runtime);
+  run(task.command, task.args, { env: { DATABASE_URL: databaseUrl } });
+  return "migrate finished";
 }
 
 if (import.meta.main) {

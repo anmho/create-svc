@@ -85,6 +85,12 @@ function isGeneratedServiceRoot(path: string) {
 }
 
 async function delegateToGeneratedService(serviceRoot: string, argv: string[]) {
+  const commandHelp = generatedServiceCommandHelp(argv);
+  if (commandHelp) {
+    console.log(commandHelp);
+    return;
+  }
+
   ensureGeneratedDependencies(serviceRoot);
   process.chdir(serviceRoot);
   process.env.CREATE_SVC_SERVICE_ROOT = serviceRoot;
@@ -122,4 +128,28 @@ function ensureGeneratedDependencies(serviceRoot: string) {
     console.error(["Failed to install generated service dependencies with bun install --silent", output].filter(Boolean).join("\n"));
     process.exit(result.exitCode || 1);
   }
+}
+
+export function generatedServiceCommandHelp(argv: string[]) {
+  const [command, ...rest] = argv;
+  if (command !== "deploy" || !hasHelpFlag(rest)) {
+    return undefined;
+  }
+
+  return [
+    "Usage:",
+    "  service deploy [--ci] [--environment main|preview|personal] [--name <name>]",
+    "",
+    "Options:",
+    "  --ci                         Run without interactive prompts",
+    "  --environment <environment>  Deploy main, preview, or personal",
+    "  --name <name>                Name preview or personal environment",
+    "  --build <local|cloudbuild>   Select image build strategy",
+    "  --cloud-build                Use Cloud Build",
+    "  --destroy                    Destroy a non-main deployment environment",
+  ].join("\n");
+}
+
+function hasHelpFlag(args: string[]) {
+  return args.includes("--help") || args.includes("-h") || args.includes("help");
 }

@@ -55,6 +55,10 @@ export async function main(argv = Bun.argv.slice(2)) {
   }
 
   if (command === "deploy") {
+    if (hasHelpFlag(rest)) {
+      console.log(formatHelp());
+      return;
+    }
     return runMain("Deploy", () => {
       ensureTriggerDevConfig();
       deployTriggerDevTasks();
@@ -158,6 +162,10 @@ export async function main(argv = Bun.argv.slice(2)) {
   }
 
   throw new Error(`Unknown command: ${command}\n\n${formatHelp()}`);
+}
+
+function hasHelpFlag(args: string[]) {
+  return args.includes("--help") || args.includes("-h") || args.includes("help");
 }
 
 function formatHelp() {
