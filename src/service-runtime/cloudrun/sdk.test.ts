@@ -3,7 +3,7 @@ import { chmod, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { scaffoldProject, type ScaffoldConfig } from "../../scaffold";
-import { formatSdkModeDetail } from "./sdk-state";
+import { formatSdkModeDetail } from "../connect-sdk-state";
 
 function baseConfig(directory: string): ScaffoldConfig {
   return {
