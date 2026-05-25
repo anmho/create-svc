@@ -56,6 +56,21 @@ test("plans the public commands for the bun hono tracer bullet", () => {
     includes: ['"observability-bootstrap": "service observability-bootstrap"'],
   });
   expect(plan[0]?.generatedChecks).toContainEqual({
+    name: "branch protection package script",
+    file: "package.json",
+    includes: ['"protect-main": "service protect-main"'],
+  });
+  expect(plan[0]?.generatedChecks).toContainEqual({
+    name: "branch protection README contract",
+    file: "README.md",
+    includes: [
+      "service protect-main",
+      "GitHub main branch protection",
+      "service create",
+      "Administration: write",
+    ],
+  });
+  expect(plan[0]?.generatedChecks).toContainEqual({
     name: "observability README contract",
     file: "README.md",
     includes: [
@@ -171,6 +186,11 @@ test("plans a typed gRPC client smoke for the go connectrpc variant", () => {
     file: "Makefile",
     includes: ["observability-bootstrap", "$(SERVICE) observability-bootstrap"],
   });
+  expect(plan[0]?.generatedChecks).toContainEqual({
+    name: "branch protection make target",
+    file: "Makefile",
+    includes: ["protect-main:", "$(SERVICE) protect-main"],
+  });
 });
 
 test("plans the workers preset with wrangler package checks", () => {
@@ -191,6 +211,11 @@ test("plans the workers preset with wrangler package checks", () => {
     { name: "run lint", command: ["bun", "run", "lint"] },
   ]);
   expect(plan[0]?.smokeChecks).toEqual([]);
+  expect(plan[0]?.generatedChecks).toContainEqual({
+    name: "branch protection package script",
+    file: "package.json",
+    includes: ['"protect-main": "service protect-main"'],
+  });
 });
 
 test("parses keep mode and rejects unknown variants", () => {
