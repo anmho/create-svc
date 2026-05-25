@@ -2,7 +2,13 @@ import { expect, test } from "bun:test";
 import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { findGeneratedServiceRoot, formatOutsideServiceCommandError, generatedDependenciesInstalled, normalizeScaffoldArgs } from "./service";
+import {
+  findGeneratedServiceRoot,
+  formatOutsideServiceCommandError,
+  generatedDependenciesInstalled,
+  generatedServiceCommandHelp,
+  normalizeScaffoldArgs,
+} from "./service";
 
 test("normalizeScaffoldArgs treats explicit scaffold commands as generator commands", () => {
   expect(normalizeScaffoldArgs(["create", "launch-api", "--yes"])).toEqual(["launch-api", "--yes"]);
@@ -46,4 +52,11 @@ test("generatedDependenciesInstalled requires node_modules when package.json exi
 
   await mkdir(join(root, "node_modules"));
   expect(generatedDependenciesInstalled(root)).toBeTrue();
+});
+
+test("generatedServiceCommandHelp intercepts deploy help before side effects", () => {
+  expect(generatedServiceCommandHelp(["deploy", "--help"])).toContain("service deploy");
+  expect(generatedServiceCommandHelp(["deploy", "-h"])).toContain("--environment");
+  expect(generatedServiceCommandHelp(["deploy"])).toBeUndefined();
+  expect(generatedServiceCommandHelp(["destroy", "--help"])).toBeUndefined();
 });

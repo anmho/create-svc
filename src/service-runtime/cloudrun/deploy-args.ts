@@ -6,6 +6,11 @@ export type DeployArgs = {
   name?: string;
 };
 
+export type RuntimeMigrationCommand = {
+  command: string;
+  args: string[];
+};
+
 export const CLOUD_RUN_LOCAL_BUILD_PLATFORM = "linux/amd64";
 
 export function localDockerBuildArgs(image: string) {
@@ -92,4 +97,16 @@ function parseBuildStrategy(value: string | undefined): DeployArgs["build"] {
     return "cloudbuild";
   }
   throw new Error(`Unknown build strategy: ${value}`);
+}
+
+export function migrationCommandForRuntime(runtime: string): RuntimeMigrationCommand {
+  if (runtime === "bun") {
+    return { command: "bun", args: ["run", "./scripts/migrate.ts"] };
+  }
+
+  if (runtime === "go") {
+    return { command: "atlas", args: ["migrate", "apply", "--env", "local"] };
+  }
+
+  throw new Error(`migrate is not available for ${runtime}`);
 }

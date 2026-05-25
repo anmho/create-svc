@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { localDockerBuildArgs, parseDeployArgs } from "./deploy-args";
+import { localDockerBuildArgs, migrationCommandForRuntime, parseDeployArgs } from "./deploy-args";
 
 const originalBuild = process.env.SERVICE_BUILD;
 const originalBuildStrategy = process.env.SERVICE_BUILD_STRATEGY;
@@ -37,4 +37,15 @@ test("local Docker builds target Cloud Run's runtime platform", () => {
     "us-west1-docker.pkg.dev/example/services/api:latest",
     ".",
   ]);
+});
+
+test("migrationCommandForRuntime uses generated migration tooling", () => {
+  expect(migrationCommandForRuntime("bun")).toEqual({
+    command: "bun",
+    args: ["run", "./scripts/migrate.ts"],
+  });
+  expect(migrationCommandForRuntime("go")).toEqual({
+    command: "atlas",
+    args: ["migrate", "apply", "--env", "local"],
+  });
 });
