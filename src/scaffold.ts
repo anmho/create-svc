@@ -247,7 +247,6 @@ function buildReplacements(config: ScaffoldConfig) {
     COMMAND_DEV_DOWN: "service dev down",
     COMMAND_BOOTSTRAP: "service create",
     COMMAND_DEPLOY: "service deploy",
-    COMMAND_PROTECT_MAIN: "service protect-main",
     COMMAND_OBSERVABILITY_BOOTSTRAP:
       config.runtime === "bun" ? "bun run observability-bootstrap" : "make observability-bootstrap",
     WORKFLOW_DEPLOY_MAIN_COMMAND: "service deploy --ci",

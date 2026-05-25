@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { cloudRunServiceNamesForDestroy, localDockerBuildArgs, migrationCommandForRuntime, parseDeployArgs } from "./deploy-args";
+import { localDockerBuildArgs, migrationCommandForRuntime, parseDeployArgs } from "./deploy-args";
 
 const originalBuild = process.env.SERVICE_BUILD;
 const originalBuildStrategy = process.env.SERVICE_BUILD_STRATEGY;
@@ -48,8 +48,4 @@ test("migrationCommandForRuntime uses generated migration tooling", () => {
     command: "atlas",
     args: ["migrate", "apply", "--env", "local"],
   });
-});
-
-test("cloudRunServiceNamesForDestroy includes api and worker services", () => {
-  expect(cloudRunServiceNamesForDestroy("omnichannel-pr-6")).toEqual(["omnichannel-pr-6", "omnichannel-pr-6-worker"]);
 });
