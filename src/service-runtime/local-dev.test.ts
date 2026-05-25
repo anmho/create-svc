@@ -56,6 +56,7 @@ describe("local dev cleanup", () => {
 
     try {
       await waitForServer(port);
+      await waitForServiceOwnedListener(root, port, child.pid);
 
       const result = await stopLocalDev({ root, dockerCompose: false, ports: [port] });
 
@@ -113,6 +114,18 @@ async function waitForListenerStop(port: number, pid: number) {
     await Bun.sleep(50);
   }
   throw new Error(`process ${pid} on port ${port} did not stop listening`);
+}
+
+async function waitForServiceOwnedListener(root: string, port: number, pid: number) {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    const plan = await buildLocalDevCleanupPlan({ root, dockerCompose: false, ports: [port] });
+    if (plan.portProcesses.some((process) => process.pid === pid && process.port === port)) {
+      return;
+    }
+    await Bun.sleep(50);
+  }
+  throw new Error(`process ${pid} on port ${port} was not detected as service-owned`);
 }
 
 async function isReachable(port: number) {
