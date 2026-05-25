@@ -88,6 +88,11 @@ with real connection settings before the worker can run:
 - `TEMPORAL_NAMESPACE`
 - any TLS certificate/key or API-key settings used by your worker code
 
+Cloud Run worker min instances are controlled by
+`cloudrun.worker_min_instances` in `service.jsonc`. The generated default is
+`0`; set it to `1` for production services that must keep a Temporal poller
+warm for scheduled workflows.
+
 If a service does not need Temporal, opt out with:
 
 ```bash
