@@ -79,19 +79,18 @@ export async function prepareGcpProject() {
 
 function publishTemporalSecrets() {
   const temporal = resolveTemporalRuntimeConfig();
-  const apiKey = process.env.TEMPORAL_API_KEY?.trim();
-  if (!apiKey || !temporal.apiKeySecretName) {
+  if (!temporal.apiKey || !temporal.apiKeySecretName) {
     return "No Temporal API key configured";
   }
 
-  addSecretVersion(temporal.apiKeySecretName, apiKey);
+  addSecretVersion(temporal.apiKeySecretName, temporal.apiKey);
   ensureSecretAccessor(temporal.apiKeySecretName, `serviceAccount:${config.runtimeServiceAccount}`);
   return temporal.apiKeySecretName;
 }
 
 function shouldPublishTemporalSecrets() {
   const temporal = resolveTemporalRuntimeConfig();
-  return Boolean(process.env.TEMPORAL_API_KEY?.trim() && temporal.apiKeySecretName);
+  return Boolean(temporal.enabled && temporal.apiKey && temporal.apiKeySecretName);
 }
 
 if (import.meta.main) {
