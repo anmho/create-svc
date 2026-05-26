@@ -27,7 +27,12 @@ const api = Bun.spawn(apiCommand, {
   env,
 });
 
-const worker = workerCommand
+const shouldStartWorker = Boolean(workerCommand && temporalEnabled(env));
+if (workerCommand && !shouldStartWorker) {
+  console.warn("Temporal worker skipped because TEMPORAL_ENABLED is false.");
+}
+
+const worker = workerCommand && shouldStartWorker
   ? Bun.spawn(workerCommand, {
       stdin: "ignore",
       stdout: "inherit",
