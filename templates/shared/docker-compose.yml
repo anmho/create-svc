@@ -15,5 +15,21 @@ services:
       timeout: 5s
       retries: 10
 
+  temporal:
+    image: temporalio/auto-setup:1.28.1
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: {{LOCAL_DATABASE_USER}}
+      POSTGRES_PWD: {{LOCAL_DATABASE_PASSWORD}}
+      POSTGRES_SEEDS: postgres
+      DBNAME: temporal
+      VISIBILITY_DBNAME: temporal_visibility
+    ports:
+      - "127.0.0.1:7233:7233"
+
 volumes:
   postgres-data:

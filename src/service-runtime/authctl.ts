@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { authctlSpawnArgs, type AuthctlCommand } from "./authctl-command";
 import { serviceConfig } from "./runtime";
 
 type CommandResult = {
@@ -9,6 +10,7 @@ type CommandResult = {
 };
 
 const decoder = new TextDecoder();
+const localAuthctlPath = "./node_modules/.bin/authctl";
 
 export type AuthDoctorResult = {
   hasAuthctl: boolean;
@@ -418,12 +420,12 @@ function resolveResourceServerCommand(): ResourceServerCommand | undefined {
 }
 
 function authctl(args: string[], options: { allowFailure?: boolean; quiet?: boolean } = {}): CommandResult {
-  const command = authctlPath();
+  const command = authctlCommand();
   if (!command) {
     throw new Error("authctl is not installed; run bun install in this generated service or link @anmho/authctl");
   }
 
-  const result = Bun.spawnSync([command, ...args], {
+  const result = Bun.spawnSync(authctlSpawnArgs(command, args), {
     cwd: process.cwd(),
     env: authctlEnvironment(),
     stdin: "inherit",
@@ -464,8 +466,24 @@ function formatAuthctlFailure(args: string[], output: CommandResult) {
   return `authctl ${args.join(" ")} failed with exit code ${output.exitCode}\n${detail}`;
 }
 
+function authctlCommand(): AuthctlCommand | undefined {
+  if (existsSync(localAuthctlPath)) {
+    return {
+      path: localAuthctlPath,
+      runWithBun: true,
+    };
+  }
+  const global = Bun.which("authctl");
+  return global
+    ? {
+        path: global,
+        runWithBun: false,
+      }
+    : undefined;
+}
+
 function authctlPath() {
-  return existsSync("./node_modules/.bin/authctl") ? "./node_modules/.bin/authctl" : Bun.which("authctl");
+  return authctlCommand()?.path;
 }
 
 function authctlEnvironment() {

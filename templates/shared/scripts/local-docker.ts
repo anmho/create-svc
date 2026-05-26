@@ -1,6 +1,6 @@
 export async function ensureLocalPostgres() {
   await ensureDockerRunning();
-  await run(["docker", "compose", "up", "-d"], { label: "start local postgres" });
+  await run(["docker", "compose", "up", "-d"], { label: "start local services" });
 }
 
 async function ensureDockerRunning() {

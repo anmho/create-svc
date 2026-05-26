@@ -43,7 +43,7 @@ console to create and deploy.
 
 ## Local development
 
-The scaffold writes a ready-to-use `.env.local` and includes a local Postgres service in `docker-compose.yml`.
+The scaffold writes a ready-to-use `.env.local` and includes local Postgres and Temporal services in `docker-compose.yml`.
 
 First local run:
 
@@ -55,8 +55,8 @@ First local run:
 Local runtime uses:
 
 - `DATABASE_URL` from `.env.local`, pointed at Docker Compose Postgres
-- `{{COMMAND_MIGRATE}}` and `{{COMMAND_DEV}}`, which open Docker Desktop if needed, wait for Docker readiness, and start Docker Compose Postgres
-- `TEMPORAL_ENABLED=true` by default with `localhost:7233` and `default`; set `TEMPORAL_ENABLED=false` when you are not running a local Temporal server
+- `{{COMMAND_MIGRATE}}` and `{{COMMAND_DEV}}`, which open Docker Desktop if needed, wait for Docker readiness, and start Docker Compose Postgres and Temporal
+- `TEMPORAL_ENABLED=true` by default with `localhost:7233` and `default`; `{{COMMAND_DEV}}` waits for the local Temporal container before starting the API and worker
 
 No cloud credentials are required for local HTTP development after Docker and Postgres are running.
 
@@ -78,7 +78,7 @@ creates a trigger, the API service starts `waitlistFollowUpWorkflow` /
 `WaitlistFollowUpWorkflow` asynchronously on the service task queue. The API
 request only waits for the trigger record; workflow completion happens through
 Temporal and is polled by the worker service.
-Local `{{COMMAND_DEV}}` starts the API process and the worker process together.
+Local `{{COMMAND_DEV}}` starts the API process and the worker process together after Docker Compose starts the local Temporal server.
 
 Production and preview deploys render `TEMPORAL_ENABLED=true` into the Cloud Run
 manifest unless you override it. For Temporal Cloud, replace the local defaults

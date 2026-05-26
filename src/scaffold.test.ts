@@ -113,6 +113,8 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
 
     const dockerCompose = await Bun.file(join(generatedRoot, "docker-compose.yml")).text();
     expect(dockerCompose).toContain('image: postgres:16-alpine');
+    expect(dockerCompose).toContain("image: temporalio/auto-setup:");
+    expect(dockerCompose).toContain("127.0.0.1:7233:7233");
     expect(dockerCompose).toContain(`127.0.0.1:${localPort}:5432`);
 
     const envExample = await Bun.file(join(generatedRoot, ".env.example")).text();
@@ -337,7 +339,7 @@ test("scaffolds a backend package cleanly into a nested monorepo-style directory
   expect(readme).toContain("`microservice` profile");
   expect(readme).toContain("api.dns-api.anmho.com");
   expect(readme).toContain("open Docker Desktop if needed");
-  expect(readme).toContain("local Postgres service in `docker-compose.yml`");
+  expect(readme).toContain("local Postgres and Temporal services in `docker-compose.yml`");
   expect(readme).toContain("gcloud auth login");
   expect(readme).toContain("known-good CLIs");
   expect(readme).toContain("service create");
