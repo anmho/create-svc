@@ -159,6 +159,7 @@ function buildReplacements(config: ScaffoldConfig) {
     LOCAL_ATTACHMENT_BUCKET: localAttachmentBucket,
     LOCAL_ATTACHMENT_PUBLIC_BASE_URL: localAttachmentPublicBaseUrl,
     COMMAND_DEV: config.runtime === "bun" ? "bun run dev" : "make dev",
+    COMMAND_DEV_DOWN: config.runtime === "bun" ? "bun run dev:down" : "make dev-down",
     COMMAND_MIGRATE: config.runtime === "bun" ? "bun run migrate" : "make migrate",
     COMMAND_GEN: config.runtime === "bun" ? "bun run gen" : "make gen",
     COMMAND_LINT: config.runtime === "bun" ? "bun run lint" : "make lint",

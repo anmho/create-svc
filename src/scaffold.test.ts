@@ -1,9 +1,13 @@
 import { expect, test } from "bun:test";
 import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { createServer, connect } from "node:net";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { deriveLocalPostgresPort } from "./naming";
 import { DirectoryConflictError, assertTargetDirectoryIsEmpty, scaffoldProject, type ScaffoldConfig } from "./scaffold";
+
+const decoder = new TextDecoder();
+const testWithLsof = Bun.which("lsof") ? test : test.skip;
 
 function baseConfig(overrides: Partial<ScaffoldConfig> = {}): ScaffoldConfig {
   return {
@@ -104,6 +108,17 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
 
     expect(await Bun.file(join(generatedRoot, ".github", "workflows", "personal.yml")).exists()).toBeFalse();
 
+    const serviceScript = await Bun.file(join(generatedRoot, "scripts", "service.ts")).text();
+    expect(serviceScript).toContain("Usage: service dev down");
+    expect(serviceScript).toContain("lsof -nP -iTCP:${port} -sTCP:LISTEN");
+
+    const packageJson = await Bun.file(join(generatedRoot, "package.json")).text();
+    expect(packageJson).toContain('"service": "./scripts/service.ts"');
+
+    const makefile = await Bun.file(join(generatedRoot, "Makefile")).text();
+    expect(makefile).toContain("dev-down:");
+    expect(makefile).toContain("bun run ./scripts/service.ts dev down");
+
     if (variant.runtime === "go") {
       const goMod = await Bun.file(join(generatedRoot, "go.mod")).text();
       expect(goMod).toContain("connectrpc.com/connect");
@@ -114,15 +129,14 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
       expect(mainGo).toContain("NewChatService");
       expect(mainGo).toContain("example.com/dns-api");
     } else {
-      const packageJson = await Bun.file(join(generatedRoot, "package.json")).text();
       expect(packageJson).toContain('"svc-cloudrun": "./scripts/cloudrun/cli.ts"');
       expect(packageJson).toContain('"dev": "bun run ./src/index.ts"');
+      expect(packageJson).toContain('"dev:down": "bun run ./scripts/service.ts dev down"');
       expect(packageJson).toContain('"gen": "bun run ./scripts/codegen.ts"');
       expect(packageJson).toContain('"bootstrap": "bun run ./scripts/cloudrun/cli.ts bootstrap"');
       expect(packageJson).toContain('"deploy": "bun run ./scripts/cloudrun/cli.ts deploy"');
       expect(packageJson).toContain('"cleanup": "bun run ./scripts/cloudrun/cli.ts cleanup"');
 
-      const makefile = await Bun.file(join(generatedRoot, "Makefile")).text();
       expect(makefile).toContain("npx --no-install svc-cloudrun");
 
       const entrypoint = await Bun.file(join(generatedRoot, "src", "index.ts")).text();
@@ -185,6 +199,70 @@ test("scaffolds a backend package cleanly into a nested monorepo-style directory
   expect(await Bun.file(join(generatedRoot, ".github", "workflows", "ci.yml")).exists()).toBeFalse();
 }, 15000);
 
+testWithLsof("generated dev down stops a pid-file process", async () => {
+  const root = await mkdtemp(join(tmpdir(), "create-svc-dev-down-pid-"));
+  const generatedRoot = join(root, "svc");
+  const port = await findOpenPort();
+  await scaffoldProject(baseConfig({ directory: generatedRoot }));
+  const proc = startPortServer(generatedRoot, port);
+
+  try {
+    await mkdir(join(generatedRoot, ".service"), { recursive: true });
+    await writeFile(join(generatedRoot, ".service", "local-dev.pid"), String(proc.pid));
+    await waitForPort(port, true);
+
+    const result = runGeneratedDevDown(generatedRoot, port);
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toContain("Stopped pid file process");
+    await waitForPort(port, false);
+  } finally {
+    await terminateProcess(proc);
+  }
+}, 15000);
+
+testWithLsof("generated dev down detects and stops a service-root listener without a pid file", async () => {
+  const root = await mkdtemp(join(tmpdir(), "create-svc-dev-down-missing-pid-"));
+  const generatedRoot = join(root, "svc");
+  const port = await findOpenPort();
+  await scaffoldProject(baseConfig({ directory: generatedRoot }));
+  const proc = startPortServer(generatedRoot, port);
+
+  try {
+    await waitForPort(port, true);
+
+    const result = runGeneratedDevDown(generatedRoot, port);
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toContain("No local dev pid file found");
+    expect(result.output).toContain(`Stopped port ${port} process`);
+    await waitForPort(port, false);
+  } finally {
+    await terminateProcess(proc);
+  }
+}, 15000);
+
+testWithLsof("generated dev down fails when an unrelated process still listens on the configured port", async () => {
+  const root = await mkdtemp(join(tmpdir(), "create-svc-dev-down-unrelated-"));
+  const generatedRoot = join(root, "svc");
+  const unrelatedRoot = join(root, "other");
+  const port = await findOpenPort();
+  await scaffoldProject(baseConfig({ directory: generatedRoot }));
+  await mkdir(unrelatedRoot, { recursive: true });
+  const proc = startPortServer(unrelatedRoot, port);
+
+  try {
+    await waitForPort(port, true);
+
+    const result = runGeneratedDevDown(generatedRoot, port);
+    expect(result.exitCode).not.toBe(0);
+    expect(result.output).toContain(`Port ${port} is still listening after dev down`);
+    expect(result.output).toContain(`lsof -nP -iTCP:${port} -sTCP:LISTEN`);
+    expect(result.output).toContain("Stop manually with: kill");
+    await waitForPort(port, true);
+  } finally {
+    await terminateProcess(proc);
+  }
+}, 15000);
+
 test("microservice profile does not generate a website package", async () => {
   const root = await mkdtemp(join(tmpdir(), "create-svc-microservice-profile-"));
   const generatedRoot = join(root, "service");
@@ -202,3 +280,77 @@ test("detects conflicting files before scaffold generation", async () => {
 
   await expect(assertTargetDirectoryIsEmpty(generatedRoot)).rejects.toBeInstanceOf(DirectoryConflictError);
 });
+
+async function findOpenPort() {
+  return new Promise<number>((resolvePort, reject) => {
+    const server = createServer();
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      if (!address || typeof address === "string") {
+        server.close(() => reject(new Error("Unable to allocate TCP port")));
+        return;
+      }
+      server.close(() => resolvePort(address.port));
+    });
+  });
+}
+
+function startPortServer(cwd: string, port: number) {
+  return Bun.spawn(
+    [
+      "bun",
+      "--eval",
+      "Bun.serve({ hostname: '127.0.0.1', port: Number(process.env.PORT), fetch: () => new Response('ok') }); await new Promise(() => {});",
+    ],
+    {
+      cwd,
+      env: { ...process.env, PORT: String(port) },
+      stdout: "pipe",
+      stderr: "pipe",
+    }
+  );
+}
+
+function runGeneratedDevDown(cwd: string, port: number) {
+  const result = Bun.spawnSync(["bun", "run", "./scripts/service.ts", "dev", "down"], {
+    cwd,
+    env: { ...process.env, PORT: String(port) },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+
+  return {
+    exitCode: result.exitCode,
+    output: [result.stdout ? decoder.decode(result.stdout) : "", result.stderr ? decoder.decode(result.stderr) : ""].join("\n"),
+  };
+}
+
+async function waitForPort(port: number, shouldListen: boolean) {
+  const started = Date.now();
+  while (Date.now() - started < 3_000) {
+    if ((await canConnect(port)) === shouldListen) {
+      return;
+    }
+    await Bun.sleep(100);
+  }
+  throw new Error(`Timed out waiting for port ${port} to ${shouldListen ? "listen" : "stop listening"}`);
+}
+
+async function canConnect(port: number) {
+  return new Promise<boolean>((resolveConnection) => {
+    const socket = connect({ host: "127.0.0.1", port });
+    socket.once("connect", () => {
+      socket.destroy();
+      resolveConnection(true);
+    });
+    socket.once("error", () => resolveConnection(false));
+  });
+}
+
+async function terminateProcess(proc: Bun.Subprocess<"ignore", "pipe", "pipe">) {
+  if (proc.exitCode === null) {
+    proc.kill();
+  }
+  await proc.exited.catch(() => {});
+}
