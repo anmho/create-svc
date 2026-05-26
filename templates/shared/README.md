@@ -29,6 +29,8 @@ console to create and deploy.
 {{COMMAND_GEN}}
 {{COMMAND_LINT}}
 {{COMMAND_TEST}}
+{{COMMAND_TEST_E2E_LOCAL}}
+{{COMMAND_TEST_E2E_PROD}}
 {{COMMAND_BOOTSTRAP}}
 {{COMMAND_DEPLOY}}
 {{COMMAND_PROTECT_MAIN}}
@@ -59,6 +61,21 @@ Local runtime uses:
 - `TEMPORAL_ENABLED=true` by default with `localhost:7233` and `default`; `{{COMMAND_DEV}}` waits for the local Temporal container before starting the API and worker
 
 No cloud credentials are required for local HTTP development after Docker and Postgres are running.
+
+Run the local end-to-end test against the already-running local service:
+
+```bash
+{{COMMAND_TEST_E2E_LOCAL}}
+```
+
+The production end-to-end test exercises health and public webhook idempotency,
+then requires Cloud Logging rows and Cloud Monitoring
+`run.googleapis.com/container/instance_count` rows for the current Cloud Run API
+and worker revisions:
+
+```bash
+{{COMMAND_TEST_E2E_PROD}}
+```
 
 ## Temporal
 
