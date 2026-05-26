@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { formatScaffoldHelp, run as runScaffoldCli } from "./cli";
 import { parseJsonc } from "./jsonc";
@@ -19,6 +19,11 @@ const GENERATED_SERVICE_COMMANDS = new Set([
 ]);
 
 export async function runServiceCommand(argv: string[], cwd = process.cwd()) {
+  if (isVersionCommand(argv)) {
+    console.log(createSvcVersion());
+    return;
+  }
+
   const serviceRoot = findGeneratedServiceRoot(cwd);
   if (serviceRoot) {
     await delegateToGeneratedService(serviceRoot, argv);
@@ -38,6 +43,15 @@ export async function runServiceCommand(argv: string[], cwd = process.cwd()) {
 
   console.error(formatOutsideServiceCommandError(command));
   process.exit(1);
+}
+
+function isVersionCommand(argv: string[]) {
+  return argv.length === 1 && (argv[0] === "--version" || argv[0] === "-v" || argv[0] === "version");
+}
+
+export function createSvcVersion() {
+  const packageJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version?: string };
+  return packageJson.version || "unknown";
 }
 
 export function normalizeScaffoldArgs(argv: string[]) {
@@ -94,6 +108,15 @@ async function delegateToGeneratedService(serviceRoot: string, argv: string[]) {
   ensureGeneratedDependencies(serviceRoot);
   process.chdir(serviceRoot);
   process.env.CREATE_SVC_SERVICE_ROOT = serviceRoot;
+
+  if (argv[0] === "sdk") {
+    const { intro, outro } = await import("@clack/prompts");
+    const { runConnectSdk } = await import("./service-runtime/connect-sdk");
+    intro("SDK");
+    const result = await runConnectSdk(argv.slice(1));
+    outro(result);
+    return;
+  }
 
   const serviceConfig = parseJsonc(await Bun.file(join(serviceRoot, "service.jsonc")).text()) as { target?: string };
   if (serviceConfig.target === "workers") {
