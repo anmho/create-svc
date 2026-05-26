@@ -56,6 +56,25 @@ test("plans the public commands for the bun hono tracer bullet", () => {
     includes: ['"observability-bootstrap": "service observability-bootstrap"'],
   });
   expect(plan[0]?.generatedChecks).toContainEqual({
+    name: "e2e package scripts",
+    file: "package.json",
+    includes: [
+      '"test:e2e": "bun run ./scripts/e2e.ts"',
+      '"test:e2e:local": "bun run ./scripts/e2e.ts --local"',
+      '"test:e2e:prod": "bun run ./scripts/e2e.ts --prod"',
+    ],
+  });
+  expect(plan[0]?.generatedChecks).toContainEqual({
+    name: "e2e test script",
+    file: "scripts/e2e.ts",
+    includes: [
+      "Cloud Monitoring did not return current revision metrics",
+      'run.googleapis.com/container/instance_count',
+      "Cloud Logging did not return rows",
+      "/webhooks/generated-e2e",
+    ],
+  });
+  expect(plan[0]?.generatedChecks).toContainEqual({
     name: "branch protection package script",
     file: "package.json",
     includes: ['"protect-main": "service protect-main"'],
@@ -185,6 +204,11 @@ test("plans a typed gRPC client smoke for the go connectrpc variant", () => {
     name: "observability make target",
     file: "Makefile",
     includes: ["observability-bootstrap", "$(SERVICE) observability-bootstrap"],
+  });
+  expect(plan[0]?.generatedChecks).toContainEqual({
+    name: "e2e make targets",
+    file: "Makefile",
+    includes: ["test-e2e:", "test-e2e-local:", "test-e2e-prod:", "bun run ./scripts/e2e.ts --prod"],
   });
   expect(plan[0]?.generatedChecks).toContainEqual({
     name: "branch protection make target",

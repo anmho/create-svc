@@ -427,6 +427,8 @@ function parseGeneratedProfile(value: string): Profile {
 
 function generatedChecksFor(runtime: Runtime): GeneratedCheck[] {
   const publicCommand = runtime === "bun" ? "bun run observability-bootstrap" : "make observability-bootstrap";
+  const e2eLocalCommand = runtime === "bun" ? "bun run test:e2e:local" : "make test-e2e-local";
+  const e2eProdCommand = runtime === "bun" ? "bun run test:e2e:prod" : "make test-e2e-prod";
   const commandFile =
     runtime === "bun"
       ? {
@@ -442,7 +444,43 @@ function generatedChecksFor(runtime: Runtime): GeneratedCheck[] {
 
   return [
     commandFile,
+    {
+      name: "e2e package scripts",
+      file: "package.json",
+      includes: [
+        '"test:e2e": "bun run ./scripts/e2e.ts"',
+        '"test:e2e:local": "bun run ./scripts/e2e.ts --local"',
+        '"test:e2e:prod": "bun run ./scripts/e2e.ts --prod"',
+      ],
+    },
+    {
+      name: "e2e make targets",
+      file: "Makefile",
+      includes: ["test-e2e:", "test-e2e-local:", "test-e2e-prod:", "bun run ./scripts/e2e.ts --prod"],
+    },
+    {
+      name: "e2e test script",
+      file: "scripts/e2e.ts",
+      includes: [
+        "Cloud Monitoring did not return current revision metrics",
+        'run.googleapis.com/container/instance_count',
+        "Cloud Logging did not return rows",
+        "/webhooks/generated-e2e",
+      ],
+    },
     ...branchProtectionGeneratedChecks(runtime),
+    {
+      name: "e2e README contract",
+      file: "README.md",
+      includes: [
+        e2eLocalCommand,
+        e2eProdCommand,
+        "Run the local end-to-end test against the already-running local service",
+        "requires Cloud Logging rows and Cloud Monitoring",
+        "current Cloud Run API",
+        "worker revisions",
+      ],
+    },
     {
       name: "observability README contract",
       file: "README.md",

@@ -244,6 +244,8 @@ function buildReplacements(config: ScaffoldConfig) {
     COMMAND_GEN: config.runtime === "bun" ? "bun run gen" : "make gen",
     COMMAND_LINT: config.runtime === "bun" ? "bun run lint" : "make lint",
     COMMAND_TEST: config.runtime === "bun" ? "bun run test" : "make test",
+    COMMAND_TEST_E2E_LOCAL: config.runtime === "bun" ? "bun run test:e2e:local" : "make test-e2e-local",
+    COMMAND_TEST_E2E_PROD: config.runtime === "bun" ? "bun run test:e2e:prod" : "make test-e2e-prod",
     COMMAND_DEV_DOWN: "service dev down",
     COMMAND_BOOTSTRAP: "service create",
     COMMAND_DEPLOY: "service deploy",
