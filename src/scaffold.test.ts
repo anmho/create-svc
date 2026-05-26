@@ -284,6 +284,7 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
       expect(makefile).toContain("bun run dev");
       const devScript = await Bun.file(join(generatedRoot, "scripts", "dev.ts")).text();
       expect(devScript).toContain("ensureLocalPostgres");
+      expect(devScript).toContain("Temporal worker skipped because TEMPORAL_ENABLED is false.");
       const localDocker = await Bun.file(join(generatedRoot, "scripts", "local-docker.ts")).text();
       expect(localDocker).toContain('["docker", "info"]');
       expect(localDocker).toContain('["open", "-a", "Docker"]');

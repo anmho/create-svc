@@ -95,7 +95,9 @@ creates a trigger, the API service starts `waitlistFollowUpWorkflow` /
 `WaitlistFollowUpWorkflow` asynchronously on the service task queue. The API
 request only waits for the trigger record; workflow completion happens through
 Temporal and is polled by the worker service.
-Local `{{COMMAND_DEV}}` starts the API process and the worker process together after Docker Compose starts the local Temporal server.
+Local `{{COMMAND_DEV}}` starts the API process and, when Temporal is enabled,
+the worker process together after Docker Compose starts the local Temporal
+server.
 
 Production and preview deploys render `TEMPORAL_ENABLED=true` into the Cloud Run
 manifest unless you override it. For Temporal Cloud, replace the local defaults
