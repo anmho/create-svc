@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import { protectMainBranch } from "./github-protection";
 
 export type GitBootstrapConfig = {
   enabled: boolean;
@@ -50,6 +51,7 @@ export async function bootstrapGitHubRepository(targetDir: string, config: GitBo
   run(["gh", "repo", "create", repository, "--private", "--source", ".", "--remote", "origin", "--push"], targetDir, undefined, {
     quiet: true,
   });
+  protectMainBranch({ repo: repository, cwd: targetDir });
 
   return {
     status: "created",
