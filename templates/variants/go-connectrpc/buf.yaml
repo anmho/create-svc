@@ -1,9 +1,13 @@
 version: v2
 modules:
   - path: protos
+    name: buf.build/anmho-services/{{SERVICE_ID}}
 lint:
   use:
     - STANDARD
+  except:
+    - RPC_REQUEST_RESPONSE_UNIQUE
+    - RPC_RESPONSE_STANDARD_NAME
 breaking:
   use:
     - FILE

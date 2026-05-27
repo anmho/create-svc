@@ -3,17 +3,19 @@ package httpapi
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"{{MODULE_PATH}}/internal/app"
 )
 
-func RegisterRoutes(router chi.Router, service *app.ChatService) {
+func RegisterRoutes(router chi.Router, service *app.WaitlistService) {
 	router.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
@@ -23,212 +25,105 @@ func RegisterRoutes(router chi.Router, service *app.ChatService) {
 	router.Get("/", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{
 			"service":   "{{SERVICE_NAME}}",
-			"domain":    "chat",
+			"domain":    "waitlist",
 			"apiOrigin": "https://api.{{SERVICE_NAME}}.anmho.com",
 		})
 	})
 
-	router.Post("/v1/users", func(w http.ResponseWriter, request *http.Request) {
-		var input app.CreateUserInput
+	router.Post("/v1/waitlist", func(w http.ResponseWriter, request *http.Request) {
+		var input app.JoinWaitlistInput
 		if err := decodeJSON(request, &input); err != nil {
 			writeError(w, err)
 			return
 		}
-		user, err := service.CreateUser(request.Context(), input)
+		result, err := service.JoinWaitlist(request.Context(), input)
 		if err != nil {
 			writeError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusCreated, map[string]any{"user": user})
+		status := http.StatusOK
+		if result.Created {
+			status = http.StatusCreated
+		}
+		writeJSON(w, status, result)
 	})
 
-	router.Get("/v1/users/{userID}", func(w http.ResponseWriter, request *http.Request) {
-		user, err := service.GetUser(request.Context(), chi.URLParam(request, "userID"))
+	router.Get("/v1/waitlist", func(w http.ResponseWriter, request *http.Request) {
+		entry, err := service.GetEntryByEmail(request.Context(), request.URL.Query().Get("email"))
 		if err != nil {
 			writeError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"user": user})
+		writeJSON(w, http.StatusOK, map[string]any{"entry": entry})
 	})
 
-	router.Get("/v1/users", func(w http.ResponseWriter, request *http.Request) {
-		user, err := service.GetUserByUsername(request.Context(), request.URL.Query().Get("username"))
+	router.Get("/v1/waitlist/{entryID}", func(w http.ResponseWriter, request *http.Request) {
+		entry, err := service.GetEntry(request.Context(), chi.URLParam(request, "entryID"))
 		if err != nil {
 			writeError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"user": user})
+		writeJSON(w, http.StatusOK, map[string]any{"entry": entry})
 	})
 
-	router.Post("/v1/conversations", func(w http.ResponseWriter, request *http.Request) {
-		var input app.CreateConversationInput
-		if err := decodeJSON(request, &input); err != nil {
-			writeError(w, err)
-			return
-		}
-		conversation, err := service.CreateConversation(request.Context(), input)
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusCreated, map[string]any{"conversation": conversation})
-	})
-
-	router.Get("/v1/conversations/{conversationID}", func(w http.ResponseWriter, request *http.Request) {
-		conversation, err := service.GetConversation(request.Context(), chi.URLParam(request, "conversationID"))
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"conversation": conversation})
-	})
-
-	router.Patch("/v1/conversations/{conversationID}", func(w http.ResponseWriter, request *http.Request) {
-		var input app.UpdateConversationInput
-		if err := decodeJSON(request, &input); err != nil {
-			writeError(w, err)
-			return
-		}
-		conversation, err := service.UpdateConversation(request.Context(), chi.URLParam(request, "conversationID"), input)
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"conversation": conversation})
-	})
-
-	router.Delete("/v1/conversations/{conversationID}", func(w http.ResponseWriter, request *http.Request) {
-		if err := service.DeleteConversation(request.Context(), chi.URLParam(request, "conversationID")); err != nil {
-			writeError(w, err)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	router.Post("/v1/conversations/{conversationID}/participants", func(w http.ResponseWriter, request *http.Request) {
-		var input struct {
-			UserID string `json:"user_id"`
-		}
-		if err := decodeJSON(request, &input); err != nil {
-			writeError(w, err)
-			return
-		}
-		conversation, err := service.AddParticipant(request.Context(), chi.URLParam(request, "conversationID"), input.UserID)
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusCreated, map[string]any{"conversation": conversation})
-	})
-
-	router.Delete("/v1/conversations/{conversationID}/participants/{userID}", func(w http.ResponseWriter, request *http.Request) {
-		if err := service.RemoveParticipant(request.Context(), chi.URLParam(request, "conversationID"), chi.URLParam(request, "userID")); err != nil {
-			writeError(w, err)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	router.Get("/v1/conversations/{conversationID}/messages", func(w http.ResponseWriter, request *http.Request) {
-		limit := 0
-		if rawLimit := strings.TrimSpace(request.URL.Query().Get("limit")); rawLimit != "" {
-			parsedLimit, err := strconv.Atoi(rawLimit)
-			if err != nil {
-				writeError(w, &app.AppError{Status: http.StatusBadRequest, Code: "invalid_limit", Err: errors.New("limit must be a positive integer")})
-				return
-			}
-			limit = parsedLimit
-		}
-		result, err := service.ListMessages(request.Context(), chi.URLParam(request, "conversationID"), app.ListMessagesInput{
-			Cursor: strings.TrimSpace(request.URL.Query().Get("cursor")),
-			Limit:  limit,
+	router.Get("/v1/admin/waitlist", func(w http.ResponseWriter, request *http.Request) {
+		entries, err := service.ListEntries(request.Context(), app.ListWaitlistEntriesInput{
+			Status: request.URL.Query().Get("status"),
+			Limit:  optionalInt(request.URL.Query().Get("limit")),
 		})
 		if err != nil {
 			writeError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, result)
+		writeJSON(w, http.StatusOK, map[string]any{"entries": entries})
 	})
 
-	router.Post("/v1/conversations/{conversationID}/messages", func(w http.ResponseWriter, request *http.Request) {
-		var input app.CreateMessageInput
+	router.Get("/v1/admin/waitlist/export", func(w http.ResponseWriter, request *http.Request) {
+		csv, err := service.ExportEntries(request.Context(), app.ListWaitlistEntriesInput{
+			Status: request.URL.Query().Get("status"),
+			Limit:  optionalInt(request.URL.Query().Get("limit")),
+		})
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+		w.Header().Set("Content-Disposition", `attachment; filename="waitlist.csv"`)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(csv))
+	})
+
+	router.Patch("/v1/admin/waitlist/{entryID}", func(w http.ResponseWriter, request *http.Request) {
+		var input app.UpdateWaitlistEntryInput
 		if err := decodeJSON(request, &input); err != nil {
 			writeError(w, err)
 			return
 		}
-		message, err := service.CreateMessage(request.Context(), chi.URLParam(request, "conversationID"), input)
+		input.EntryID = chi.URLParam(request, "entryID")
+		entry, err := service.UpdateEntry(request.Context(), input)
 		if err != nil {
 			writeError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusCreated, map[string]any{"message": message})
+		writeJSON(w, http.StatusOK, map[string]any{"entry": entry})
 	})
 
-	router.Patch("/v1/conversations/{conversationID}/messages/{messageID}", func(w http.ResponseWriter, request *http.Request) {
-		var input app.UpdateMessageInput
-		if err := decodeJSON(request, &input); err != nil {
+	router.Post("/v1/triggers/waitlist", func(w http.ResponseWriter, request *http.Request) {
+		var payload map[string]any
+		if err := decodeOptionalJSON(request, &payload); err != nil {
 			writeError(w, err)
 			return
 		}
-		message, err := service.UpdateMessage(request.Context(), chi.URLParam(request, "conversationID"), chi.URLParam(request, "messageID"), input)
+		trigger, err := service.RecordTrigger(request.Context(), app.RecordTriggerInput{
+			Type:    stringValue(payload, "type", "manual"),
+			EntryID: stringValue(payload, "entry_id", ""),
+			Payload: payload,
+		})
 		if err != nil {
 			writeError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"message": message})
-	})
-
-	router.Delete("/v1/conversations/{conversationID}/messages/{messageID}", func(w http.ResponseWriter, request *http.Request) {
-		if err := service.DeleteMessage(request.Context(), chi.URLParam(request, "conversationID"), chi.URLParam(request, "messageID")); err != nil {
-			writeError(w, err)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	router.Post("/v1/attachments/uploads", func(w http.ResponseWriter, request *http.Request) {
-		var input app.CreateAttachmentUploadInput
-		if err := decodeJSON(request, &input); err != nil {
-			writeError(w, err)
-			return
-		}
-		result, err := service.CreateAttachmentUpload(request.Context(), input)
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusCreated, map[string]any{"result": result})
-	})
-
-	router.Post("/v1/attachments/{attachmentID}/finalize", func(w http.ResponseWriter, request *http.Request) {
-		var input app.FinalizeAttachmentInput
-		if err := decodeOptionalJSON(request, &input); err != nil {
-			writeError(w, err)
-			return
-		}
-		attachment, err := service.FinalizeAttachment(request.Context(), chi.URLParam(request, "attachmentID"), input)
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"attachment": attachment})
-	})
-
-	router.Get("/v1/attachments/{attachmentID}", func(w http.ResponseWriter, request *http.Request) {
-		attachment, err := service.GetAttachment(request.Context(), chi.URLParam(request, "attachmentID"))
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"attachment": attachment})
-	})
-
-	router.Delete("/v1/attachments/{attachmentID}", func(w http.ResponseWriter, request *http.Request) {
-		if err := service.DeleteAttachment(request.Context(), chi.URLParam(request, "attachmentID")); err != nil {
-			writeError(w, err)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
+		writeJSON(w, http.StatusAccepted, map[string]any{"trigger": trigger})
 	})
 
 	router.Post("/webhooks/{provider}", func(w http.ResponseWriter, request *http.Request) {
@@ -237,16 +132,35 @@ func RegisterRoutes(router chi.Router, service *app.ChatService) {
 			writeError(w, err)
 			return
 		}
-		event, duplicate, err := service.ProcessWebhook(request.Context(), chi.URLParam(request, "provider"), request.Header, rawBody)
+		provider := chi.URLParam(request, "provider")
+		payload := parseWebhookPayload(rawBody)
+		result, err := service.RecordWebhookEvent(request.Context(), app.RecordWebhookEventInput{
+			Provider:        provider,
+			ExternalEventID: webhookEventID(payload, request.Header),
+			Payload:         payload,
+			Headers:         headersPayload(request.Header),
+		})
 		if err != nil {
 			writeError(w, err)
 			return
 		}
-		status := http.StatusAccepted
-		if duplicate {
-			status = http.StatusOK
+		if !result.Duplicate {
+			if _, err := service.RecordTrigger(request.Context(), app.RecordTriggerInput{
+				Type: "webhook." + provider,
+				Payload: map[string]any{
+					"headers": headersPayload(request.Header),
+					"rawBody": string(rawBody),
+				},
+			}); err != nil {
+				writeError(w, err)
+				return
+			}
 		}
-		writeJSON(w, status, map[string]any{"event": event, "duplicate": duplicate})
+		if result.Duplicate {
+			writeJSON(w, http.StatusOK, result)
+			return
+		}
+		writeJSON(w, http.StatusAccepted, result)
 	})
 
 	router.Get("/webhooks/{provider}/health", func(w http.ResponseWriter, request *http.Request) {
@@ -260,6 +174,36 @@ func RegisterRoutes(router chi.Router, service *app.ChatService) {
 func decodeJSON(request *http.Request, out any) error {
 	defer request.Body.Close()
 	return json.NewDecoder(request.Body).Decode(out)
+}
+
+func parseWebhookPayload(rawBody []byte) map[string]any {
+	var payload map[string]any
+	if len(rawBody) == 0 || json.Unmarshal(rawBody, &payload) != nil {
+		return map[string]any{"rawBody": string(rawBody)}
+	}
+	return payload
+}
+
+func webhookEventID(payload map[string]any, headers http.Header) string {
+	if id, ok := payload["id"].(string); ok && id != "" {
+		return id
+	}
+	if id := headers.Get("X-Webhook-Event-Id"); id != "" {
+		return id
+	}
+	return fmt.Sprintf("evt_%d", time.Now().UnixNano())
+}
+
+func headersPayload(headers http.Header) map[string]any {
+	out := make(map[string]any, len(headers))
+	for key, values := range headers {
+		if len(values) == 1 {
+			out[key] = values[0]
+			continue
+		}
+		out[key] = values
+	}
+	return out
 }
 
 func decodeOptionalJSON(request *http.Request, out any) error {
@@ -288,8 +232,34 @@ func writeError(w http.ResponseWriter, err error) {
 	}
 
 	status := http.StatusInternalServerError
-	if errors.Is(err, strconv.ErrSyntax) || strings.Contains(strings.ToLower(err.Error()), "json") {
+	if strings.Contains(strings.ToLower(err.Error()), "json") {
 		status = http.StatusBadRequest
 	}
 	writeJSON(w, status, map[string]string{"error": err.Error()})
+}
+
+func stringValue(values map[string]any, key string, fallback string) string {
+	if values == nil {
+		return fallback
+	}
+	value, ok := values[key]
+	if !ok && key == "entry_id" {
+		value, ok = values["entryId"]
+	}
+	if !ok {
+		return fallback
+	}
+	text, ok := value.(string)
+	if !ok {
+		return fallback
+	}
+	return strings.TrimSpace(text)
+}
+
+func optionalInt(value string) int {
+	parsed, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil {
+		return 0
+	}
+	return parsed
 }

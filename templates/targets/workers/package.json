@@ -1,0 +1,38 @@
+{
+  "name": "{{SERVICE_NAME}}",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun run ./scripts/dev.ts wrangler dev --ip 127.0.0.1 --port 8787 --show-interactive-dev-session=false",
+    "service": "service",
+    "migrate": "service migrate",
+    "seed": "service seed",
+    "lint": "tsc --noEmit",
+    "test": "bun test",
+    "create": "service create",
+    "deploy": "service deploy",
+    "protect-main": "service protect-main",
+    "dashboards": "service dashboards",
+    "auth": "service auth",
+    "destroy": "service destroy",
+    "trigger": "trigger",
+    "trigger:dev": "trigger dev",
+    "trigger:deploy": "trigger deploy"
+  },
+  "dependencies": {
+    "@anmho/authctl": "0.1.1",
+    "@clack/prompts": "^1.2.0",
+    "@neondatabase/api-client": "^2.7.1",
+    "@trigger.dev/sdk": "^4.4.6",
+    "hono": "^4.10.1",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "latest",
+    "@types/pg": "^8.16.0",
+    "@types/bun": "latest",
+    "trigger.dev": "^4.4.6",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.49.0"
+  }
+}

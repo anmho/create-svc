@@ -1,5 +1,11 @@
 export const BILLING_ACCOUNT_DEFAULT = "billingAccounts/01BD2E-3A6949-8F4C84";
 export const QUOTA_PROJECT_DEFAULT = "anmho-infra-prod";
+export const SERVICES_PROJECT_DEFAULT = "anmho-services";
+export const SERVICES_PROJECT_NAME_DEFAULT = "services";
+
+export const DEPLOY_TARGETS = ["cloudrun", "workers"] as const;
+
+export type DeployTarget = (typeof DEPLOY_TARGETS)[number];
 
 export const FRAMEWORKS_BY_RUNTIME = {
   go: ["chi", "connectrpc"],
@@ -9,6 +15,24 @@ export const FRAMEWORKS_BY_RUNTIME = {
 export type Runtime = keyof typeof FRAMEWORKS_BY_RUNTIME;
 export type Framework = (typeof FRAMEWORKS_BY_RUNTIME)[Runtime][number];
 export type GcpProjectMode = "create_new" | "use_existing";
+
+export function parseDeployTarget(value: string): DeployTarget {
+  if (DEPLOY_TARGETS.includes(value as DeployTarget)) {
+    return value as DeployTarget;
+  }
+
+  throw new Error(`Unknown target: ${value}`);
+}
+
+export function frameworksForTargetRuntime(target: DeployTarget, runtime: Runtime): readonly Framework[] {
+  if (target === "workers") {
+    if (runtime === "bun") {
+      return ["hono"];
+    }
+    return [];
+  }
+  return FRAMEWORKS_BY_RUNTIME[runtime];
+}
 
 export function slugify(value: string, maxLength = 63) {
   return value
@@ -57,13 +81,14 @@ export function compactDatabaseName(serviceName: string) {
 export function deriveLocalPostgresPort(serviceName: string) {
   const normalized = slugify(serviceName) || "my-service";
   const hash = Number.parseInt(shortHash(normalized).slice(0, 4), 16);
-  return String(55000 + (hash % 1000));
+  return String(15432 + (hash % 1000));
 }
 
 export function deriveDefaults(serviceName: string) {
   const normalizedServiceName = slugify(serviceName) || "my-service";
 
   return {
+    serviceId: normalizedServiceName,
     serviceName: normalizedServiceName,
     projectName: normalizedServiceName,
     projectId: compactIdentifier(`anmho-${normalizedServiceName}`, 30),
@@ -71,7 +96,7 @@ export function deriveDefaults(serviceName: string) {
     neonDatabaseName: compactDatabaseName(normalizedServiceName),
     localDatabasePort: deriveLocalPostgresPort(normalizedServiceName),
     apiHostname: `api.${normalizedServiceName}.anmho.com`,
-    modulePath: `example.com/${normalizedServiceName}`,
+    modulePath: `github.com/anmho/${normalizedServiceName}`,
   };
 }
 
@@ -83,21 +108,29 @@ export function buildGcpProjectOptions(
   serviceName: string,
   projectId: string,
   projectName: string,
-  projects: Array<{ projectId: string; name: string }>
+  projects: Array<{ projectId: string; name?: string }>
 ) {
+  const servicesProject = projects.find((project) => project.projectId === SERVICES_PROJECT_DEFAULT);
+  const remainingProjects = projects.filter((project) => project.projectId !== SERVICES_PROJECT_DEFAULT);
   return [
+    {
+      label: `Use shared services project: ${servicesProject?.name ?? SERVICES_PROJECT_NAME_DEFAULT} (${SERVICES_PROJECT_DEFAULT})`,
+      mode: "use_existing" as const,
+      projectId: SERVICES_PROJECT_DEFAULT,
+      projectName: servicesProject?.name ?? SERVICES_PROJECT_NAME_DEFAULT,
+    },
+    ...remainingProjects.map((project) => ({
+      label: `Use existing project: ${project.name ?? project.projectId} (${project.projectId})`,
+      mode: "use_existing" as const,
+      projectId: project.projectId,
+      projectName: project.name ?? project.projectId,
+    })),
     {
       label: buildCreateProjectLabel(serviceName, projectId),
       mode: "create_new" as const,
       projectId,
       projectName,
     },
-    ...projects.map((project) => ({
-      label: `Use existing project: ${project.name} (${project.projectId})`,
-      mode: "use_existing" as const,
-      projectId: project.projectId,
-      projectName: project.name,
-    })),
   ];
 }
 

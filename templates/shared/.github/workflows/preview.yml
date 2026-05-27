@@ -1,29 +1,46 @@
 name: Preview
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
+  issue_comment:
+    types: [created]
 
 permissions:
   contents: read
+  issues: read
   id-token: write
+  pull-requests: read
 
 jobs:
   deploy:
+    if: ${{ github.event.issue.pull_request && contains(github.event.comment.body, '/deploy preview') }}
     runs-on: ubuntu-latest
     steps:
+      - id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pr_json="$(gh api "repos/${{ github.repository }}/pulls/${{ github.event.issue.number }}")"
+          echo "number=$(jq -r '.number' <<< "$pr_json")" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$(jq -r '.head.sha' <<< "$pr_json")" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.pr.outputs.head_sha }}
       - uses: oven-sh/setup-bun@v2
       - if: ${{ '{{RUNTIME}}' == 'go' }}
         uses: actions/setup-go@v5
         with:
           go-version: "1.25"
+      - if: ${{ '{{RUNTIME}}' == 'go' }}
+        uses: ariga/setup-atlas@v0
       - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
           service_account: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
       - uses: google-github-actions/setup-gcloud@v2
+      - run: gcloud components install beta --quiet
       - run: bun install
-      - run: bun run deploy -- --ci --environment preview --name ${{ github.event.pull_request.number }}
+      - run: bun install -g create-svc@latest
+      - run: {{WORKFLOW_DEPLOY_PREVIEW_COMMAND}}
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

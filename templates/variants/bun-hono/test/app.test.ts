@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { createApp } from "../src/index";
-import type { ChatService } from "../src/chat/service";
+import type { WaitlistService } from "../src/waitlist/service";
+import type { WaitlistEntry } from "../src/waitlist/types";
 
 test("health endpoint returns ok", async () => {
   const response = await createApp(createMockService()).request("/healthz");
@@ -14,53 +15,96 @@ test("webhook health endpoint returns ok", async () => {
   expect(await response.json()).toEqual({ status: "ok", provider: "generic" });
 });
 
-function createMockService(): ChatService {
+test("waitlist join returns created entry", async () => {
+  const response = await createApp(createMockService()).request("/v1/waitlist", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: "founder@example.com", source: "test" }),
+  });
+  expect(response.status).toBe(201);
+  expect(await response.json()).toMatchObject({
+    created: true,
+    entry: {
+      email: "founder@example.com",
+      status: "joined",
+    },
+  });
+});
+
+test("waitlist api requires a bearer token when service auth is enabled", async () => {
+  const previous = Bun.env.AUTH_ENABLED;
+  Bun.env.AUTH_ENABLED = "true";
+  try {
+    const response = await createApp(createMockService()).request("/v1/waitlist", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "founder@example.com" }),
+    });
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ error: "missing bearer token", code: "unauthorized" });
+  } finally {
+    if (previous === undefined) {
+      delete Bun.env.AUTH_ENABLED;
+    } else {
+      Bun.env.AUTH_ENABLED = previous;
+    }
+  }
+});
+
+function createMockService(): WaitlistService {
+  const entry: WaitlistEntry = {
+    id: "entry_1",
+    email: "founder@example.com",
+    name: null,
+    company: null,
+    source: "test",
+    status: "joined",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  };
+
   return {
-    async createUser() {
-      throw new Error("not implemented");
+    async joinWaitlist() {
+      return { entry, created: true };
     },
-    async getUser() {
-      throw new Error("not implemented");
+    async getWaitlistEntry() {
+      return entry;
     },
-    async getUserByUsername() {
-      throw new Error("not implemented");
+    async getWaitlistEntryByEmail() {
+      return entry;
     },
-    async createConversation() {
-      throw new Error("not implemented");
+    async listWaitlistEntries() {
+      return [entry];
     },
-    async getConversation() {
-      throw new Error("not implemented");
+    async updateWaitlistEntry() {
+      return { ...entry, status: "invited" };
     },
-    async updateConversation() {
-      throw new Error("not implemented");
+    async exportWaitlistEntries() {
+      return "id,email,name,company,source,status,created_at,updated_at\nentry_1,founder@example.com,,,test,joined,2026-01-01T00:00:00.000Z,2026-01-01T00:00:00.000Z";
     },
-    async deleteConversation() {},
-    async addParticipant() {
-      throw new Error("not implemented");
+    async recordTrigger() {
+      return {
+        id: "trigger_1",
+        type: "manual",
+        entryId: null,
+        status: "queued",
+        payload: {},
+        createdAt: "2026-01-01T00:00:00.000Z",
+        processedAt: null,
+      };
     },
-    async removeParticipant() {},
-    async listMessages() {
-      return { messages: [] };
-    },
-    async createMessage() {
-      throw new Error("not implemented");
-    },
-    async updateMessage() {
-      throw new Error("not implemented");
-    },
-    async deleteMessage() {},
-    async createAttachmentUpload() {
-      throw new Error("not implemented");
-    },
-    async finalizeAttachment() {
-      throw new Error("not implemented");
-    },
-    async getAttachment() {
-      throw new Error("not implemented");
-    },
-    async deleteAttachment() {},
-    async processWebhook() {
-      throw new Error("not implemented");
+    async recordWebhookEvent() {
+      return {
+        duplicate: false,
+        event: {
+          id: "webhook_1",
+          provider: "generic",
+          externalEventId: "evt_1",
+          payload: {},
+          headers: {},
+          receivedAt: "2026-01-01T00:00:00.000Z",
+        },
+      };
     },
   };
 }

@@ -1,0 +1,13 @@
+node_modules
+.env
+.env.local
+.env.*
+coverage
+dist
+out
+.cloudrun.rendered.yaml
+.service/*.log
+.service/*.pid
+.wrangler
+.DS_Store
+{{GITIGNORE_EXTRA}}

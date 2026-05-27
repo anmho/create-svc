@@ -1,9 +1,12 @@
 import type { ScaffoldConfig } from "./scaffold";
+import { mkdir } from "node:fs/promises";
+import { dirname, join } from "node:path";
 
 type CommandOptions = {
   cwd: string;
   allowFailure?: boolean;
   input?: string;
+  quiet?: boolean;
 };
 
 type CommandResult = {
@@ -12,19 +15,284 @@ type CommandResult = {
   stderr: string;
 };
 
+type PostScaffoldCommand = {
+  command: string;
+  args: string[];
+};
+
 const decoder = new TextDecoder();
 const encoder = new TextEncoder();
+const DEPLOYMENT_VERIFY_ATTEMPTS = 36;
+const DEPLOYMENT_VERIFY_DELAY_MS = 10_000;
 
 export async function runPostScaffoldFlow(config: ScaffoldConfig, cwd: string) {
   if (config.autoDeploy) {
     installProjectDependencies(cwd);
-    const command = config.runtime === "bun" ? "bun" : "make";
-    run(command, config.runtime === "bun" ? ["run", "bootstrap"] : ["bootstrap"], { cwd });
-    run(command, config.runtime === "bun" ? ["run", "deploy"] : ["deploy"], { cwd });
-    return { message: "Dependencies installed and first deploy started" };
+    for (const command of buildPostScaffoldCommands(config)) {
+      run(command.command, command.args, { cwd });
+    }
+    for (const command of buildDeploymentVerificationCommands(config)) {
+      runWithRetries(command, { cwd, quiet: true }, DEPLOYMENT_VERIFY_ATTEMPTS, DEPLOYMENT_VERIFY_DELAY_MS);
+    }
+    await startLocalDevelopment(config, cwd);
+    for (const command of buildLocalVerificationCommands(config)) {
+      runWithRetries(command, { cwd, quiet: true }, 18, 5_000);
+    }
+    return { message: "Dependencies installed, service created, production verified, and local dev started" };
   }
 
   return { message: "Backend package generated" };
+}
+
+export function runPreGitBootstrapFlow(config: Pick<ScaffoldConfig, "framework"> & Partial<Pick<ScaffoldConfig, "target">>, cwd: string) {
+  const commands = buildPreGitBootstrapCommands(config);
+  if (commands.length === 0) {
+    return { changed: false };
+  }
+
+  installProjectDependencies(cwd);
+  for (const command of commands) {
+    run(command.command, command.args, { cwd });
+  }
+  return { changed: true };
+}
+
+async function startLocalDevelopment(config: Pick<ScaffoldConfig, "target">, cwd: string) {
+  for (const command of buildLocalPreparationCommands(config)) {
+    run(command.command, command.args, { cwd });
+  }
+  await mkdir(join(cwd, ".service"), { recursive: true });
+  const child = Bun.spawn(["sh", "-c", "exec bun run dev > .service/local-dev.log 2>&1 < /dev/null"], {
+    cwd,
+    env: postScaffoldEnv(),
+    stdin: "ignore",
+    stdout: "ignore",
+    stderr: "ignore",
+    detached: true,
+  });
+  child.unref();
+  await Bun.write(join(cwd, ".service", "local-dev.pid"), `${child.pid}\n`);
+}
+
+export function buildLocalPreparationCommands(config: Pick<ScaffoldConfig, "target">): PostScaffoldCommand[] {
+  if (config.target === "workers") {
+    return [
+      { command: "bun", args: ["run", "./scripts/ensure-local-db.ts"] },
+      { command: "bun", args: ["run", "./scripts/wait-for-db.ts"] },
+      { command: "bun", args: ["run", "migrate"] },
+    ];
+  }
+  return [{ command: "bun", args: ["run", "migrate"] }];
+}
+
+function runWithRetries(command: PostScaffoldCommand, options: CommandOptions, attempts: number, delayMs: number) {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return run(command.command, command.args, options);
+    } catch (error) {
+      lastError = error;
+      if (attempt === attempts) {
+        break;
+      }
+      Bun.sleepSync(delayMs);
+    }
+  }
+  throw lastError;
+}
+
+export function buildDeploymentVerificationCommands(
+  config: Pick<ScaffoldConfig, "apiHostname" | "framework" | "runtime"> &
+    Partial<Pick<ScaffoldConfig, "target" | "serviceName" | "gcpProject" | "region">>
+): PostScaffoldCommand[] {
+  if (config.target === "workers") {
+    const host = config.apiHostname;
+    const tokenCommand = 'TOKEN="$(service auth token)"';
+    return [
+      workersCurlCommand(host, "/"),
+      workersCurlCommand(host, "/readyz"),
+      workersProtectedVerificationCommand(host, tokenCommand),
+    ];
+  }
+
+  const origin = verificationOrigin(config);
+  const tokenCommand = 'TOKEN="$(service auth token)"';
+  return [
+    shellVerificationCommand(`curl --fail --show-error --silent "${origin}/"`),
+    shellVerificationCommand(`curl --fail --show-error --silent "${origin}/readyz"`),
+    protectedVerificationCommand(config, origin, tokenCommand),
+  ];
+}
+
+function workersCurlCommand(host: string, path: string): PostScaffoldCommand {
+  return shellVerificationCommand(workersCurlScript(host, path));
+}
+
+function workersProtectedVerificationCommand(host: string, tokenCommand: string): PostScaffoldCommand {
+  return shellVerificationCommand(
+    `${tokenCommand} && ${workersCurlScript(host, "/v1/admin/waitlist?limit=1", ['-H "Authorization: Bearer $TOKEN"'])}`
+  );
+}
+
+function workersCurlScript(host: string, path: string, flags: string[] = []) {
+  const url = `https://${host}${path}`;
+  const curl = ["curl --fail --show-error --silent", ...flags, `"${url}"`].join(" ");
+  const resolvedCurl = ["curl --fail --show-error --silent", `--resolve "${host}:443:$IP"`, ...flags, `"${url}"`].join(" ");
+  return [
+    `(${curl})`,
+    "||",
+    `for IP in $(dig @1.1.1.1 +short ${host}); do`,
+    `${resolvedCurl}`,
+    "&& exit 0;",
+    "done;",
+    "exit 1",
+  ].join(" ");
+}
+
+export function buildLocalVerificationCommands(
+  config: Pick<ScaffoldConfig, "apiHostname" | "framework" | "runtime"> & Partial<Pick<ScaffoldConfig, "target">>
+): PostScaffoldCommand[] {
+  const origin = localVerificationOrigin(config);
+  const tokenCommand = 'TOKEN="$(service auth token)"';
+  return [
+    shellVerificationCommand(`curl --fail --show-error --silent "${origin}/"`),
+    shellVerificationCommand(`curl --fail --show-error --silent "${origin}/readyz"`),
+    protectedLocalVerificationCommand(config, origin, tokenCommand),
+  ];
+}
+
+function protectedVerificationCommand(
+  config: Pick<ScaffoldConfig, "apiHostname" | "framework" | "runtime"> &
+    Partial<Pick<ScaffoldConfig, "target" | "serviceName" | "gcpProject" | "region">>,
+  origin: string,
+  tokenCommand: string
+): PostScaffoldCommand {
+  if (config.framework === "connectrpc" && config.runtime === "go") {
+    const host = verificationHost(config);
+    return {
+      command: "sh",
+      args: [
+        "-c",
+        [
+          `${tokenCommand} &&`,
+          "grpcurl",
+          '-H "Authorization: Bearer $TOKEN"',
+          "-d '{\"limit\":1}'",
+          "-proto protos/waitlist/v1/waitlist.proto",
+          `"${host}:443"`,
+          "waitlist.v1.WaitlistService/ListWaitlistEntries",
+        ].join(" "),
+      ],
+    };
+  }
+
+  if (config.framework === "connectrpc") {
+    return {
+      command: "sh",
+      args: [
+        "-c",
+        [
+          `${tokenCommand} &&`,
+          "curl --fail --show-error --silent",
+          '-H "Authorization: Bearer $TOKEN"',
+          '-H "Content-Type: application/json"',
+          "-d '{\"limit\":1}'",
+          `"${origin}/waitlist.v1.WaitlistService/ListWaitlistEntries"`,
+        ].join(" "),
+      ],
+    };
+  }
+
+  return {
+    command: "sh",
+    args: [
+      "-c",
+      [
+        `${tokenCommand} &&`,
+        "curl --fail --show-error --silent",
+        '-H "Authorization: Bearer $TOKEN"',
+        `"${origin}/v1/admin/waitlist?limit=1"`,
+      ].join(" "),
+    ],
+  };
+}
+
+function protectedLocalVerificationCommand(
+  config: Pick<ScaffoldConfig, "apiHostname" | "framework" | "runtime"> & Partial<Pick<ScaffoldConfig, "target">>,
+  origin: string,
+  tokenCommand: string
+): PostScaffoldCommand {
+  if (config.framework === "connectrpc" && config.runtime === "go") {
+    const host = localVerificationHost(config);
+    return {
+      command: "sh",
+      args: [
+        "-c",
+        [
+          `${tokenCommand} &&`,
+          "grpcurl -plaintext",
+          '-H "Authorization: Bearer $TOKEN"',
+          "-d '{\"limit\":1}'",
+          "-proto protos/waitlist/v1/waitlist.proto",
+          `"${host}"`,
+          "waitlist.v1.WaitlistService/ListWaitlistEntries",
+        ].join(" "),
+      ],
+    };
+  }
+
+  return protectedVerificationCommand(config, origin, tokenCommand);
+}
+
+function shellVerificationCommand(script: string): PostScaffoldCommand {
+  return { command: "sh", args: ["-c", script] };
+}
+
+function verificationOrigin(
+  config: Partial<Pick<ScaffoldConfig, "target" | "serviceName" | "gcpProject" | "region">> & Pick<ScaffoldConfig, "apiHostname">
+) {
+  if (config.target !== "workers" && config.serviceName && config.gcpProject && config.region) {
+    return `$(gcloud run services describe ${config.serviceName} --project ${config.gcpProject} --region ${config.region} '--format=value(status.url)')`;
+  }
+  return `https://${config.apiHostname}`;
+}
+
+function verificationHost(
+  config: Partial<Pick<ScaffoldConfig, "target" | "serviceName" | "gcpProject" | "region">> & Pick<ScaffoldConfig, "apiHostname">
+) {
+  if (config.target !== "workers" && config.serviceName && config.gcpProject && config.region) {
+    return `$(gcloud run services describe ${config.serviceName} --project ${config.gcpProject} --region ${config.region} '--format=value(status.url)' | sed 's#^https://##')`;
+  }
+  return config.apiHostname;
+}
+
+function localVerificationOrigin(config: Partial<Pick<ScaffoldConfig, "target" | "runtime" | "framework">>) {
+  if (config.target === "workers") {
+    return "http://127.0.0.1:8787";
+  }
+  if (config.runtime === "bun" && config.framework === "hono") {
+    return "http://127.0.0.1:3000";
+  }
+  return "http://127.0.0.1:8080";
+}
+
+function localVerificationHost(config: Partial<Pick<ScaffoldConfig, "target" | "runtime" | "framework">>) {
+  return localVerificationOrigin(config).replace(/^https?:\/\//, "");
+}
+
+export function buildPostScaffoldCommands(
+  config: Pick<ScaffoldConfig, "framework"> & Partial<Pick<ScaffoldConfig, "target">>
+): PostScaffoldCommand[] {
+  return [{ command: "service", args: ["create"] }];
+}
+
+export function buildPreGitBootstrapCommands(
+  config: Pick<ScaffoldConfig, "framework"> & Partial<Pick<ScaffoldConfig, "target">>
+): PostScaffoldCommand[] {
+  if (config.target === "workers" || config.framework !== "connectrpc") {
+    return [];
+  }
+  return [{ command: "service", args: ["sdk", "build"] }];
 }
 
 function installProjectDependencies(cwd: string) {
@@ -41,10 +309,10 @@ function requireCommand(name: string) {
 function run(command: string, args: string[], options: CommandOptions): CommandResult {
   const result = Bun.spawnSync([command, ...args], {
     cwd: options.cwd,
-    env: process.env,
+    env: postScaffoldEnv(),
     stdin: options.input === undefined ? undefined : encoder.encode(options.input),
-    stdout: options.allowFailure ? "pipe" : "inherit",
-    stderr: options.allowFailure ? "pipe" : "inherit",
+    stdout: options.allowFailure || options.quiet ? "pipe" : "inherit",
+    stderr: options.allowFailure || options.quiet ? "pipe" : "inherit",
   });
 
   const stdout = result.stdout ? decoder.decode(result.stdout).trim() : "";
@@ -58,5 +326,13 @@ function run(command: string, args: string[], options: CommandOptions): CommandR
     success: result.success,
     stdout,
     stderr,
+  };
+}
+
+function postScaffoldEnv() {
+  const currentBinDir = dirname(Bun.argv[1] ?? "");
+  return {
+    ...process.env,
+    PATH: currentBinDir ? `${currentBinDir}:${process.env.PATH ?? ""}` : process.env.PATH,
   };
 }

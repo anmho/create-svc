@@ -1,4 +1,7 @@
 import { SQL } from "bun";
+import { ensureLocalPostgres } from "./local-docker";
+
+await ensureLocalPostgres();
 
 const databaseUrl = Bun.env.DATABASE_URL?.trim();
 if (!databaseUrl) {
@@ -7,7 +10,7 @@ if (!databaseUrl) {
 
 const client = new SQL(databaseUrl);
 await waitForDatabase(client);
-const migrationId = "0000_init_chat";
+const migrationId = "0000_init_waitlist";
 const migrationSql = await Bun.file(new URL("../migrations/0000_init.sql", import.meta.url)).text();
 
 await client.unsafe(`create table if not exists schema_migrations (

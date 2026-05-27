@@ -1,12 +1,12 @@
-.PHONY: dev dev-down migrate gen lint test bootstrap deploy cleanup
+.PHONY: dev dev-down migrate gen lint test test-e2e test-e2e-local test-e2e-prod create deploy protect-main dashboards observability-bootstrap auth destroy
 
-CLOUDRUN := npx --no-install svc-cloudrun
+SERVICE := service
 
 dev:
-	bun run ./src/index.ts
+	bun run dev
 
 dev-down:
-	bun run ./scripts/service.ts dev down
+	$(SERVICE) dev down
 
 migrate:
 	bun run ./scripts/migrate.ts
@@ -15,16 +15,37 @@ gen:
 	bun run ./scripts/codegen.ts
 
 lint:
-	bunx tsc --noEmit
+	bun run lint
 
 test:
 	bun test
 
-bootstrap:
-	$(CLOUDRUN) bootstrap
+test-e2e:
+	bun run ./scripts/e2e.ts $(ARGS)
+
+test-e2e-local:
+	bun run ./scripts/e2e.ts --local $(ARGS)
+
+test-e2e-prod:
+	bun run ./scripts/e2e.ts --prod $(ARGS)
+
+create:
+	$(SERVICE) create
 
 deploy:
-	$(CLOUDRUN) deploy $(ARGS)
+	$(SERVICE) deploy $(ARGS)
 
-cleanup:
-	$(CLOUDRUN) cleanup $(ARGS)
+protect-main:
+	$(SERVICE) protect-main $(ARGS)
+
+dashboards:
+	$(SERVICE) dashboards
+
+observability-bootstrap:
+	$(SERVICE) observability-bootstrap
+
+auth:
+	$(SERVICE) auth $(ARGS)
+
+destroy:
+	$(SERVICE) destroy $(ARGS)

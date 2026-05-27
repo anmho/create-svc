@@ -1,9 +1,0 @@
-node_modules
-.env
-.env.local
-.env.*
-coverage
-dist
-out
-.DS_Store
-{{GITIGNORE_EXTRA}}

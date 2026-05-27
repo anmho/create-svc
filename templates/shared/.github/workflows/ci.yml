@@ -16,7 +16,14 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: "1.25"
+      - if: ${{ '{{RUNTIME}}' == 'go' }}
+        uses: ariga/setup-atlas@v0
+      - if: ${{ '{{RUNTIME}}' == 'go' && '{{FRAMEWORK}}' == 'connectrpc' }}
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          version: "1.60.0"
       - run: bun install
-      - run: bun lint
-      - run: bun test
-
+      - run: bun run lint
+      - run: bun run test
+      - if: ${{ vars.GCX_ENABLED == 'true' && github.ref == 'refs/heads/main' }}
+        run: bun run dashboards

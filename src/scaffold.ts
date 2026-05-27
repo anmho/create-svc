@@ -4,16 +4,27 @@ import {
   compactIdentifier,
   compactDatabaseName,
   deriveLocalPostgresPort,
+  type DeployTarget,
   type Framework,
   type GcpProjectMode,
   type Runtime,
 } from "./naming";
 import { exampleForProfile, type Profile } from "./profiles";
+import type { GitBootstrapConfig } from "./git-bootstrap";
+
+const GENERATED_GITHUB_ACTION_WORKFLOWS = new Set([
+  ".github/workflows/ci.yml",
+  ".github/workflows/preview.yml",
+  ".github/workflows/preview-cleanup.yml",
+  ".github/workflows/personal.yml",
+  ".github/workflows/deploy.yml",
+]);
 
 export type ScaffoldConfig = {
   directory: string;
   serviceName: string;
   modulePath: string;
+  target: DeployTarget;
   runtime: Runtime;
   framework: Framework;
   profile: Profile;
@@ -24,6 +35,7 @@ export type ScaffoldConfig = {
   billingAccount: string;
   quotaProjectId: string;
   autoDeploy: boolean;
+  git: GitBootstrapConfig;
   neonDatabaseName: string;
   apiHostname: string;
   generatorRoot: string;
@@ -46,16 +58,21 @@ export async function scaffoldProject(config: ScaffoldConfig) {
   await ensureTargetDirectory(targetDir);
 
   const replacements = buildReplacements(config);
-  const sharedTemplateRoot = resolve(config.generatorRoot, "templates", "shared");
-  const variantTemplateRoot = resolve(config.generatorRoot, "templates", "variants", `${config.runtime}-${config.framework}`);
-  const templateRoots = [sharedTemplateRoot, variantTemplateRoot];
+  const templateRoots = [
+    { kind: "shared" as const, root: resolve(config.generatorRoot, "templates", "shared") },
+    { kind: "variant" as const, root: resolve(config.generatorRoot, "templates", "variants", `${config.runtime}-${config.framework}`) },
+    { kind: "target" as const, root: resolve(config.generatorRoot, "templates", "targets", config.target) },
+  ];
 
-  for (const templateRoot of templateRoots) {
-    const files = await collectTemplateFiles(templateRoot);
+  for (const template of templateRoots) {
+    const files = await collectTemplateFiles(template.root);
 
     for (const relativePath of files) {
-      const sourcePath = join(templateRoot, relativePath);
-      const destinationPath = join(targetDir, relativePath);
+      if (shouldSkipForTarget(config.target, template.kind, relativePath)) {
+        continue;
+      }
+      const sourcePath = join(template.root, relativePath);
+      const destinationPath = join(targetDir, templateDestinationPath(relativePath));
       const raw = await Bun.file(sourcePath).text();
       const rendered = renderTemplate(raw, replacements);
 
@@ -65,6 +82,47 @@ export async function scaffoldProject(config: ScaffoldConfig) {
   }
 
   await writeLocalEnvFile(targetDir, replacements);
+}
+
+function templateDestinationPath(relativePath: string) {
+  return relativePath === "_gitignore" ? ".gitignore" : relativePath;
+}
+
+function shouldSkipForTarget(target: DeployTarget, templateKind: "shared" | "variant" | "target", relativePath: string) {
+  if (
+    relativePath === "scripts/authctl.ts" ||
+    relativePath.startsWith("scripts/cloudrun/") ||
+    relativePath.startsWith("scripts/workers/")
+  ) {
+    return true;
+  }
+
+  if (target === "workers") {
+    if (templateKind === "target") {
+      return false;
+    }
+
+    if (relativePath === "Dockerfile") {
+      return true;
+    }
+
+    if (templateKind === "shared") {
+      return relativePath === "service.yaml";
+    }
+
+    return (
+      relativePath.startsWith("src/db/") ||
+      relativePath.startsWith("src/temporal/") ||
+      relativePath === "src/worker.ts" ||
+      relativePath.startsWith("src/waitlist/") ||
+      relativePath.startsWith("test/") ||
+      relativePath.startsWith("migrations/") ||
+      relativePath === "scripts/codegen.ts" ||
+      relativePath === "scripts/migrate.ts"
+    );
+  }
+
+  return relativePath === "wrangler.toml";
 }
 
 async function ensureTargetDirectory(targetDir: string) {
@@ -88,19 +146,27 @@ export async function assertTargetDirectoryIsEmpty(targetDir: string) {
 
 async function collectTemplateFiles(root: string, relative = ""): Promise<string[]> {
   const cwd = join(root, relative);
-  const entries = await readdir(cwd, { withFileTypes: true });
+  let entries;
+  try {
+    entries = await readdir(cwd, { withFileTypes: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return [];
+    }
+    throw error;
+  }
   const files: string[] = [];
 
   for (const entry of entries) {
     const nextRelative = relative ? join(relative, entry.name) : entry.name;
     if (entry.isDirectory()) {
-      if (nextRelative === ".github" || nextRelative.startsWith(".github/")) {
+      if (entry.name === "node_modules" || entry.name === ".git") {
         continue;
       }
       files.push(...(await collectTemplateFiles(root, nextRelative)));
       continue;
     }
-    if (nextRelative === ".github" || nextRelative.startsWith(".github/")) {
+    if (shouldSkipTemplateFile(nextRelative)) {
       continue;
     }
     files.push(nextRelative);
@@ -109,22 +175,31 @@ async function collectTemplateFiles(root: string, relative = ""): Promise<string
   return files.sort();
 }
 
+function shouldSkipTemplateFile(relativePath: string) {
+  if (!relativePath.startsWith(".github/")) {
+    return false;
+  }
+
+  return !GENERATED_GITHUB_ACTION_WORKFLOWS.has(relativePath);
+}
+
 function buildReplacements(config: ScaffoldConfig) {
   const example = exampleForProfile(config.profile);
   const serviceAccountBase = compactIdentifier(config.serviceName, 21);
   const runtimeServiceAccount = `${serviceAccountBase}-runtime@${config.gcpProject}.iam.gserviceaccount.com`;
   const previewBranchPrefix = `${config.serviceName}-pr`;
   const personalBranchPrefix = `${config.serviceName}-dev`;
-  const remoteAttachmentBucket = `${config.gcpProject}-${config.serviceName}-attachments`;
-  const remoteAttachmentPublicBaseUrl = `https://storage.googleapis.com/${remoteAttachmentBucket}`;
   const localDatabaseName = compactDatabaseName(config.serviceName);
   const localDatabasePort = deriveLocalPostgresPort(config.serviceName);
-  const localAttachmentBucket = `${config.serviceName}-local-attachments`;
-  const localAttachmentPublicBaseUrl = `https://storage.local.invalid/${localAttachmentBucket}`;
+  const authIssuer = "https://auth.anmho.com/api/auth";
+  const authAudience = `api://${config.serviceName}`;
+  const authJwksUrl = `${authIssuer}/jwks`;
 
   return {
     SERVICE_NAME: config.serviceName,
+    SERVICE_ID: config.serviceName,
     MODULE_PATH: config.modulePath,
+    TARGET: config.target,
     PROJECT_ID: config.gcpProject,
     PROJECT_NAME: config.gcpProjectName,
     REGION: config.region,
@@ -150,33 +225,46 @@ function buildReplacements(config: ScaffoldConfig) {
     RUNTIME_SERVICE_ACCOUNT: runtimeServiceAccount,
     API_HOSTNAME: config.apiHostname,
     API_BASE_DOMAIN: "anmho.com",
-    ATTACHMENT_BUCKET: remoteAttachmentBucket,
-    ATTACHMENT_PUBLIC_BASE_URL: remoteAttachmentPublicBaseUrl,
+    GIT_ENABLED: String(config.git.enabled),
+    GIT_OWNER: config.git.owner,
+    GIT_REPOSITORY: config.git.repository,
+    AUTH_ISSUER: authIssuer,
+    AUTH_AUDIENCE: authAudience,
+    AUTH_JWKS_URL: authJwksUrl,
+    TEMPORAL_ENABLED: "true",
+    TEMPORAL_ADDRESS: "localhost:7233",
+    TEMPORAL_NAMESPACE: "default",
+    TEMPORAL_TASK_QUEUE: config.serviceName,
     LOCAL_DATABASE_NAME: localDatabaseName,
     LOCAL_DATABASE_PORT: localDatabasePort,
     LOCAL_DATABASE_USER: "postgres",
     LOCAL_DATABASE_PASSWORD: "postgres",
-    LOCAL_ATTACHMENT_BUCKET: localAttachmentBucket,
-    LOCAL_ATTACHMENT_PUBLIC_BASE_URL: localAttachmentPublicBaseUrl,
     COMMAND_DEV: config.runtime === "bun" ? "bun run dev" : "make dev",
     COMMAND_DEV_DOWN: config.runtime === "bun" ? "bun run dev:down" : "make dev-down",
     COMMAND_MIGRATE: config.runtime === "bun" ? "bun run migrate" : "make migrate",
     COMMAND_GEN: config.runtime === "bun" ? "bun run gen" : "make gen",
     COMMAND_LINT: config.runtime === "bun" ? "bun run lint" : "make lint",
     COMMAND_TEST: config.runtime === "bun" ? "bun run test" : "make test",
-    COMMAND_BOOTSTRAP: config.runtime === "bun" ? "bun run bootstrap" : "make bootstrap",
-    COMMAND_DEPLOY: config.runtime === "bun" ? "bun run deploy" : "make deploy",
-    COMMAND_DEPLOY_PERSONAL:
-      config.runtime === "bun"
-        ? 'bun run deploy -- --environment personal --name <slug>'
-        : 'make deploy ARGS="--environment personal --name <slug>"',
-    COMMAND_DEPLOY_DESTROY:
-      config.runtime === "bun"
-        ? 'bun run deploy -- --destroy --environment personal --name <slug>'
-        : 'make deploy ARGS="--destroy --environment personal --name <slug>"',
-    COMMAND_CLEANUP: config.runtime === "bun" ? "bun run cleanup" : "make cleanup",
-    COMMAND_CLEANUP_PROJECT: config.runtime === "bun" ? "bun run cleanup -- --project" : 'make cleanup ARGS="--project"',
-    GITIGNORE_EXTRA: config.framework === "connectrpc" ? "gen/" : "",
+    COMMAND_TEST_E2E_LOCAL: config.runtime === "bun" ? "bun run test:e2e:local" : "make test-e2e-local",
+    COMMAND_TEST_E2E_PROD: config.runtime === "bun" ? "bun run test:e2e:prod" : "make test-e2e-prod",
+    COMMAND_BOOTSTRAP: "service create",
+    COMMAND_DEPLOY: "service deploy",
+    COMMAND_PROTECT_MAIN: "service protect-main",
+    COMMAND_OBSERVABILITY_BOOTSTRAP:
+      config.runtime === "bun" ? "bun run observability-bootstrap" : "make observability-bootstrap",
+    WORKFLOW_DEPLOY_MAIN_COMMAND: "service deploy --ci",
+    WORKFLOW_DEPLOY_PREVIEW_COMMAND:
+      "service deploy --ci --environment preview --name ${{ steps.pr.outputs.number }}",
+    WORKFLOW_DEPLOY_MAIN_DOC_COMMAND: "service deploy --ci",
+    WORKFLOW_DEPLOY_PREVIEW_DOC_COMMAND: "service deploy --ci --environment preview --name <pull-request-number>",
+    COMMAND_AUTH_RESOURCE: "service auth resource-server",
+    COMMAND_AUTH_CLIENT: "service auth client create",
+    COMMAND_AUTH_TOKEN: "service auth token",
+    COMMAND_DEPLOY_PERSONAL: "service deploy --environment personal --name <name>",
+    COMMAND_DEPLOY_DESTROY: "service destroy --environment personal --name <name>",
+    COMMAND_CLEANUP: "service destroy",
+    COMMAND_CLEANUP_PROJECT: "service destroy --project",
+    GITIGNORE_EXTRA: "",
     LOCAL_INTROSPECTION_NOTE:
       config.framework === "connectrpc"
         ? [
@@ -190,7 +278,40 @@ function buildReplacements(config: ScaffoldConfig) {
             "- override with `ENABLE_RPC_INTROSPECTION=true|false`",
           ].join("\n")
         : "",
+    PRODUCTION_PROTECTED_CHECKS: buildProtectedChecks(config),
   };
+}
+
+function buildProtectedChecks(config: ScaffoldConfig) {
+  const tokenCommand = 'TOKEN="$(service auth token)"';
+  if (config.framework === "connectrpc" && config.runtime === "go") {
+    return [
+      "After deploy, verify protected reads with:",
+      "",
+      "```bash",
+      tokenCommand,
+      `grpcurl -H "Authorization: Bearer $TOKEN" -d '{"limit":1}' -proto protos/waitlist/v1/waitlist.proto ${config.apiHostname}:443 waitlist.v1.WaitlistService/ListWaitlistEntries`,
+      "```",
+    ].join("\n");
+  }
+  if (config.framework === "connectrpc") {
+    return [
+      "After deploy, verify protected reads with:",
+      "",
+      "```bash",
+      tokenCommand,
+      `curl --fail --show-error --silent -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"limit":1}' "https://${config.apiHostname}/waitlist.v1.WaitlistService/ListWaitlistEntries"`,
+      "```",
+    ].join("\n");
+  }
+  return [
+    "After deploy, verify protected reads with:",
+    "",
+    "```bash",
+    tokenCommand,
+    `curl --fail --show-error --silent -H "Authorization: Bearer $TOKEN" "https://${config.apiHostname}/v1/admin/waitlist?limit=1"`,
+    "```",
+  ].join("\n");
 }
 
 async function writeLocalEnvFile(targetDir: string, replacements: Record<string, string>) {
@@ -201,12 +322,25 @@ async function writeLocalEnvFile(targetDir: string, replacements: Record<string,
 
   const rendered = renderTemplate(
     [
-      "# Generated local development defaults for create-svc.",
+      "# Generated local development defaults for create-service.",
       "# This file is user-owned after scaffold and is gitignored.",
       "",
-      "DATABASE_URL=postgres://{{LOCAL_DATABASE_USER}}:{{LOCAL_DATABASE_PASSWORD}}@127.0.0.1:{{LOCAL_DATABASE_PORT}}/{{LOCAL_DATABASE_NAME}}",
-      "ATTACHMENT_BUCKET={{LOCAL_ATTACHMENT_BUCKET}}",
-      "ATTACHMENT_PUBLIC_BASE_URL={{LOCAL_ATTACHMENT_PUBLIC_BASE_URL}}",
+      "DATABASE_URL=postgres://{{LOCAL_DATABASE_USER}}:{{LOCAL_DATABASE_PASSWORD}}@127.0.0.1:{{LOCAL_DATABASE_PORT}}/{{LOCAL_DATABASE_NAME}}?sslmode=disable",
+      "TEMPORAL_ENABLED={{TEMPORAL_ENABLED}}",
+      "TEMPORAL_ADDRESS={{TEMPORAL_ADDRESS}}",
+      "TEMPORAL_NAMESPACE={{TEMPORAL_NAMESPACE}}",
+      "TEMPORAL_TASK_QUEUE={{TEMPORAL_TASK_QUEUE}}",
+      "",
+      "",
+      "VAULT_SECRET_MOUNT=secret",
+      "VAULT_AUTHCTL_ACCESS_PATH=prod/apps/auth/authctl/cloudflare-access",
+      "VAULT_AUTHCTL_ACCESS_BASE_URL_FIELD=AUTH_INTERNAL_BASE_URL",
+      "VAULT_AUTHCTL_ACCESS_CLIENT_ID_FIELD=CLOUDFLARE_ACCESS_SERVICE_TOKEN_CLIENT_ID",
+      "VAULT_AUTHCTL_ACCESS_CLIENT_SECRET_FIELD=CLOUDFLARE_ACCESS_SERVICE_TOKEN_CLIENT_SECRET",
+      "VAULT_NEON_API_KEY_PATH=prod/providers/neon",
+      "VAULT_NEON_API_KEY_FIELD=api_key",
+      "VAULT_CLOUDFLARE_API_TOKEN_PATH=prod/providers/cloudflare",
+      "VAULT_CLOUDFLARE_API_TOKEN_FIELD=api_token",
       "",
     ].join("\n"),
     replacements

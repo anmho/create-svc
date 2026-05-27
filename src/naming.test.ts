@@ -1,8 +1,16 @@
 import { expect, test } from "bun:test";
-import { buildGcpProjectOptions, compactDatabaseName, compactIdentifier, deriveDefaults, deriveLocalPostgresPort } from "./naming";
+import {
+  SERVICES_PROJECT_DEFAULT,
+  buildGcpProjectOptions,
+  compactDatabaseName,
+  compactIdentifier,
+  deriveDefaults,
+  deriveLocalPostgresPort,
+} from "./naming";
 
 test("deriveDefaults uses the service name for project, repo, and database naming", () => {
   expect(deriveDefaults("edge-api")).toEqual({
+    serviceId: "edge-api",
     serviceName: "edge-api",
     projectName: "edge-api",
     projectId: "anmho-edge-api",
@@ -10,7 +18,7 @@ test("deriveDefaults uses the service name for project, repo, and database namin
     neonDatabaseName: "edge_api",
     localDatabasePort: deriveLocalPostgresPort("edge-api"),
     apiHostname: "api.edge-api.anmho.com",
-    modulePath: "example.com/edge-api",
+    modulePath: "github.com/anmho/edge-api",
   });
 });
 
@@ -24,16 +32,23 @@ test("compactDatabaseName switches to underscores", () => {
   expect(compactDatabaseName("preview-worker")).toBe("preview_worker");
 });
 
-test("buildGcpProjectOptions puts create-new first", () => {
+test("deriveLocalPostgresPort stays out of ephemeral port ranges", () => {
+  const port = Number(deriveLocalPostgresPort("preview-worker"));
+  expect(port).toBeGreaterThanOrEqual(15432);
+  expect(port).toBeLessThan(16432);
+});
+
+test("buildGcpProjectOptions puts the shared services project first", () => {
   const options = buildGcpProjectOptions("preview-worker", "anmho-preview-worker", "preview-worker", [
     { projectId: "anmho-existing", name: "existing" },
   ]);
 
   expect(options[0]).toEqual({
-    label: "Create new project: preview-worker (anmho-preview-worker)",
-    mode: "create_new",
-    projectId: "anmho-preview-worker",
-    projectName: "preview-worker",
+    label: `Use shared services project: services (${SERVICES_PROJECT_DEFAULT})`,
+    mode: "use_existing",
+    projectId: "anmho-services",
+    projectName: "services",
   });
   expect(options[1]?.mode).toBe("use_existing");
+  expect(options[2]?.mode).toBe("create_new");
 });
