@@ -94,7 +94,7 @@ describe("local dev cleanup", () => {
   }, 10_000);
 
   test("fails with lsof and kill commands when an unrelated listener remains on the configured port", async () => {
-    if (!Bun.which("lsof") && !(process.platform === "linux" && Bun.which("fuser"))) {
+    if (!Bun.which("lsof")) {
       return;
     }
 
@@ -108,6 +108,7 @@ describe("local dev cleanup", () => {
 
     try {
       await waitForServer(port);
+      await waitForListener(port, child.pid);
 
       const error = await stopLocalDev({ root, dockerCompose: false, ports: [port] }).then(
         () => undefined,
@@ -177,6 +178,17 @@ async function waitForServer(port: number) {
     await Bun.sleep(50);
   }
   throw new Error(`server on port ${port} did not start`);
+}
+
+async function waitForListener(port: number, pid: number) {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    if (listenerHasPid(port, pid)) {
+      return;
+    }
+    await Bun.sleep(50);
+  }
+  throw new Error(`process ${pid} on port ${port} was not detected by lsof`);
 }
 
 async function waitForListenerStop(port: number, pid: number) {
