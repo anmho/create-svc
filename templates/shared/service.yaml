@@ -15,6 +15,11 @@ spec:
         managed_by: create-service
         service_id: ${SERVICE_ID}
         service_role: ${SERVICE_ROLE}
+      annotations:
+        # Per-role: api scales to zero; the Temporal worker must stay warm with
+        # CPU always allocated. Values come from autoscalingForProcess().
+        autoscaling.knative.dev/minScale: "${SERVICE_MIN_SCALE}"
+        run.googleapis.com/cpu-throttling: "${SERVICE_CPU_THROTTLING}"
     spec:
       serviceAccountName: ${RUNTIME_SERVICE_ACCOUNT}
       containers:

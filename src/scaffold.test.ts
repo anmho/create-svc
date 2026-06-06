@@ -97,6 +97,8 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
     expect(manifest).toContain("${AUTH_AUDIENCE}");
     expect(manifest).toContain("managed_by: create-service");
     expect(manifest).toContain("service_id: ${SERVICE_ID}");
+    expect(manifest).toContain('autoscaling.knative.dev/minScale: "${SERVICE_MIN_SCALE}"');
+    expect(manifest).toContain('run.googleapis.com/cpu-throttling: "${SERVICE_CPU_THROTTLING}"');
     expect(manifest).not.toContain("CLERK_SECRET_KEY");
     expect(manifest).not.toContain("STRIPE_SECRET_KEY");
     expect(manifest).not.toContain("REVENUECAT_API_KEY");

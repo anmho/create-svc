@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { cloudRunServiceNamesForDestroy, localDockerBuildArgs, migrationCommandForRuntime, parseDeployArgs } from "./deploy-args";
+import { autoscalingForProcess, cloudRunServiceNamesForDestroy, localDockerBuildArgs, migrationCommandForRuntime, parseDeployArgs } from "./deploy-args";
 
 const originalBuild = process.env.SERVICE_BUILD;
 const originalBuildStrategy = process.env.SERVICE_BUILD_STRATEGY;
@@ -52,4 +52,14 @@ test("migrationCommandForRuntime uses generated migration tooling", () => {
 
 test("cloudRunServiceNamesForDestroy includes api and worker services", () => {
   expect(cloudRunServiceNamesForDestroy("omnichannel-pr-6")).toEqual(["omnichannel-pr-6", "omnichannel-pr-6-worker"]);
+});
+
+test("api process scales to zero with default CPU throttling", () => {
+  expect(autoscalingForProcess("api")).toEqual({ minScale: "0", cpuThrottling: "true" });
+});
+
+test("worker process stays warm with CPU always allocated for Temporal polling", () => {
+  // A Temporal worker long-polls its Task Queue and gets no inbound HTTP
+  // requests, so scaling to zero or throttling CPU would stop it from working.
+  expect(autoscalingForProcess("worker")).toEqual({ minScale: "1", cpuThrottling: "false" });
 });

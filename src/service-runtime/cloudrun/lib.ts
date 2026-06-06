@@ -2,7 +2,7 @@ import { intro, log, outro, spinner } from "@clack/prompts";
 import { join } from "node:path";
 import { config } from "./config";
 import { serviceRoot } from "../runtime";
-import { localDockerBuildArgs, parseDeployArgs, type DeployArgs } from "./deploy-args";
+import { autoscalingForProcess, localDockerBuildArgs, parseDeployArgs, type CloudRunProcess, type DeployArgs } from "./deploy-args";
 import { resolveTemporalRuntimeConfigValues } from "./temporal-config";
 
 type CommandOptions = {
@@ -37,7 +37,6 @@ type CommandResult = {
   exitCode: number;
 };
 
-type CloudRunProcess = "api" | "worker";
 
 const decoder = new TextDecoder();
 const encoder = new TextEncoder();
@@ -513,11 +512,14 @@ export async function renderManifest(image: string, target: DeploymentTarget, pr
   const template = await Bun.file(join(serviceRoot, "service.yaml")).text();
   const temporal = resolveTemporalRuntimeConfig();
   const serviceName = process === "worker" ? `${target.serviceName}-worker` : target.serviceName;
+  const autoscaling = autoscalingForProcess(process);
   const values = {
     SERVICE_NAME: serviceName,
     SERVICE_ID: config.serviceName,
     SERVICE_ROLE: process,
     SERVICE_INGRESS: process === "worker" ? "internal" : "all",
+    SERVICE_MIN_SCALE: autoscaling.minScale,
+    SERVICE_CPU_THROTTLING: autoscaling.cpuThrottling,
     CONTAINER_COMMAND: renderContainerCommand(process),
     RUNTIME_SERVICE_ACCOUNT: config.runtimeServiceAccount,
     IMAGE_URL: image,

@@ -114,3 +114,30 @@ export function migrationCommandForRuntime(runtime: string): RuntimeMigrationCom
 export function cloudRunServiceNamesForDestroy(serviceName: string) {
   return [serviceName, `${serviceName}-worker`];
 }
+
+export type CloudRunProcess = "api" | "worker";
+
+/**
+ * Per-role Cloud Run autoscaling for the rendered Service manifest.
+ *
+ * - `api`: request-driven, so it scales to zero (minScale 0) and keeps the
+ *   default CPU throttling (CPU billed only while handling requests).
+ * - `worker`: a Temporal worker long-polls its Task Queue and receives no
+ *   inbound HTTP requests, so request-based autoscaling would never wake it.
+ *   It must stay warm (minScale 1) with CPU always allocated
+ *   (cpu-throttling false) or the poll loop starves between requests.
+ *
+ * Note: this keeps the worker as an always-on Cloud Run Service. True
+ * scale-to-zero for the worker requires migrating it to a Cloud Run Worker
+ * Pool driven by CREMA backlog autoscaling — see
+ * plans/temporal-worker-pools-crema.md.
+ */
+export function autoscalingForProcess(process: CloudRunProcess): {
+  minScale: string;
+  cpuThrottling: string;
+} {
+  if (process === "worker") {
+    return { minScale: "1", cpuThrottling: "false" };
+  }
+  return { minScale: "0", cpuThrottling: "true" };
+}
