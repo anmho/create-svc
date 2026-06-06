@@ -13,11 +13,14 @@ import {
   deleteSecret,
   deleteService,
   deleteServiceAccount,
+  deleteWorkerPool,
   describeCloudRunService,
   describeProductionDomainMapping,
   describeSecret,
+  describeWorkerPool,
   formatError,
   listCloudRunServices,
+  listWorkerPools,
   listArtifactImages,
   listSecrets,
   parseCleanupArgs,
@@ -61,6 +64,7 @@ type DestroyPlan = {
   githubRepository?: string;
   hasProductionDomainMapping: boolean;
   serviceNames: string[];
+  workerPoolNames: string[];
   secretNames: string[];
   artifactImages: string[];
   neon?: {
@@ -112,6 +116,15 @@ async function deletePlannedResources(plan: DestroyPlan, options: { deleteGitHub
         for (const serviceName of plan.serviceNames) {
           assertOwnedResource(`Cloud Run service ${serviceName}`, describeCloudRunService(serviceName));
           deleteService(serviceName);
+        }
+      },
+    },
+    {
+      label: "Deleting Cloud Run worker pools",
+      task: () => {
+        for (const poolName of plan.workerPoolNames) {
+          assertOwnedResource(`Cloud Run worker pool ${poolName}`, describeWorkerPool(poolName));
+          deleteWorkerPool(poolName);
         }
       },
     },
@@ -197,6 +210,7 @@ async function buildDestroyPlan(destroyProject: boolean): Promise<DestroyPlan> {
     githubRepository: undefined,
     hasProductionDomainMapping: false,
     serviceNames: [],
+    workerPoolNames: [],
     secretNames: [],
     artifactImages: [],
   };
@@ -205,6 +219,7 @@ async function buildDestroyPlan(destroyProject: boolean): Promise<DestroyPlan> {
   await planLocalDev(plan);
   planProductionDomainMapping(plan);
   planCloudRunServices(plan);
+  planWorkerPools(plan);
   planArtifactImages(plan);
   planSecrets(plan);
   await planNeon(plan);
@@ -299,6 +314,21 @@ function planCloudRunServices(plan: DestroyPlan) {
     }
   } catch (error) {
     plan.blockers.push(`Cloud Run services in ${config.project.id}/${config.region}: ${formatError(error)}`);
+  }
+}
+
+function planWorkerPools(plan: DestroyPlan) {
+  try {
+    plan.workerPoolNames = listWorkerPools().filter(matchesServiceResource);
+    if (plan.workerPoolNames.length === 0) {
+      plan.skipped.push({ label: `Cloud Run worker pools in ${config.project.id}/${config.region}`, detail: "none matched" });
+      return;
+    }
+    for (const poolName of plan.workerPoolNames) {
+      plan.resources.push({ label: `Cloud Run worker pool ${poolName}`, detail: `${config.project.id}/${config.region}` });
+    }
+  } catch (error) {
+    plan.blockers.push(`Cloud Run worker pools in ${config.project.id}/${config.region}: ${formatError(error)}`);
   }
 }
 

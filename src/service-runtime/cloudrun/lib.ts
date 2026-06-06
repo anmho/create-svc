@@ -111,7 +111,10 @@ export function gcloud(args: string[], options: CommandOptions = {}) {
   if (config.project.quotaProjectId && !normalized.includes("--billing-project")) {
     normalized.push("--billing-project", config.project.quotaProjectId);
   }
-  return run("gcloud", normalized, options);
+  return run("gcloud", normalized, {
+    ...options,
+    env: { ...process.env, CLOUDSDK_RUN_REGION: config.region, ...(options.env || {}) },
+  });
 }
 
 export async function gcloudStreaming(args: string[], options: CommandOptions = {}) {
@@ -119,7 +122,10 @@ export async function gcloudStreaming(args: string[], options: CommandOptions = 
   if (config.project.quotaProjectId && !normalized.includes("--billing-project")) {
     normalized.push("--billing-project", config.project.quotaProjectId);
   }
-  return runStreaming("gcloud", normalized, options);
+  return runStreaming("gcloud", normalized, {
+    ...options,
+    env: { ...process.env, CLOUDSDK_RUN_REGION: config.region, ...(options.env || {}) },
+  });
 }
 
 export async function dockerStreaming(args: string[], options: CommandOptions = {}) {
@@ -525,6 +531,111 @@ export async function renderManifest(image: string, target: DeploymentTarget, pr
     DATABASE_URL_SECRET: target.databaseSecretName,
     SERVICE_RUNTIME: config.runtime,
     SERVICE_FRAMEWORK: config.framework,
+    ...temporalEnvValues(temporal),
+    AUTH_ISSUER: config.auth.issuer,
+    AUTH_AUDIENCE: config.auth.audience,
+    AUTH_JWKS_URL: config.auth.jwksUrl,
+  };
+
+  return substitute(template, values);
+}
+
+// Worker pool autoscaling defaults. CREMA scales the pool from zero off Temporal
+// backlog; these cap the pool and set the per-replica target queue depth.
+const WORKER_POOL_MAX_SCALE = "5";
+const CREMA_TARGET_QUEUE_SIZE = "5";
+
+export function workerPoolName(serviceName: string) {
+  return `${serviceName}-worker`;
+}
+
+/**
+ * Render the Cloud Run Worker Pool manifest for the Temporal worker. Unlike the
+ * always-on worker Service, the pool stays at minScale 0 and is scaled up by
+ * CREMA (see renderCremaScaledObject). Deployed via `gcloud run worker-pools
+ * replace`.
+ */
+export async function renderWorkerPoolManifest(image: string, target: DeploymentTarget) {
+  const template = await Bun.file(join(serviceRoot, "worker-pool.yaml")).text();
+  const temporal = resolveTemporalRuntimeConfig();
+  const values = {
+    WORKER_POOL_NAME: workerPoolName(target.serviceName),
+    WORKER_POOL_MAX_SCALE,
+    SERVICE_ID: config.serviceName,
+    CONTAINER_COMMAND: renderContainerCommand("worker"),
+    RUNTIME_SERVICE_ACCOUNT: config.runtimeServiceAccount,
+    IMAGE_URL: image,
+    DATABASE_URL_SECRET: target.databaseSecretName,
+    SERVICE_RUNTIME: config.runtime,
+    SERVICE_FRAMEWORK: config.framework,
+    ...temporalEnvValues(temporal),
+    AUTH_ISSUER: config.auth.issuer,
+    AUTH_AUDIENCE: config.auth.audience,
+    AUTH_JWKS_URL: config.auth.jwksUrl,
+  };
+  return substitute(template, values);
+}
+
+export async function writeRenderedWorkerPoolManifest(image: string, target: DeploymentTarget) {
+  const rendered = await renderWorkerPoolManifest(image, target);
+  const path = new URL("../../.cloudrun.worker-pool.rendered.yaml", import.meta.url);
+  await Bun.write(path, rendered);
+  return path;
+}
+
+/**
+ * Render the CREMA scaledObject config that autoscales the worker pool off the
+ * Temporal Task Queue backlog. Publish to Parameter Manager (`crema-config`).
+ */
+export async function renderCremaScaledObject(target: DeploymentTarget) {
+  const template = await Bun.file(join(serviceRoot, "crema-scaledobject.yaml")).text();
+  const temporal = resolveTemporalRuntimeConfig();
+  const values = {
+    PROJECT_ID: config.project.id,
+    REGION: config.region,
+    WORKER_POOL_NAME: workerPoolName(target.serviceName),
+    WORKER_POOL_MAX_SCALE,
+    TEMPORAL_ADDRESS: temporal.address,
+    TEMPORAL_NAMESPACE: temporal.namespace,
+    TEMPORAL_TASK_QUEUE: temporal.taskQueue,
+    CREMA_TARGET_QUEUE_SIZE,
+  };
+  return substitute(template, values);
+}
+
+export async function writeRenderedCremaConfig(target: DeploymentTarget) {
+  const rendered = await renderCremaScaledObject(target);
+  const path = new URL("../../.crema-config.rendered.yaml", import.meta.url);
+  await Bun.write(path, rendered);
+  return path;
+}
+
+export function deleteWorkerPool(name: string) {
+  return gcloud(["run", "worker-pools", "delete", name, "--project", config.project.id, "--region", config.region, "--quiet"], {
+    allowFailure: true,
+  });
+}
+
+export function describeWorkerPool(name: string): GcpResourceWithLabels | undefined {
+  const result = gcloud(
+    ["run", "worker-pools", "describe", name, "--project", config.project.id, "--region", config.region, "--format=json"],
+    { allowFailure: true }
+  );
+  return parseOptionalJson(result.stdout, result.success);
+}
+
+function substitute(template: string, values: Record<string, string>) {
+  return template.replace(/\$\{([A-Z0-9_]+)\}/g, (_, key: string) => {
+    const value = values[key];
+    if (value === undefined) {
+      throw new Error(`missing manifest value for ${key}`);
+    }
+    return value;
+  });
+}
+
+function temporalEnvValues(temporal: ReturnType<typeof resolveTemporalRuntimeConfig>) {
+  return {
     TEMPORAL_ENABLED: String(temporal.enabled),
     TEMPORAL_ADDRESS: temporal.address,
     TEMPORAL_NAMESPACE: temporal.namespace,
@@ -539,18 +650,7 @@ export async function renderManifest(image: string, target: DeploymentTarget, pr
         ].join("\n")
       : "",
     TEMPORAL_MTLS_ENV: renderTemporalMtlsEnv(temporal),
-    AUTH_ISSUER: config.auth.issuer,
-    AUTH_AUDIENCE: config.auth.audience,
-    AUTH_JWKS_URL: config.auth.jwksUrl,
   };
-
-  return template.replace(/\$\{([A-Z0-9_]+)\}/g, (_, key: string) => {
-    const value = values[key as keyof typeof values];
-    if (value === undefined) {
-      throw new Error(`missing manifest value for ${key}`);
-    }
-    return value;
-  });
 }
 
 export function resolveTemporalRuntimeConfig() {
@@ -616,13 +716,6 @@ export function readVaultField(mount: string, path: string, fields: string[]) {
 export async function writeRenderedManifest(image: string, target: DeploymentTarget) {
   const rendered = await renderManifest(image, target);
   const path = new URL("../../.cloudrun.rendered.yaml", import.meta.url);
-  await Bun.write(path, rendered);
-  return path;
-}
-
-export async function writeRenderedWorkerManifest(image: string, target: DeploymentTarget) {
-  const rendered = await renderManifest(image, target, "worker");
-  const path = new URL("../../.cloudrun.worker.rendered.yaml", import.meta.url);
   await Bun.write(path, rendered);
   return path;
 }
@@ -767,6 +860,13 @@ export function deleteProductionDomainMapping() {
 
 export function listCloudRunServices() {
   return gcloud(["run", "services", "list", "--project", config.project.id, "--region", config.region, "--format=value(metadata.name)"]).stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+export function listWorkerPools() {
+  return gcloud(["run", "worker-pools", "list", "--project", config.project.id, "--region", config.region, "--format=value(metadata.name)"]).stdout
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);

@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { cloudRunServiceNamesForDestroy, localDockerBuildArgs, migrationCommandForRuntime, parseDeployArgs } from "./deploy-args";
+import { autoscalingForProcess, cloudRunServiceNamesForDestroy, cloudRunWorkerPoolNamesForDestroy, localDockerBuildArgs, migrationCommandForRuntime, parseDeployArgs } from "./lib";
 
 const originalBuild = process.env.SERVICE_BUILD;
 const originalBuildStrategy = process.env.SERVICE_BUILD_STRATEGY;
@@ -50,6 +50,10 @@ test("migrationCommandForRuntime uses generated migration tooling", () => {
   });
 });
 
-test("cloudRunServiceNamesForDestroy includes api and worker services", () => {
-  expect(cloudRunServiceNamesForDestroy("omnichannel-pr-6")).toEqual(["omnichannel-pr-6", "omnichannel-pr-6-worker"]);
+test("cloudRunServiceNamesForDestroy targets the api service only (worker is a pool)", () => {
+  expect(cloudRunServiceNamesForDestroy("omnichannel-pr-6")).toEqual(["omnichannel-pr-6"]);
+});
+
+test("cloudRunWorkerPoolNamesForDestroy targets the worker pool", () => {
+  expect(cloudRunWorkerPoolNamesForDestroy("omnichannel-pr-6")).toEqual(["omnichannel-pr-6-worker"]);
 });

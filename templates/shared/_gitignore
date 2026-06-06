@@ -6,6 +6,8 @@ coverage
 dist
 out
 .cloudrun.rendered.yaml
+.cloudrun.worker-pool.rendered.yaml
+.crema-config.rendered.yaml
 .service/*.log
 .service/*.pid
 .wrangler

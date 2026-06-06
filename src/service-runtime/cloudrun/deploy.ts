@@ -4,6 +4,7 @@ import { deleteBranch, ensureBranch, ensureDatabase, getConnectionUri, listBranc
 import {
   addSecretVersion,
   deleteService,
+  deleteWorkerPool,
   dockerStreaming,
   ensureArtifactRepository,
   ensureProductionDomainMapping,
@@ -22,9 +23,10 @@ import {
   runStep,
   serviceOrigin,
   writeRenderedManifest,
-  writeRenderedWorkerManifest,
+  writeRenderedWorkerPoolManifest,
+  writeRenderedCremaConfig,
 } from "./lib";
-import { cloudRunServiceNamesForDestroy, migrationCommandForRuntime } from "./deploy-args";
+import { cloudRunServiceNamesForDestroy, cloudRunWorkerPoolNamesForDestroy, migrationCommandForRuntime } from "./deploy-args";
 
 type DeployOptions = {
   bootstrapResult?: BootstrapResult;
@@ -51,6 +53,9 @@ export async function deploy(args = Bun.argv.slice(2), deployOptions: DeployOpti
 
     for (const serviceName of cloudRunServiceNamesForDestroy(target.serviceName)) {
       await runStep(`Deleting Cloud Run service ${serviceName}`, () => deleteService(serviceName));
+    }
+    for (const poolName of cloudRunWorkerPoolNamesForDestroy(target.serviceName)) {
+      await runStep(`Deleting Cloud Run worker pool ${poolName}`, () => deleteWorkerPool(poolName));
     }
     await runStep(`Deleting Neon branch ${target.branchName}`, async () => {
       const branches = await listBranches(neon.projectId);
@@ -110,10 +115,14 @@ export async function deploy(args = Bun.argv.slice(2), deployOptions: DeployOpti
   );
 
   if (resolveTemporalRuntimeConfig().enabled) {
-    const renderedWorkerManifestPath = await runStep("Rendering Cloud Run worker manifest", () => writeRenderedWorkerManifest(image, target));
-    await runStep(`Deploying Cloud Run worker ${target.serviceName}-worker`, () =>
-      gcloud(["run", "services", "replace", renderedWorkerManifestPath.pathname, "--project", config.project.id, "--region", config.region])
+    const renderedWorkerPoolPath = await runStep("Rendering Cloud Run worker pool manifest", () => writeRenderedWorkerPoolManifest(image, target));
+    await runStep(`Deploying Cloud Run worker pool ${target.serviceName}-worker`, () =>
+      gcloud(["run", "worker-pools", "replace", renderedWorkerPoolPath.pathname, "--project", config.project.id])
     );
+    await runStep("Rendering CREMA autoscaler config", async () => {
+      await writeRenderedCremaConfig(target);
+      return "Wrote .crema-config.rendered.yaml — publish to Parameter Manager (crema-config); see plans/temporal-worker-pools-crema.md";
+    });
   }
 
   await runStep("Granting public invoker access", () =>
