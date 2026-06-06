@@ -111,7 +111,10 @@ export function gcloud(args: string[], options: CommandOptions = {}) {
   if (config.project.quotaProjectId && !normalized.includes("--billing-project")) {
     normalized.push("--billing-project", config.project.quotaProjectId);
   }
-  return run("gcloud", normalized, options);
+  return run("gcloud", normalized, {
+    ...options,
+    env: { ...process.env, CLOUDSDK_RUN_REGION: config.region, ...(options.env || {}) },
+  });
 }
 
 export async function gcloudStreaming(args: string[], options: CommandOptions = {}) {
@@ -119,7 +122,10 @@ export async function gcloudStreaming(args: string[], options: CommandOptions = 
   if (config.project.quotaProjectId && !normalized.includes("--billing-project")) {
     normalized.push("--billing-project", config.project.quotaProjectId);
   }
-  return runStreaming("gcloud", normalized, options);
+  return runStreaming("gcloud", normalized, {
+    ...options,
+    env: { ...process.env, CLOUDSDK_RUN_REGION: config.region, ...(options.env || {}) },
+  });
 }
 
 export async function dockerStreaming(args: string[], options: CommandOptions = {}) {

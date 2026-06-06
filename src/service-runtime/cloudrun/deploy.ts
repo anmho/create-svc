@@ -117,7 +117,7 @@ export async function deploy(args = Bun.argv.slice(2), deployOptions: DeployOpti
   if (resolveTemporalRuntimeConfig().enabled) {
     const renderedWorkerPoolPath = await runStep("Rendering Cloud Run worker pool manifest", () => writeRenderedWorkerPoolManifest(image, target));
     await runStep(`Deploying Cloud Run worker pool ${target.serviceName}-worker`, () =>
-      gcloud(["run", "worker-pools", "replace", renderedWorkerPoolPath.pathname, "--project", config.project.id, "--region", config.region])
+      gcloud(["run", "worker-pools", "replace", renderedWorkerPoolPath.pathname, "--project", config.project.id])
     );
     await runStep("Rendering CREMA autoscaler config", async () => {
       await writeRenderedCremaConfig(target);

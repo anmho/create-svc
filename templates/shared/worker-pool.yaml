@@ -6,6 +6,12 @@ metadata:
     managed_by: create-service
     service_id: ${SERVICE_ID}
     service_role: worker
+  annotations:
+    # CREMA scales this pool 0..N off Temporal Task Queue backlog, so the
+    # pool itself stays at minScale 0. CPU must stay always-allocated or the
+    # poll loop starves while idle. See plans/temporal-worker-pools-crema.md.
+    autoscaling.knative.dev/minScale: "0"
+    autoscaling.knative.dev/maxScale: "${WORKER_POOL_MAX_SCALE}"
 spec:
   template:
     metadata:
@@ -14,11 +20,6 @@ spec:
         service_id: ${SERVICE_ID}
         service_role: worker
       annotations:
-        # CREMA scales this pool 0..N off Temporal Task Queue backlog, so the
-        # pool itself stays at minScale 0. CPU must stay always-allocated or the
-        # poll loop starves while idle. See plans/temporal-worker-pools-crema.md.
-        autoscaling.knative.dev/minScale: "0"
-        autoscaling.knative.dev/maxScale: "${WORKER_POOL_MAX_SCALE}"
         run.googleapis.com/cpu-throttling: "false"
     spec:
       serviceAccountName: ${RUNTIME_SERVICE_ACCOUNT}
