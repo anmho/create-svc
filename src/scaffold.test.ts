@@ -105,6 +105,18 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
     expect(manifest).not.toContain("RESEND_API_KEY");
     expect(manifest).not.toContain("POSTHOG_API_KEY");
 
+    const workerPool = await Bun.file(join(generatedRoot, "worker-pool.yaml")).text();
+    expect(workerPool).toContain("kind: WorkerPool");
+    expect(workerPool).toContain('autoscaling.knative.dev/minScale: "0"');
+    expect(workerPool).toContain('autoscaling.knative.dev/maxScale: "${WORKER_POOL_MAX_SCALE}"');
+    expect(workerPool).toContain('run.googleapis.com/cpu-throttling: "false"');
+    expect(workerPool).toContain("TEMPORAL_TASK_QUEUE");
+
+    const crema = await Bun.file(join(generatedRoot, "crema-scaledobject.yaml")).text();
+    expect(crema).toContain("type: temporal");
+    expect(crema).toContain("minReplicaCount: 0");
+    expect(crema).toContain("taskQueue: ${TEMPORAL_TASK_QUEUE}");
+
     const gitignore = await Bun.file(join(generatedRoot, ".gitignore")).text();
     expect(gitignore).toContain("node_modules");
     expect(gitignore).toContain(".service/*.log");

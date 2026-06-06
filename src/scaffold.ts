@@ -107,7 +107,8 @@ function shouldSkipForTarget(target: DeployTarget, templateKind: "shared" | "var
     }
 
     if (templateKind === "shared") {
-      return relativePath === "service.yaml";
+      // Cloud Run-only manifests don't belong in a Cloudflare Workers repo.
+      return relativePath === "service.yaml" || relativePath === "worker-pool.yaml" || relativePath === "crema-scaledobject.yaml";
     }
 
     return (

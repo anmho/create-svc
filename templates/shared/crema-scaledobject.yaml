@@ -1,0 +1,22 @@
+# CREMA (Cloud Run External Metrics Autoscaling) config for the Temporal worker
+# pool. Store this in Parameter Manager (parameter `crema-config`) and point the
+# always-on crema-autoscaler service at it. See plans/temporal-worker-pools-crema.md.
+scaledObjects:
+  - spec:
+      scaleTargetRef:
+        name: projects/${PROJECT_ID}/locations/${REGION}/workerpools/${WORKER_POOL_NAME}
+      minReplicaCount: 0
+      maxReplicaCount: ${WORKER_POOL_MAX_SCALE}
+      triggers:
+        - type: temporal
+          metadata:
+            endpoint: ${TEMPORAL_ADDRESS}
+            namespace: ${TEMPORAL_NAMESPACE}
+            taskQueue: ${TEMPORAL_TASK_QUEUE}
+            targetQueueSize: "${CREMA_TARGET_QUEUE_SIZE}"
+            activationTargetQueueSize: "1"
+            # Watch both queue types or you miss workflow starts.
+            queueTypes: workflow,activity
+            # Required for workers deployed without Build IDs.
+            selectUnversioned: "true"
+    pollingInterval: 15

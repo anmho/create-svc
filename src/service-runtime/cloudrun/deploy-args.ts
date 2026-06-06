@@ -112,5 +112,9 @@ export function migrationCommandForRuntime(runtime: string): RuntimeMigrationCom
 }
 
 export function cloudRunServiceNamesForDestroy(serviceName: string) {
-  return [serviceName, `${serviceName}-worker`];
+  return [serviceName];
+}
+
+export function cloudRunWorkerPoolNamesForDestroy(serviceName: string) {
+  return [`${serviceName}-worker`];
 }
