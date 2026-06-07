@@ -40,6 +40,11 @@ export type BranchProtectionRequest = {
   allow_fork_syncing: boolean;
 };
 
+type BranchProtectionVerification = {
+  actualChecks: string[];
+  missingChecks: string[];
+};
+
 const DEFAULT_BRANCH = "main";
 const DEFAULT_REQUIRED_CHECKS = ["test"];
 const decoder = new TextDecoder();
@@ -93,7 +98,7 @@ export function protectMainBranch(options: ProtectionOptions = {}) {
   const runner = options.runner ?? run;
   const repo = normalizeRepo(options.repo ?? process.env.GITHUB_REPOSITORY ?? discoverRepo(runner, options.cwd));
   const branch = options.branch ?? DEFAULT_BRANCH;
-  const requiredChecks = options.requiredChecks ?? DEFAULT_REQUIRED_CHECKS;
+  const requiredChecks = normalizeRequiredChecks(options.requiredChecks ?? DEFAULT_REQUIRED_CHECKS);
   const request = buildBranchProtectionRequest(requiredChecks);
   const endpoint = `/repos/${repo}/branches/${branch}/protection`;
   const result = runner("gh", ["api", "--method", "PUT", endpoint, "--input", "-"], {
@@ -105,18 +110,30 @@ export function protectMainBranch(options: ProtectionOptions = {}) {
     throw new Error(formatProtectionFailure(repo, branch, result));
   }
 
+  const readback = runner("gh", ["api", endpoint], { cwd: options.cwd });
+  if (!readback.success) {
+    throw new Error(formatProtectionFailure(repo, branch, readback));
+  }
+
+  const verification = verifyBranchProtection(requiredChecks, readback.stdout);
+  if (verification.missingChecks.length > 0) {
+    throw new Error(formatProtectionVerificationFailure(repo, branch, requiredChecks, verification.actualChecks));
+  }
+
   return {
     repo,
     branch,
     requiredChecks,
+    verified: true,
   };
 }
 
 export function buildBranchProtectionRequest(requiredChecks = DEFAULT_REQUIRED_CHECKS): BranchProtectionRequest {
+  const normalizedChecks = normalizeRequiredChecks(requiredChecks);
   return {
     required_status_checks: {
       strict: true,
-      contexts: requiredChecks,
+      contexts: normalizedChecks,
     },
     enforce_admins: true,
     required_pull_request_reviews: {
@@ -145,6 +162,73 @@ export function formatProtectionFailure(repo: string, branch: string, result: Co
     : "";
 
   return [`Failed to reconcile ${branch} branch protection for ${repo}.`, details, permissionHint].filter(Boolean).join("\n");
+}
+
+export function formatProtectionVerificationFailure(repo: string, branch: string, expectedChecks: string[], actualChecks: string[]) {
+  const actual = actualChecks.length > 0 ? actualChecks.join(", ") : "(none)";
+  return [
+    `Failed to verify ${branch} branch protection for ${repo}.`,
+    `Expected required checks: ${expectedChecks.join(", ")}`,
+    `GitHub returned required checks: ${actual}`,
+    `Rerun: service protect-main --repo ${repo} --branch ${branch}`,
+  ].join("\n");
+}
+
+function verifyBranchProtection(expectedChecks: string[], raw: string): BranchProtectionVerification {
+  const actualChecks = requiredChecksFromProtectionResponse(raw);
+  const actual = new Set(actualChecks);
+  const missingChecks = expectedChecks.filter((check) => !actual.has(check));
+  return { actualChecks, missingChecks };
+}
+
+function requiredChecksFromProtectionResponse(raw: string) {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+
+  const requiredStatusChecks = (parsed as { required_status_checks?: unknown })?.required_status_checks;
+  if (!requiredStatusChecks || typeof requiredStatusChecks !== "object") {
+    return [];
+  }
+
+  const checks = new Set<string>();
+  const contexts = (requiredStatusChecks as { contexts?: unknown }).contexts;
+  if (Array.isArray(contexts)) {
+    for (const context of contexts) {
+      if (typeof context === "string" && context.trim()) {
+        checks.add(context.trim());
+      }
+    }
+  }
+
+  const checkRuns = (requiredStatusChecks as { checks?: unknown }).checks;
+  if (Array.isArray(checkRuns)) {
+    for (const checkRun of checkRuns) {
+      if (!checkRun || typeof checkRun !== "object") {
+        continue;
+      }
+      const context = (checkRun as { context?: unknown }).context;
+      const name = (checkRun as { name?: unknown }).name;
+      for (const value of [context, name]) {
+        if (typeof value === "string" && value.trim()) {
+          checks.add(value.trim());
+        }
+      }
+    }
+  }
+
+  return [...checks];
+}
+
+function normalizeRequiredChecks(requiredChecks: string[]) {
+  const normalized = [...new Set(requiredChecks.map((check) => check.trim()).filter(Boolean))];
+  if (normalized.length === 0) {
+    throw new Error("Branch protection requires at least one required status check");
+  }
+  return normalized;
 }
 
 function discoverRepo(runner: CommandRunner, cwd?: string) {

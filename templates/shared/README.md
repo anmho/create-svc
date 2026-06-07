@@ -179,13 +179,13 @@ The generated backend scripts still use `gcloud` as the primary control plane ev
 
 ## GitHub main branch protection
 
-Generated repositories include GitHub Actions workflows for CI and production deploys. `service create` reconciles `main` branch protection after creating and pushing the GitHub repository. To rerun reconciliation for an existing generated repo:
+Generated repositories include GitHub Actions workflows for CI and production deploys. `service create` applies and verifies `main` branch protection after creating and pushing the GitHub repository. To rerun verification for an existing generated repo:
 
 ```bash
 {{COMMAND_PROTECT_MAIN}}
 ```
 
-The protection requires the generated pull request `test` status check, pull requests, stale-review dismissal, conversation resolution, and admin enforcement. If GitHub permissions are missing, rerun the command with a token that has repo admin access or fine-grained `Administration: write`.
+The protection requires the generated pull request `test` status check, pull requests, stale-review dismissal, conversation resolution, and admin enforcement. The command fails if GitHub does not report the expected required checks after applying protection. If GitHub permissions are missing, rerun the command with a token that has repo admin access or fine-grained `Administration: write`.
 
 Go variants use Atlas for migrations:
 

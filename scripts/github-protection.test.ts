@@ -32,10 +32,15 @@ test("sends the expected GitHub API request to reconcile main protection", async
   const calls: Array<{ command: string; args: string[]; input?: string }> = [];
   const runner: CommandRunner = (command, args, options) => {
     calls.push({ command, args, input: options?.input });
-    return { success: true, stdout: "{}", stderr: "", exitCode: 0 };
+    return {
+      success: true,
+      stdout: JSON.stringify({ required_status_checks: { contexts: ["test"] } }),
+      stderr: "",
+      exitCode: 0,
+    };
   };
 
-  await protectMainBranch({ repo: "anmho/dns-api", runner });
+  const result = await protectMainBranch({ repo: "anmho/dns-api", runner });
 
   expect(calls).toEqual([
     {
@@ -43,7 +48,69 @@ test("sends the expected GitHub API request to reconcile main protection", async
       args: ["api", "--method", "PUT", "/repos/anmho/dns-api/branches/main/protection", "--input", "-"],
       input: `${JSON.stringify(buildBranchProtectionRequest())}\n`,
     },
+    {
+      command: "gh",
+      args: ["api", "/repos/anmho/dns-api/branches/main/protection"],
+      input: undefined,
+    },
   ]);
+  expect(result).toEqual({
+    repo: "anmho/dns-api",
+    branch: "main",
+    requiredChecks: ["test"],
+    verified: true,
+  });
+});
+
+test("verifies required checks from GitHub protection readback checks array", async () => {
+  const runner: CommandRunner = (_command, args) => {
+    const isReadback = args[0] === "api" && args.length === 2;
+    return {
+      success: true,
+      stdout: isReadback
+        ? JSON.stringify({ required_status_checks: { contexts: [], checks: [{ context: "lint" }, { name: "test" }] } })
+        : "{}",
+      stderr: "",
+      exitCode: 0,
+    };
+  };
+
+  expect(protectMainBranch({ repo: "anmho/dns-api", requiredChecks: ["test"], runner })).toEqual({
+    repo: "anmho/dns-api",
+    branch: "main",
+    requiredChecks: ["test"],
+    verified: true,
+  });
+});
+
+test("fails when GitHub readback has no required checks", async () => {
+  const runner: CommandRunner = (_command, args) => {
+    const isReadback = args[0] === "api" && args.length === 2;
+    return {
+      success: true,
+      stdout: isReadback ? JSON.stringify({ required_status_checks: { contexts: [], checks: [] } }) : "{}",
+      stderr: "",
+      exitCode: 0,
+    };
+  };
+
+  expect(() => protectMainBranch({ repo: "anmho/dns-api", runner })).toThrow("GitHub returned required checks: (none)");
+  expect(() => protectMainBranch({ repo: "anmho/dns-api", runner })).toThrow(
+    "Rerun: service protect-main --repo anmho/dns-api --branch main"
+  );
+});
+
+test("rejects empty required checks before calling GitHub", () => {
+  const calls: string[] = [];
+  const runner: CommandRunner = (command) => {
+    calls.push(command);
+    return { success: true, stdout: "{}", stderr: "", exitCode: 0 };
+  };
+
+  expect(() => protectMainBranch({ repo: "anmho/dns-api", requiredChecks: [], runner })).toThrow(
+    "Branch protection requires at least one required status check"
+  );
+  expect(calls).toEqual([]);
 });
 
 test("formats GitHub permission failures with the required permission and rerun command", () => {

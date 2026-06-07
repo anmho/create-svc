@@ -155,7 +155,7 @@ async function delegateToGeneratedService(serviceRoot: string, argv: string[]) {
       branch: protectionArgs.branch,
       cwd: serviceRoot,
     });
-    console.log(`Protected ${result.repo} ${result.branch} with required checks: ${result.requiredChecks.join(", ")}`);
+    console.log(`Verified ${result.repo} ${result.branch} branch protection with required checks: ${result.requiredChecks.join(", ")}`);
     return;
   }
 
@@ -218,7 +218,7 @@ export function generatedServiceCommandHelp(argv: string[]) {
       "Usage:",
       "  service protect-main [--repo owner/name] [--branch main]",
       "",
-      "Reconciles generated service branch protection with required pull request checks.",
+      "Applies and verifies generated service branch protection with required pull request checks.",
     ].join("\n");
   }
 
