@@ -2,7 +2,7 @@
 
 Status: proposed
 Owner: platform
-Related code: `src/service-runtime/cloudrun/{deploy,lib,deploy-args}.ts`, `templates/shared/service.yaml`
+Related code: `src/service-commands/cloudrun/{deploy,lib,deploy-args}.ts`, `templates/shared/service.yaml`
 
 ## Problem
 

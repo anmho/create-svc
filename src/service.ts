@@ -161,7 +161,7 @@ async function delegateToGeneratedService(serviceRoot: string, argv: string[]) {
 
   if (argv[0] === "sdk") {
     const { intro, outro } = await import("@clack/prompts");
-    const { runConnectSdk } = await import("./service-runtime/connect-sdk");
+    const { runConnectSdk } = await import("./service-commands/connect-sdk");
     intro("SDK");
     const result = await runConnectSdk(argv.slice(1));
     outro(result);
@@ -169,12 +169,12 @@ async function delegateToGeneratedService(serviceRoot: string, argv: string[]) {
   }
 
   if (serviceConfig.target === "workers") {
-    const { main } = await import("./service-runtime/workers/cli");
+    const { main } = await import("./service-commands/workers/cli");
     await main(argv);
     return;
   }
 
-  const { main } = await import("./service-runtime/cloudrun/cli");
+  const { main } = await import("./service-commands/cloudrun/cli");
   await main(argv);
 }
 
