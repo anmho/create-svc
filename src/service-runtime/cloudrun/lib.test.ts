@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { autoscalingForProcess, cloudRunServiceNamesForDestroy, cloudRunWorkerPoolNamesForDestroy, localDockerBuildArgs, migrationCommandForRuntime, parseDeployArgs } from "./lib";
+import { cloudRunServiceNamesForDestroy, cloudRunWorkerPoolNamesForDestroy, localDockerBuildArgs, migrationCommandForRuntime, parseDeployArgs } from "./deploy-args";
 
 const originalBuild = process.env.SERVICE_BUILD;
 const originalBuildStrategy = process.env.SERVICE_BUILD_STRATEGY;
