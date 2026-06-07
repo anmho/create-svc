@@ -25,6 +25,7 @@ console to create and deploy.
 
 ```bash
 {{COMMAND_DEV}}
+{{COMMAND_DEV_DOWN}}
 {{COMMAND_MIGRATE}}
 {{COMMAND_GEN}}
 {{COMMAND_LINT}}
@@ -52,6 +53,12 @@ First local run:
 ```bash
 {{COMMAND_MIGRATE}}
 {{COMMAND_DEV}}
+```
+
+Stop detached local servers and Docker Compose services:
+
+```bash
+{{COMMAND_DEV_DOWN}}
 ```
 
 Local runtime uses:

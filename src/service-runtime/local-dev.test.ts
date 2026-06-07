@@ -68,6 +68,65 @@ describe("local dev cleanup", () => {
     }
   }, 10_000);
 
+
+  test("does not stop a pid-file process outside the service root", async () => {
+    const root = await tempRoot();
+    const unrelatedRoot = await tempRoot();
+    const port = await reservePort();
+    const child = startServer(unrelatedRoot, port);
+    if (!child.pid) {
+      throw new Error("spawned local dev process has no pid");
+    }
+
+    try {
+      await waitForServer(port);
+      await mkdir(join(root, ".service"), { recursive: true });
+      await Bun.write(join(root, ".service", "local-dev.pid"), `${child.pid}\n`);
+
+      const result = await stopLocalDev({ root, dockerCompose: false, ports: [] });
+
+      expect(result).toContain(`Skipping pid-file process ${child.pid}`);
+      await waitForServer(port);
+    } finally {
+      child.kill("SIGKILL");
+      await child.exited.catch(() => undefined);
+    }
+  }, 10_000);
+
+  test("fails with lsof and kill commands when an unrelated listener remains on the configured port", async () => {
+    if (!Bun.which("lsof")) {
+      return;
+    }
+
+    const root = await tempRoot();
+    const unrelatedRoot = await tempRoot();
+    const port = await reservePort();
+    const child = startServer(unrelatedRoot, port);
+    if (!child.pid) {
+      throw new Error("spawned local dev process has no pid");
+    }
+
+    try {
+      await waitForServer(port);
+      await waitForListener(port, child.pid);
+
+      const error = await stopLocalDev({ root, dockerCompose: false, ports: [port] }).then(
+        () => undefined,
+        (caught) => caught,
+      );
+
+      expect(error).toBeInstanceOf(Error);
+      const message = error instanceof Error ? error.message : String(error);
+      expect(message).toContain(`Port ${port} is still listening after dev down`);
+      expect(message).toContain(`lsof -nP -iTCP:${port} -sTCP:LISTEN`);
+      expect(message).toContain(`Stop manually with: kill ${child.pid}`);
+      await waitForServer(port);
+    } finally {
+      child.kill("SIGKILL");
+      await child.exited.catch(() => undefined);
+    }
+  }, 10_000);
+
   test("plans Docker Compose cleanup when compose exists", async () => {
     const root = await tempRoot();
     await Bun.write(join(root, "docker-compose.yml"), "services: {}\n");
@@ -77,6 +136,22 @@ describe("local dev cleanup", () => {
     expect(plan.resources).toContain("Docker Compose containers, networks, and volumes");
   });
 });
+
+function startServer(cwd: string, port: number) {
+  return Bun.spawn(
+    [
+      "bun",
+      "-e",
+      "Bun.serve({ port: Number(Bun.env.PORT), fetch() { return new Response('ok'); } }); setInterval(() => {}, 1000);",
+    ],
+    {
+      cwd,
+      env: { ...process.env, PORT: String(port) },
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
+}
 
 async function tempRoot() {
   const root = await mkdtemp(join(tmpdir(), "create-svc-local-dev-"));
@@ -103,6 +178,17 @@ async function waitForServer(port: number) {
     await Bun.sleep(50);
   }
   throw new Error(`server on port ${port} did not start`);
+}
+
+async function waitForListener(port: number, pid: number) {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    if (listenerHasPid(port, pid)) {
+      return;
+    }
+    await Bun.sleep(50);
+  }
+  throw new Error(`process ${pid} on port ${port} was not detected by lsof`);
 }
 
 async function waitForListenerStop(port: number, pid: number) {

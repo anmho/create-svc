@@ -1,4 +1,4 @@
-.PHONY: dev migrate migrate-lint gen lint test test-e2e test-e2e-local test-e2e-prod create deploy protect-main dashboards observability-bootstrap auth destroy
+.PHONY: dev dev-down migrate migrate-lint gen lint test test-e2e test-e2e-local test-e2e-prod create deploy protect-main dashboards observability-bootstrap auth destroy
 
 SERVICE := service
 WITH_ENV := set -a; [ ! -f .env.local ] || . ./.env.local; set +a;
@@ -6,6 +6,9 @@ ATLAS ?= atlas
 
 dev:
 	@bun run ./scripts/dev.ts go run ./cmd/server --worker go run ./cmd/worker
+
+dev-down:
+	$(SERVICE) dev down
 
 migrate:
 	@bun run ./scripts/ensure-local-db.ts

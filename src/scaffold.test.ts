@@ -218,6 +218,7 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
         expect(dockerfile).toContain("COPY gen ./gen");
       }
       expect(packageJson).toContain('"dev": "make dev"');
+      expect(packageJson).toContain('"dev:down": "service dev down"');
       expect(packageJson).toContain('"service": "service"');
       expect(packageJson).toContain('"migrate": "service migrate"');
       expect(packageJson).toContain('"create": "service create"');
@@ -252,6 +253,8 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
       expect(makefile).toContain("bun run ./scripts/ensure-local-db.ts");
       expect(makefile).toContain("bun run ./scripts/wait-for-db.ts");
       expect(makefile).toContain("bun run ./scripts/dev.ts go run ./cmd/server --worker go run ./cmd/worker");
+      expect(makefile).toContain("dev-down:");
+      expect(makefile).toContain("$(SERVICE) dev down");
       expect(makefile).toContain("protect-main:");
       expect(makefile).toContain("$(SERVICE) protect-main");
       expect(await Bun.file(join(generatedRoot, "atlas.hcl")).exists()).toBeTrue();
@@ -266,6 +269,7 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
       expect(packageJson).toContain('"@anmho/authctl": "0.1.1"');
       expect(packageJson).toContain("@temporalio/worker");
       expect(packageJson).toContain('"dev": "bun run ./scripts/dev.ts bun run ./src/index.ts --worker bun run ./src/worker.ts"');
+      expect(packageJson).toContain('"dev:down": "service dev down"');
       expect(packageJson).toContain('"gen": "bun run ./scripts/codegen.ts"');
       expect(packageJson).toContain('"service": "service"');
       expect(packageJson).toContain('"migrate": "service migrate"');
@@ -294,6 +298,8 @@ test("scaffolds all runtime/framework variants with shared cloudrun config", asy
       expect(makefile).toContain("protect-main:");
       expect(makefile).toContain("auth:");
       expect(makefile).toContain("bun run dev");
+      expect(makefile).toContain("dev-down:");
+      expect(makefile).toContain("$(SERVICE) dev down");
       const devScript = await Bun.file(join(generatedRoot, "scripts", "dev.ts")).text();
       expect(devScript).toContain("ensureLocalPostgres");
       expect(devScript).toContain("Temporal worker skipped because TEMPORAL_ENABLED is false.");

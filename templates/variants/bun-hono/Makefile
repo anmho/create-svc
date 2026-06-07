@@ -1,9 +1,12 @@
-.PHONY: dev migrate gen lint test test-e2e test-e2e-local test-e2e-prod create deploy protect-main dashboards observability-bootstrap auth destroy
+.PHONY: dev dev-down migrate gen lint test test-e2e test-e2e-local test-e2e-prod create deploy protect-main dashboards observability-bootstrap auth destroy
 
 SERVICE := service
 
 dev:
 	bun run dev
+
+dev-down:
+	$(SERVICE) dev down
 
 migrate:
 	bun run ./scripts/migrate.ts

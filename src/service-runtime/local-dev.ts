@@ -14,6 +14,7 @@ export type LocalDevCleanupPlan = {
   hasPidFile: boolean;
   pid?: number;
   portProcesses: PortProcess[];
+  ports: number[];
   hasDockerCompose: boolean;
   resources: string[];
   skipped: string[];
@@ -25,14 +26,14 @@ type PortProcess = {
 };
 
 const decoder = new TextDecoder();
-const defaultLocalDevPorts = [8080, 3000];
+const fallbackLocalDevPorts = [8080, 3000];
 
 export async function buildLocalDevCleanupPlan(options: LocalDevOptions = {}): Promise<LocalDevCleanupPlan> {
   const root = options.root ?? defaultServiceRoot();
   const pidFile = join(root, ".service", "local-dev.pid");
   const hasPidFile = await Bun.file(pidFile).exists();
   const pid = hasPidFile ? parsePid(await Bun.file(pidFile).text()) : undefined;
-  const ports = options.ports ?? defaultLocalDevPorts;
+  const ports = options.ports ?? defaultLocalDevPorts();
   const portProcesses = findServicePortProcesses(root, ports, pid);
   const hasDockerCompose = Boolean(options.dockerCompose) && (await Bun.file(join(root, "docker-compose.yml")).exists());
   const resources: string[] = [];
@@ -57,6 +58,7 @@ export async function buildLocalDevCleanupPlan(options: LocalDevOptions = {}): P
     hasPidFile,
     pid,
     portProcesses,
+    ports,
     hasDockerCompose,
     resources,
     skipped,
@@ -70,7 +72,15 @@ export async function stopLocalDev(options: LocalDevOptions = {}) {
 
   if (plan.hasPidFile) {
     if (plan.pid) {
-      messages.push(stopPid(plan.pid) ? `Stopped local dev process ${plan.pid}` : `Removed stale local dev pid file for ${plan.pid}`);
+      if (isServiceOwnedPid(root, plan.pid)) {
+        messages.push(stopPid(plan.pid) ? `Stopped local dev process ${plan.pid}` : `Removed stale local dev pid file for ${plan.pid}`);
+      } else if (isRunning(plan.pid)) {
+        messages.push(
+          `Skipping pid-file process ${plan.pid}; it is not running from ${root}. Inspect with: ps -p ${plan.pid} -o pid=,command=`,
+        );
+      } else {
+        messages.push(`Removed stale local dev pid file for ${plan.pid}`);
+      }
     } else {
       messages.push(`Removed invalid local dev pid file ${plan.pidFile}`);
     }
@@ -89,6 +99,8 @@ export async function stopLocalDev(options: LocalDevOptions = {}) {
     messages.push(result);
   }
 
+  assertPortsClean(plan.ports);
+
   return messages.join("\n");
 }
 
@@ -100,6 +112,27 @@ function parsePid(raw: string) {
   const pid = Number.parseInt(raw.trim(), 10);
   return Number.isFinite(pid) && pid > 0 ? pid : undefined;
 }
+
+function defaultLocalDevPorts() {
+  const configuredPort = Bun.env.PORT?.trim();
+  if (configuredPort) {
+    const port = Number(configuredPort);
+    if (!Number.isInteger(port) || port <= 0) {
+      throw new Error(`Invalid PORT: ${Bun.env.PORT}`);
+    }
+    return [port];
+  }
+  return fallbackLocalDevPorts;
+}
+
+function isServiceOwnedPid(root: string, pid: number) {
+  const cwd = processCwd(pid);
+  if (!cwd) {
+    return false;
+  }
+  return isPathInside(root, cwd);
+}
+
 
 function stopPid(pid: number) {
   const wasRunning = isRunning(pid);
@@ -144,8 +177,6 @@ function waitForExit(pid: number, timeoutMs: number) {
 }
 
 function findServicePortProcesses(root: string, ports: number[], pidFromFile?: number): PortProcess[] {
-  const resolvedRoot = realpath(root);
-  const rootWithSlash = resolvedRoot.endsWith("/") ? resolvedRoot : `${resolvedRoot}/`;
   const seen = new Set<string>();
   const processes: PortProcess[] = [];
   for (const port of ports) {
@@ -158,13 +189,20 @@ function findServicePortProcesses(root: string, ports: number[], pidFromFile?: n
         continue;
       }
       const cwd = processCwd(pid);
-      if (cwd && (cwd === resolvedRoot || cwd.startsWith(rootWithSlash))) {
+      if (cwd && isPathInside(root, cwd)) {
         processes.push({ pid, port });
         seen.add(key);
       }
     }
   }
   return processes;
+}
+
+function isPathInside(root: string, path: string) {
+  const resolvedRoot = realpath(root);
+  const resolvedPath = realpath(path);
+  const rootWithSlash = resolvedRoot.endsWith("/") ? resolvedRoot : `${resolvedRoot}/`;
+  return resolvedPath === resolvedRoot || resolvedPath.startsWith(rootWithSlash);
 }
 
 function realpath(path: string) {
@@ -261,6 +299,22 @@ function formatPortProcesses(processes: PortProcess[]) {
   return processes
     .map((portProcess) => `local dev process ${portProcess.pid} on port ${portProcess.port}`)
     .join(", ");
+}
+
+function assertPortsClean(ports: number[]) {
+  for (const port of ports) {
+    const pids = listeningPids(port).sort((a, b) => a - b);
+    if (pids.length === 0) {
+      continue;
+    }
+    throw new Error(
+      [
+        `Port ${port} is still listening after dev down: ${pids.join(", ")}`,
+        `Inspect with: lsof -nP -iTCP:${port} -sTCP:LISTEN`,
+        `Stop manually with: kill ${pids.join(" ")}`,
+      ].join("\n"),
+    );
+  }
 }
 
 function runDockerComposeDown(root: string, removeVolumes: boolean) {

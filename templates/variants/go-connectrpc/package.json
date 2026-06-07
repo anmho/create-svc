@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "make dev",
+    "dev:down": "service dev down",
     "service": "service",
     "migrate": "service migrate",
     "gen": "make gen",
