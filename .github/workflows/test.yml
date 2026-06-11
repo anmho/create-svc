@@ -14,6 +14,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: "1.3.2"
+      - run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - run: bun install --frozen-lockfile
       - run: PORT=3999 bun test src scripts
       - run: bun run typecheck
