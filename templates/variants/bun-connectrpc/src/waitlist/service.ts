@@ -1,5 +1,5 @@
-import { createDb } from "@/db/client";
-import { WaitlistRepository } from "@/db/repository";
+import { createDb } from "~/db/client";
+import { WaitlistRepository } from "~/db/repository";
 import type {
   JoinWaitlistInput,
   ListWaitlistEntriesInput,
@@ -10,7 +10,7 @@ import type {
   WaitlistEntry,
   WaitlistEntryStatus,
   WaitlistTrigger,
-} from "@/waitlist/types";
+} from "~/waitlist/types";
 
 export class AppError extends Error {
   constructor(

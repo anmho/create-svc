@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { createIntrospectionDocument, isLocalRpcIntrospectionEnabled } from "@/index";
-import { assertTemporalRuntimeConfig, resolveTemporalRuntimeConfig } from "@/temporal";
+import { createIntrospectionDocument, isLocalRpcIntrospectionEnabled } from "~/index";
+import { assertTemporalRuntimeConfig, resolveTemporalRuntimeConfig } from "~/temporal";
 
 test("local introspection document exposes waitlist service and methods", () => {
   const document = createIntrospectionDocument();

@@ -2,13 +2,13 @@ import { Code, ConnectError, createConnectRouter } from "@connectrpc/connect";
 import type { ServiceImpl } from "@connectrpc/connect";
 import { createFetchHandler } from "@connectrpc/connect/protocol";
 import { Hono } from "hono";
-import { WaitlistService as WaitlistRpcService } from "@gen/protos/waitlist/v1/waitlist_pb";
-import { authMiddleware } from "@/auth";
-import { connectRequestDb, type RequestDb } from "@/db/client";
-import { WaitlistRepository } from "@/db/repository";
-import { createTriggerDevDispatcher, type TriggerDispatcher } from "@/trigger";
-import { AppError, DefaultWaitlistService, type WaitlistService } from "@/waitlist/service";
-import type { WaitlistEntry, WaitlistTrigger } from "@/waitlist/types";
+import { WaitlistService as WaitlistRpcService } from "~gen/protos/waitlist/v1/waitlist_pb";
+import { authMiddleware } from "~/auth";
+import { connectRequestDb, type RequestDb } from "~/db/client";
+import { WaitlistRepository } from "~/db/repository";
+import { createTriggerDevDispatcher, type TriggerDispatcher } from "~/trigger";
+import { AppError, DefaultWaitlistService, type WaitlistService } from "~/waitlist/service";
+import type { WaitlistEntry, WaitlistTrigger } from "~/waitlist/types";
 
 export type Env = {
   HYPERDRIVE?: Hyperdrive;

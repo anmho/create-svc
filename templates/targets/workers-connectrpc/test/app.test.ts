@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
-import { createApp, createIntrospectionDocument, createRpcService } from "@/index";
-import { AppError, type WaitlistService } from "@/waitlist/service";
-import type { WaitlistEntry } from "@/waitlist/types";
+import { createApp, createIntrospectionDocument, createRpcService } from "~/index";
+import { AppError, type WaitlistService } from "~/waitlist/service";
+import type { WaitlistEntry } from "~/waitlist/types";
 
 const baseEntry: WaitlistEntry = {
   id: "entry-1",

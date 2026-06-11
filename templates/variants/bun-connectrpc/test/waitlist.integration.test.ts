@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { SQL } from "bun";
-import { createDb } from "@/db/client";
-import { WaitlistRepository } from "@/db/repository";
-import { DefaultWaitlistService } from "@/waitlist/service";
-import { createRpcService } from "@/index";
+import { createDb } from "~/db/client";
+import { WaitlistRepository } from "~/db/repository";
+import { DefaultWaitlistService } from "~/waitlist/service";
+import { createRpcService } from "~/index";
 
 const databaseUrl = Bun.env.DATABASE_URL?.trim();
 const integrationTest = databaseUrl ? test : test.skip;
