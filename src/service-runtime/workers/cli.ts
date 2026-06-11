@@ -261,9 +261,20 @@ function run(command: string, args: string[], options: { allowFailure?: boolean;
     stderr: options.capture ? "pipe" : "inherit",
   });
   if (!result.success && !options.allowFailure) {
-    throw new Error(`${command} ${args.join(" ")} failed with exit code ${result.exitCode}`);
+    const output = options.capture ? commandOutput(result) : "";
+    throw new Error(
+      [`${command} ${args.join(" ")} failed with exit code ${result.exitCode}`, output ? `output:\n${output}` : ""]
+        .filter(Boolean)
+        .join("\n")
+    );
   }
   return result;
+}
+
+function commandOutput(result: Bun.SyncSubprocess<"pipe" | "inherit", "pipe" | "inherit">) {
+  const stdout = result.stdout instanceof Uint8Array ? new TextDecoder().decode(result.stdout).trim() : "";
+  const stderr = result.stderr instanceof Uint8Array ? new TextDecoder().decode(result.stderr).trim() : "";
+  return [stdout, stderr].filter(Boolean).join("\n");
 }
 
 async function ensureHyperdrive(databaseUrl?: string) {
@@ -476,6 +487,7 @@ create index if not exists waitlist_triggers_status_created_idx
 async function applyMigrations(databaseUrl: string) {
   if ((serviceConfig.framework as string) === "connectrpc") {
     run("bun", ["run", "drizzle-kit", "migrate", "--config", "drizzle.config.ts"], {
+      capture: true,
       env: {
         DATABASE_URL: databaseUrl,
       },
