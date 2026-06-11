@@ -237,7 +237,7 @@ export async function deleteBranch(projectId: string, branchId: string) {
   }
   assertDisposableBranchName(branch.name);
   try {
-    await (await neonClient()).deleteProjectBranch(projectId, branchId);
+    await (await neonClient()).deleteProjectBranch({ projectId, branchId });
   } catch (error) {
     const status = (error as { response?: { status?: number } })?.response?.status;
     if (status === 404) {
