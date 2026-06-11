@@ -476,6 +476,9 @@ test("scaffolds the workers target with wrangler lifecycle commands", async () =
   expect(await Bun.file(join(generatedRoot, "service.yaml")).exists()).toBeFalse();
   expect(await Bun.file(join(generatedRoot, "Dockerfile")).exists()).toBeFalse();
   expect(await Bun.file(join(generatedRoot, "docker-compose.yml")).exists()).toBeTrue();
+  const compose = await Bun.file(join(generatedRoot, "docker-compose.yml")).text();
+  expect(compose).toContain("postgres:");
+  expect(compose).not.toContain("temporal:");
   expect(await Bun.file(join(generatedRoot, "src", "db", "repository.ts")).exists()).toBeFalse();
   expect(await Bun.file(join(generatedRoot, "src", "temporal", "worker.ts")).exists()).toBeFalse();
   expect(await Bun.file(join(generatedRoot, "src", "worker.ts")).exists()).toBeFalse();
@@ -491,6 +494,64 @@ test("scaffolds the workers target with wrangler lifecycle commands", async () =
   expect(previewCleanupWorkflow).toContain("pull_request:");
   expect(previewCleanupWorkflow).toContain("wrangler delete --name dns-api-pr-");
 });
+
+test("scaffolds workers connectrpc with fetch handlers and Trigger.dev dispatch", async () => {
+  const root = await mkdtemp(join(tmpdir(), "create-svc-workers-connectrpc-"));
+  const generatedRoot = join(root, "edge-rpc");
+
+  await scaffoldProject(
+    baseConfig({
+      directory: generatedRoot,
+      target: "workers",
+      runtime: "bun",
+      framework: "connectrpc",
+    })
+  );
+
+  const packageJson = await Bun.file(join(generatedRoot, "package.json")).text();
+  expect(packageJson).toContain('"@connectrpc/connect"');
+  expect(packageJson).not.toContain('"@connectrpc/connect-node"');
+  expect(packageJson).toContain('"@trigger.dev/sdk"');
+  expect(packageJson).toContain('"drizzle-orm"');
+  expect(packageJson).toContain('"gen": "bun run ./scripts/codegen.ts"');
+
+  const entrypoint = await Bun.file(join(generatedRoot, "src", "index.ts")).text();
+  expect(entrypoint).toContain("createFetchHandler");
+  expect(entrypoint).toContain("WaitlistRpcService.typeName");
+  expect(entrypoint).toContain("dispatchWaitlistFollowUp");
+  expect(entrypoint).toContain("/debug/connectrpc");
+  expect(entrypoint).toContain("/metrics");
+  expect(entrypoint).toContain("/internal/trigger/waitlist-follow-up");
+  expect(entrypoint).not.toContain('app.post("/v1/waitlist"');
+  expect(entrypoint).not.toContain("connectNodeAdapter");
+
+  const dbClient = await Bun.file(join(generatedRoot, "src", "db", "client.ts")).text();
+  expect(dbClient).toContain("drizzle-orm/node-postgres");
+  expect(dbClient).toContain("connectRequestDb");
+
+  const tsconfig = await Bun.file(join(generatedRoot, "tsconfig.json")).text();
+  expect(tsconfig).toContain('"@cloudflare/workers-types"');
+  expect(tsconfig).toContain('"@/*"');
+  expect(tsconfig).toContain('"@gen/*"');
+
+  const wranglerConfig = await Bun.file(join(generatedRoot, "wrangler.toml")).text();
+  expect(wranglerConfig).toContain('binding = "HYPERDRIVE"');
+  expect(wranglerConfig).toContain('TRIGGER_API_URL = "https://api.trigger.dev"');
+
+  const compose = await Bun.file(join(generatedRoot, "docker-compose.yml")).text();
+  expect(compose).toContain("postgres:");
+  expect(compose).not.toContain("temporal:");
+
+  expect(await Bun.file(join(generatedRoot, "src", "trigger.ts")).exists()).toBeTrue();
+  expect(await Bun.file(join(generatedRoot, "trigger.config.ts")).exists()).toBeTrue();
+  expect(await Bun.file(join(generatedRoot, "trigger", "waitlist-follow-up.ts")).exists()).toBeTrue();
+  expect(await Bun.file(join(generatedRoot, "scripts", "codegen.ts")).exists()).toBeTrue();
+  expect(await Bun.file(join(generatedRoot, "protos", "waitlist", "v1", "waitlist.proto")).exists()).toBeTrue();
+  expect(await Bun.file(join(generatedRoot, "src", "temporal", "worker.ts")).exists()).toBeFalse();
+  expect(await Bun.file(join(generatedRoot, "src", "worker.ts")).exists()).toBeFalse();
+  expect(await Bun.file(join(generatedRoot, "Dockerfile")).exists()).toBeFalse();
+  expect(await Bun.file(join(generatedRoot, "service.yaml")).exists()).toBeFalse();
+}, 15000);
 
 test("microservice profile does not generate a website package", async () => {
   const root = await mkdtemp(join(tmpdir(), "create-svc-microservice-profile-"));

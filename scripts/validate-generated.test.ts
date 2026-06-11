@@ -10,6 +10,7 @@ test("plans every generated service variant by default", () => {
     "go-chi",
     "go-connectrpc",
     "workers-bun-hono",
+    "workers-bun-connectrpc",
   ]);
 });
 

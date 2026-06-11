@@ -45,7 +45,7 @@ export async function main(argv = Bun.argv.slice(2)) {
       ensureAuthResourceServer();
       ensureAuthClient();
       const databaseUrl = await resolveDatabaseUrl({ preferRemote: true });
-      await applySchemaWithRetries(databaseUrl);
+      await applyMigrationsWithRetries(databaseUrl);
       await ensureHyperdrive(databaseUrl);
       deployTriggerDevTasks();
       publishTriggerDevSecret();
@@ -70,8 +70,8 @@ export async function main(argv = Bun.argv.slice(2)) {
 
   if (command === "migrate") {
     return runMain("Migrate", async () => {
-      await applySchema(await resolveDatabaseUrl());
-      return "Workers database schema applied";
+      await applyMigrations(await resolveDatabaseUrl());
+      return "Workers database migrations applied";
     });
   }
 
@@ -248,22 +248,37 @@ async function confirmGitHubRepositoryDeletion(force: boolean) {
   return true;
 }
 
-function run(command: string, args: string[], options: { allowFailure?: boolean; capture?: boolean } = {}) {
+function run(command: string, args: string[], options: { allowFailure?: boolean; capture?: boolean; env?: Record<string, string | undefined> } = {}) {
   const resolvedCommand = resolveCommandPath(command);
   if (!resolvedCommand) {
     throw new Error(`missing required command: ${command}`);
   }
   const result = Bun.spawnSync([resolvedCommand, ...args], {
     cwd: process.cwd(),
-    env: process.env,
+    env: { ...process.env, ...options.env },
     stdin: "inherit",
     stdout: options.capture ? "pipe" : "inherit",
     stderr: options.capture ? "pipe" : "inherit",
   });
   if (!result.success && !options.allowFailure) {
-    throw new Error(`${command} ${args.join(" ")} failed with exit code ${result.exitCode}`);
+    const output = options.capture ? commandOutput(result) : "";
+    throw new Error(
+      [`${command} ${args.join(" ")} failed with exit code ${result.exitCode}`, output ? `output:\n${output}` : ""]
+        .filter(Boolean)
+        .join("\n")
+    );
   }
   return result;
+}
+
+function commandOutput(result: Bun.SyncSubprocess<"pipe" | "inherit", "pipe" | "inherit">) {
+  const stdout = result.stdout instanceof Uint8Array ? new TextDecoder().decode(result.stdout).trim() : "";
+  const stderr = result.stderr instanceof Uint8Array ? new TextDecoder().decode(result.stderr).trim() : "";
+  return [stdout, stderr].filter(Boolean).join("\n");
+}
+
+function formatError(error: unknown) {
+  return error instanceof Error ? error.message : String(error ?? "unknown error");
 }
 
 async function ensureHyperdrive(databaseUrl?: string) {
@@ -473,11 +488,47 @@ create index if not exists waitlist_triggers_status_created_idx
   }
 }
 
-async function applySchemaWithRetries(databaseUrl: string) {
+async function applyMigrations(databaseUrl: string) {
+  if ((serviceConfig.framework as string) === "connectrpc") {
+    await waitForDatabase(databaseUrl);
+    run("bun", ["run", "drizzle-kit", "migrate", "--config", "drizzle.config.ts"], {
+      capture: true,
+      env: {
+        DATABASE_URL: databaseUrl,
+      },
+    });
+    return;
+  }
+
+  await applySchema(databaseUrl);
+}
+
+async function waitForDatabase(databaseUrl: string, timeoutMs = 30_000) {
+  const started = Date.now();
+  let lastError: unknown;
+
+  while (Date.now() - started < timeoutMs) {
+    const client = new Client({ connectionString: databaseUrl });
+    try {
+      await client.connect();
+      await client.query("select 1");
+      return;
+    } catch (error) {
+      lastError = error;
+      await Bun.sleep(1_000);
+    } finally {
+      await client.end().catch(() => undefined);
+    }
+  }
+
+  throw new Error(`Timed out waiting for DATABASE_URL to accept connections: ${formatError(lastError)}`);
+}
+
+async function applyMigrationsWithRetries(databaseUrl: string) {
   let lastError: unknown;
   for (let attempt = 1; attempt <= 10; attempt += 1) {
     try {
-      await applySchema(databaseUrl);
+      await applyMigrations(databaseUrl);
       return;
     } catch (error) {
       lastError = error;

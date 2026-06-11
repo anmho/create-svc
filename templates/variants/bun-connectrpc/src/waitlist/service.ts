@@ -1,6 +1,5 @@
-import { createDb } from "../db/client";
-import { WaitlistRepository } from "../db/repository";
-import { startWaitlistFollowUpWorkflow } from "../temporal/client";
+import { createDb } from "@/db/client";
+import { WaitlistRepository } from "@/db/repository";
 import type {
   JoinWaitlistInput,
   ListWaitlistEntriesInput,
@@ -10,7 +9,8 @@ import type {
   WebhookEvent,
   WaitlistEntry,
   WaitlistEntryStatus,
-} from "./types";
+  WaitlistTrigger,
+} from "@/waitlist/types";
 
 export class AppError extends Error {
   constructor(
@@ -33,8 +33,16 @@ export type WaitlistService = {
   recordWebhookEvent(input: RecordWebhookEventInput): Promise<{ event: WebhookEvent; duplicate: boolean }>;
 };
 
+export type WaitlistFollowUpDispatch = (input: {
+  trigger: WaitlistTrigger;
+  email?: string;
+}) => Promise<unknown>;
+
 export class DefaultWaitlistService implements WaitlistService {
-  constructor(private readonly repository: WaitlistRepository) {}
+  constructor(
+    private readonly repository: WaitlistRepository,
+    private readonly followUp: WaitlistFollowUpDispatch = async () => undefined
+  ) {}
 
   async joinWaitlist(input: JoinWaitlistInput) {
     const email = normalizeEmail(input.email);
@@ -118,10 +126,9 @@ export class DefaultWaitlistService implements WaitlistService {
     });
 
     const payload = parsePayloadJson(trigger.payloadJson);
-    startWaitlistFollowUpWorkflow({
-      triggerId: trigger.id,
+    this.followUp({
+      trigger,
       email: typeof payload.email === "string" ? payload.email : undefined,
-      type: trigger.type,
     }).catch((error) => console.error("failed to start waitlist follow-up workflow", error));
 
     return trigger;
@@ -147,8 +154,8 @@ export class DefaultWaitlistService implements WaitlistService {
   }
 }
 
-export function createDefaultWaitlistService() {
-  return new DefaultWaitlistService(new WaitlistRepository(createDb()));
+export function createDefaultWaitlistService(followUp?: WaitlistFollowUpDispatch) {
+  return new DefaultWaitlistService(new WaitlistRepository(createDb()), followUp);
 }
 
 function normalizeEmail(value: string) {

@@ -1,5 +1,5 @@
-import { assertTemporalRuntimeConfig } from "./temporal";
-import { startTemporalWorker } from "./temporal/worker";
+import { assertTemporalRuntimeConfig } from "@/temporal";
+import { startTemporalWorker } from "@/temporal/worker";
 
 assertTemporalRuntimeConfig();
 const temporalWorker = await startTemporalWorker();

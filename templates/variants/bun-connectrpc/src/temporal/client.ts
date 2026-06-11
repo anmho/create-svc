@@ -1,6 +1,6 @@
 import { Client, Connection } from "@temporalio/client";
-import type { WaitlistFollowUpInput } from "./activities";
-import { waitlistFollowUpWorkflow } from "./workflows";
+import type { WaitlistFollowUpInput } from "@/temporal/activities";
+import { waitlistFollowUpWorkflow } from "@/temporal/workflows";
 
 export function temporalClientEnabled() {
   return (Bun.env.TEMPORAL_ENABLED ?? "").trim().toLowerCase() === "true";

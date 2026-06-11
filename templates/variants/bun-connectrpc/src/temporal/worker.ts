@@ -1,5 +1,5 @@
 import { NativeConnection, Worker } from "@temporalio/worker";
-import * as activities from "./activities";
+import * as activities from "@/temporal/activities";
 
 export function temporalWorkerEnabled() {
   return (Bun.env.TEMPORAL_ENABLED ?? "").trim().toLowerCase() === "true";

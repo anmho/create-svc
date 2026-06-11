@@ -84,9 +84,7 @@ test("parseArgs rejects the removed app profile", () => {
 test("target/runtime/framework combinations are validated", () => {
   expect(() => validateTargetRuntimeFramework("cloudrun", "go", "connectrpc")).not.toThrow();
   expect(() => validateTargetRuntimeFramework("workers", "bun", "hono")).not.toThrow();
-  expect(() => validateTargetRuntimeFramework("workers", "bun", "connectrpc")).toThrow(
-    "Framework connectrpc is not valid for target workers and runtime bun"
-  );
+  expect(() => validateTargetRuntimeFramework("workers", "bun", "connectrpc")).not.toThrow();
   expect(() => validateTargetRuntimeFramework("workers", "go", "connectrpc")).toThrow(
     "Framework connectrpc is not valid for target workers and runtime go"
   );

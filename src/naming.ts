@@ -27,7 +27,7 @@ export function parseDeployTarget(value: string): DeployTarget {
 export function frameworksForTargetRuntime(target: DeployTarget, runtime: Runtime): readonly Framework[] {
   if (target === "workers") {
     if (runtime === "bun") {
-      return ["hono"];
+      return ["hono", "connectrpc"];
     }
     return [];
   }
