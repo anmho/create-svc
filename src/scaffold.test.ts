@@ -531,8 +531,8 @@ test("scaffolds workers connectrpc with fetch handlers and Trigger.dev dispatch"
 
   const tsconfig = await Bun.file(join(generatedRoot, "tsconfig.json")).text();
   expect(tsconfig).toContain('"@cloudflare/workers-types"');
-  expect(tsconfig).toContain('"@/*"');
-  expect(tsconfig).toContain('"@gen/*"');
+  expect(tsconfig).toContain('"~/*"');
+  expect(tsconfig).toContain('"~gen/*"');
 
   const wranglerConfig = await Bun.file(join(generatedRoot, "wrangler.toml")).text();
   expect(wranglerConfig).toContain('binding = "HYPERDRIVE"');

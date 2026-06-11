@@ -1,7 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
-import type { createDb } from "@/db/client";
-import { waitlistEntries, waitlistTriggers, webhookEvents } from "@/db/schema";
-import type { WaitlistEntry, WaitlistTrigger, WebhookEvent } from "@/waitlist/types";
+import type { createDb } from "~/db/client";
+import { waitlistEntries, waitlistTriggers, webhookEvents } from "~/db/schema";
+import type { WaitlistEntry, WaitlistTrigger, WebhookEvent } from "~/waitlist/types";
 
 type Database = ReturnType<typeof createDb>;
 type WaitlistEntryRow = typeof waitlistEntries.$inferSelect;

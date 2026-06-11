@@ -8,8 +8,8 @@
     "types": ["bun", "@cloudflare/workers-types"],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"],
-      "@gen/*": ["./gen/*"]
+      "~/*": ["./src/*"],
+      "~gen/*": ["./gen/*"]
     }
   },
   "include": ["src/**/*.ts", "test/**/*.ts", "scripts/**/*.ts", "gen/**/*.ts", "trigger/**/*.ts", "trigger.config.ts"]

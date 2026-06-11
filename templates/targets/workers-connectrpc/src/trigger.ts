@@ -1,4 +1,4 @@
-import type { WaitlistTrigger } from "@/waitlist/types";
+import type { WaitlistTrigger } from "~/waitlist/types";
 
 export type TriggerRun = {
   id: string;

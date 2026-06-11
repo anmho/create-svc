@@ -8,8 +8,8 @@
     "types": ["bun"],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"],
-      "@gen/*": ["./gen/*"]
+      "~/*": ["./src/*"],
+      "~gen/*": ["./gen/*"]
     }
   },
   "include": ["src/**/*.ts", "test/**/*.ts", "scripts/**/*.ts", "gen/**/*.ts"]
