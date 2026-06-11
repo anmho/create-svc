@@ -140,7 +140,8 @@ function shouldSkipForTarget(
         relativePath === "src/index.ts" ||
         relativePath === "src/auth.ts" ||
         relativePath === "test/app.test.ts" ||
-        relativePath === "scripts/migrate.ts"
+        relativePath === "scripts/migrate.ts" ||
+        relativePath === "migrations/0000_init.sql"
       );
     }
 
