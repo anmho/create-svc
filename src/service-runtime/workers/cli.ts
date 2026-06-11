@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { confirm, intro, isCancel, log, outro } from "@clack/prompts";
+import { confirm, intro, isCancel, log, outro, password, text } from "@clack/prompts";
 import { createApiClient } from "@neondatabase/api-client";
 import { Client } from "pg";
 import { manualGitHubDeleteCommand } from "../../git-bootstrap";
@@ -41,7 +41,7 @@ export async function main(argv = Bun.argv.slice(2)) {
 
   if (command === "create") {
     return runMain("Create", async () => {
-      ensureTriggerDevConfig();
+      await ensureTriggerDevConfig({ interactive: !rest.includes("--ci") });
       ensureAuthResourceServer();
       ensureAuthClient();
       const databaseUrl = await resolveDatabaseUrl({ preferRemote: true });
@@ -59,8 +59,8 @@ export async function main(argv = Bun.argv.slice(2)) {
       console.log(formatHelp());
       return;
     }
-    return runMain("Deploy", () => {
-      ensureTriggerDevConfig();
+    return runMain("Deploy", async () => {
+      await ensureTriggerDevConfig({ interactive: !rest.includes("--ci") });
       deployTriggerDevTasks();
       publishTriggerDevSecret();
       run("wrangler", ["deploy", ...rest]);
@@ -599,7 +599,7 @@ async function runDoctor() {
   return output;
 }
 
-function ensureTriggerDevConfig() {
+async function ensureTriggerDevConfig(options: { interactive?: boolean } = {}) {
   const missing = [];
   if (!process.env[config.triggerDev.projectRefEnv]?.trim()) {
     missing.push(config.triggerDev.projectRefEnv);
@@ -610,9 +610,71 @@ function ensureTriggerDevConfig() {
   if (!process.env[config.triggerDev.secretKeyEnv]?.trim()) {
     missing.push(config.triggerDev.secretKeyEnv);
   }
-  if (missing.length > 0) {
-    throw new Error(`${formatList(missing)} required for Workers Trigger.dev task deployment and dispatch`);
+  if (missing.length > 0 && options.interactive !== false) {
+    await promptForTriggerDevConfig(missing);
+    missing.splice(0, missing.length);
+    if (!process.env[config.triggerDev.projectRefEnv]?.trim()) {
+      missing.push(config.triggerDev.projectRefEnv);
+    }
+    if (!process.env[config.triggerDev.accessTokenEnv]?.trim()) {
+      missing.push(config.triggerDev.accessTokenEnv);
+    }
+    if (!process.env[config.triggerDev.secretKeyEnv]?.trim()) {
+      missing.push(config.triggerDev.secretKeyEnv);
+    }
   }
+  if (missing.length > 0) {
+    throw new Error(
+      `${formatList(missing)} required for Workers Trigger.dev task deployment and dispatch. Get them from the Trigger.dev console by creating/selecting a project, then provide the project ref, deploy access token, and secret key.`
+    );
+  }
+}
+
+async function promptForTriggerDevConfig(missing: string[]) {
+  log.info(
+    [
+      "Workers background tasks need Trigger.dev credentials.",
+      "Create/select the Trigger.dev project in the console, then paste the project ref, access token, and secret key.",
+    ].join(" ")
+  );
+
+  if (missing.includes(config.triggerDev.projectRefEnv)) {
+    process.env[config.triggerDev.projectRefEnv] = await promptRequiredText(
+      `${config.triggerDev.projectRefEnv} (Trigger.dev project ref)`
+    );
+  }
+  if (missing.includes(config.triggerDev.accessTokenEnv)) {
+    process.env[config.triggerDev.accessTokenEnv] = await promptRequiredSecret(
+      `${config.triggerDev.accessTokenEnv} (Trigger.dev deploy access token)`
+    );
+  }
+  if (missing.includes(config.triggerDev.secretKeyEnv)) {
+    process.env[config.triggerDev.secretKeyEnv] = await promptRequiredSecret(
+      `${config.triggerDev.secretKeyEnv} (Trigger.dev secret key)`
+    );
+  }
+}
+
+async function promptRequiredText(message: string) {
+  const answer = await text({
+    message,
+    validate: (value) => (String(value ?? "").trim() ? undefined : "Required"),
+  });
+  if (isCancel(answer)) {
+    throw new Error("Trigger.dev configuration cancelled");
+  }
+  return String(answer).trim();
+}
+
+async function promptRequiredSecret(message: string) {
+  const answer = await password({
+    message,
+    validate: (value) => (String(value ?? "").trim() ? undefined : "Required"),
+  });
+  if (isCancel(answer)) {
+    throw new Error("Trigger.dev configuration cancelled");
+  }
+  return String(answer).trim();
 }
 
 function formatList(values: string[]) {

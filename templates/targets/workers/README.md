@@ -66,8 +66,14 @@ export TRIGGER_ACCESS_TOKEN=<personal access token>
 export TRIGGER_SECRET_KEY=<secret key>
 ```
 
+Create or select a Trigger.dev project in the Trigger.dev console to get these
+values. `TRIGGER_PROJECT_REF` is the project ref, `TRIGGER_ACCESS_TOKEN` is the
+deploy/API access token, and `TRIGGER_SECRET_KEY` is the runtime secret key used
+by the Worker to dispatch tasks.
+
 `service create` and `service deploy` deploy the Trigger.dev task before the
-Worker deploy and fail clearly if these values are missing.
+Worker deploy. In interactive runs they prompt for missing Trigger.dev values;
+in `--ci` runs they fail clearly if any value is missing.
 GitHub Actions deploys require matching repository secrets:
 `TRIGGER_PROJECT_REF`, `TRIGGER_ACCESS_TOKEN`, and `TRIGGER_SECRET_KEY`.
 
