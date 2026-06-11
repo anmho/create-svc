@@ -2,11 +2,12 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { connectNodeAdapter } from "@connectrpc/connect-node";
 import type { ServiceImpl } from "@connectrpc/connect";
 import { createServer } from "node:http";
-import { WaitlistService as WaitlistRpcService } from "../gen/protos/waitlist/v1/waitlist_pb.js";
-import { withServiceAuth } from "./auth";
-import { AppError, createDefaultWaitlistService, type WaitlistService } from "./waitlist/service";
-import { assertTemporalRuntimeConfig } from "./temporal";
-import type { WaitlistEntry, WaitlistTrigger } from "./waitlist/types";
+import { WaitlistService as WaitlistRpcService } from "@gen/protos/waitlist/v1/waitlist_pb";
+import { withServiceAuth } from "@/auth";
+import { AppError, createDefaultWaitlistService, type WaitlistService } from "@/waitlist/service";
+import { assertTemporalRuntimeConfig } from "@/temporal";
+import { startWaitlistFollowUpWorkflow } from "@/temporal/client";
+import type { WaitlistEntry, WaitlistTrigger } from "@/waitlist/types";
 
 type RpcService = ServiceImpl<typeof WaitlistRpcService>;
 type FallbackHandler = NonNullable<Parameters<typeof connectNodeAdapter>[0]["fallback"]>;
@@ -238,6 +239,14 @@ function headersPayload(headers: Parameters<FallbackHandler>[0]["headers"]) {
 if (import.meta.main) {
   assertTemporalRuntimeConfig();
   const port = Number(Bun.env.PORT ?? 8080);
-  const server = createServer(withServiceAuth(createHandler(createDefaultWaitlistService())));
+  const server = createServer(
+    withServiceAuth(
+      createHandler(
+        createDefaultWaitlistService(({ trigger, email }) =>
+          startWaitlistFollowUpWorkflow({ triggerId: trigger.id, email, type: trigger.type })
+        )
+      )
+    )
+  );
   server.listen(port);
 }

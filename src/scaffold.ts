@@ -62,13 +62,16 @@ export async function scaffoldProject(config: ScaffoldConfig) {
     { kind: "shared" as const, root: resolve(config.generatorRoot, "templates", "shared") },
     { kind: "variant" as const, root: resolve(config.generatorRoot, "templates", "variants", `${config.runtime}-${config.framework}`) },
     { kind: "target" as const, root: resolve(config.generatorRoot, "templates", "targets", config.target) },
+    // Framework-specific target overlay (e.g. targets/workers-connectrpc) wins
+    // over both the variant and the base target when it exists.
+    { kind: "target-framework" as const, root: resolve(config.generatorRoot, "templates", "targets", `${config.target}-${config.framework}`) },
   ];
 
   for (const template of templateRoots) {
     const files = await collectTemplateFiles(template.root);
 
     for (const relativePath of files) {
-      if (shouldSkipForTarget(config.target, template.kind, relativePath)) {
+      if (shouldSkipForTarget(config.target, config.framework, template.kind, relativePath)) {
         continue;
       }
       const sourcePath = join(template.root, relativePath);
@@ -88,7 +91,12 @@ function templateDestinationPath(relativePath: string) {
   return relativePath === "_gitignore" ? ".gitignore" : relativePath;
 }
 
-function shouldSkipForTarget(target: DeployTarget, templateKind: "shared" | "variant" | "target", relativePath: string) {
+function shouldSkipForTarget(
+  target: DeployTarget,
+  framework: Framework,
+  templateKind: "shared" | "variant" | "target" | "target-framework",
+  relativePath: string
+) {
   if (
     relativePath === "scripts/authctl.ts" ||
     relativePath.startsWith("scripts/cloudrun/") ||
@@ -98,7 +106,16 @@ function shouldSkipForTarget(target: DeployTarget, templateKind: "shared" | "var
   }
 
   if (target === "workers") {
-    if (templateKind === "target") {
+    if (templateKind === "target" || templateKind === "target-framework") {
+      if (framework === "connectrpc" && templateKind === "target") {
+        // The framework overlay replaces the base target's Hono app surface.
+        return (
+          relativePath === "src/index.ts" ||
+          relativePath === "src/storage.ts" ||
+          relativePath === "test/app.test.ts" ||
+          relativePath === "package.json"
+        );
+      }
       return false;
     }
 
@@ -109,6 +126,22 @@ function shouldSkipForTarget(target: DeployTarget, templateKind: "shared" | "var
     if (templateKind === "shared") {
       // Cloud Run-only manifests don't belong in a Cloudflare Workers repo.
       return relativePath === "service.yaml" || relativePath === "worker-pool.yaml" || relativePath === "crema-scaledobject.yaml";
+    }
+
+    if (framework === "connectrpc") {
+      // Workers + ConnectRPC keeps the variant's Drizzle db layer, domain
+      // service, protos, codegen, and migrations. Temporal (Cloud Run async),
+      // the node-http entrypoint, and node-only scripts/tests are replaced by
+      // the targets/workers(-connectrpc) overlays.
+      return (
+        relativePath.startsWith("src/temporal/") ||
+        relativePath === "src/temporal.ts" ||
+        relativePath === "src/worker.ts" ||
+        relativePath === "src/index.ts" ||
+        relativePath === "src/auth.ts" ||
+        relativePath === "test/app.test.ts" ||
+        relativePath === "scripts/migrate.ts"
+      );
     }
 
     return (

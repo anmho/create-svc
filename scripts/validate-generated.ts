@@ -13,6 +13,7 @@ export const GENERATED_VARIANTS = [
   "go-chi",
   "go-connectrpc",
   "workers-bun-hono",
+  "workers-bun-connectrpc",
 ] as const;
 
 export type GeneratedVariant = (typeof GENERATED_VARIANTS)[number];
@@ -161,6 +162,22 @@ const VARIANT_DEFINITIONS: Record<GeneratedVariant, VariantDefinition> = {
     framework: "hono",
     commandSteps: [
       { name: "install dependencies", command: ["bun", "install"] },
+      { name: "run tests", command: ["bun", "run", "test"] },
+      { name: "run lint", command: ["bun", "run", "lint"] },
+    ],
+    generatedChecks: branchProtectionGeneratedChecks("bun"),
+    smokeChecks: [],
+  },
+  "workers-bun-connectrpc": {
+    name: "workers-bun-connectrpc",
+    target: "workers",
+    runtime: "bun",
+    framework: "connectrpc",
+    commandSteps: [
+      { name: "install dependencies", command: ["bun", "install"] },
+      { name: "generate code", command: ["bun", "run", "gen"] },
+      { name: "start local postgres", command: ["docker", "compose", "up", "-d"] },
+      { name: "run migrations", command: ["bun", "run", "migrate"] },
       { name: "run tests", command: ["bun", "run", "test"] },
       { name: "run lint", command: ["bun", "run", "lint"] },
     ],
