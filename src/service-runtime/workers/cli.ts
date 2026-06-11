@@ -277,6 +277,10 @@ function commandOutput(result: Bun.SyncSubprocess<"pipe" | "inherit", "pipe" | "
   return [stdout, stderr].filter(Boolean).join("\n");
 }
 
+function formatError(error: unknown) {
+  return error instanceof Error ? error.message : String(error ?? "unknown error");
+}
+
 async function ensureHyperdrive(databaseUrl?: string) {
   const configPath = "./wrangler.toml";
   const text = await Bun.file(configPath).text();
@@ -486,6 +490,7 @@ create index if not exists waitlist_triggers_status_created_idx
 
 async function applyMigrations(databaseUrl: string) {
   if ((serviceConfig.framework as string) === "connectrpc") {
+    await waitForDatabase(databaseUrl);
     run("bun", ["run", "drizzle-kit", "migrate", "--config", "drizzle.config.ts"], {
       capture: true,
       env: {
@@ -496,6 +501,27 @@ async function applyMigrations(databaseUrl: string) {
   }
 
   await applySchema(databaseUrl);
+}
+
+async function waitForDatabase(databaseUrl: string, timeoutMs = 30_000) {
+  const started = Date.now();
+  let lastError: unknown;
+
+  while (Date.now() - started < timeoutMs) {
+    const client = new Client({ connectionString: databaseUrl });
+    try {
+      await client.connect();
+      await client.query("select 1");
+      return;
+    } catch (error) {
+      lastError = error;
+      await Bun.sleep(1_000);
+    } finally {
+      await client.end().catch(() => undefined);
+    }
+  }
+
+  throw new Error(`Timed out waiting for DATABASE_URL to accept connections: ${formatError(lastError)}`);
 }
 
 async function applyMigrationsWithRetries(databaseUrl: string) {
